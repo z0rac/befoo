@@ -20,7 +20,7 @@ endif
 CPPFLAGS = ${CFLAGS}
 
 PROG = ${NAME}.exe
-OBJS = main.o imap4.o mail.o mailbox.o
+OBJS = main.o imap4.o pop3.o mail.o mailbox.o
 OBJS += mascot.o summary.o setting.o window.o win32.o mingw/mthr.o
 L10N = ja.rc
 LIBS = -lstdc++ -lws2_32 -lcomctl32 -limagehlp -lshlwapi -lwinmm
@@ -41,7 +41,7 @@ ${PROG}: ${OBJS} ${NAME}.res
 
 ${OBJS}: win32.h Makefile
 main.o mascot.o summary.o: define.h mailbox.h window.h setting.h
-mail.o mailbox.o imap4.o: mailbox.h
+mail.o mailbox.o imap4.o pop3.o: mailbox.h
 window.o: window.h
 setting.o: setting.h
 ${NAME}.res: ${L10N} ${RSRC} Makefile

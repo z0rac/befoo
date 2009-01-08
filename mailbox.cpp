@@ -304,18 +304,32 @@ mailbox::uri(const string& uri, const string& passwd)
   return true;
 }
 
+const mail*
+mailbox::find(const string& uid) const
+{
+  list<mail>::const_iterator p = _mails.begin();
+  for (; p != _mails.end(); ++p) {
+    if (p->uid() == uid) return &*p;
+  }
+  return NULL;
+}
+
 void
 mailbox::fetchmail()
 {
   extern backend* imap4tcp(const string&, const string&);
   extern backend* imap4ssl(const string&, const string&);
+  extern backend* pop3tcp(const string&, const string&);
+  extern backend* pop3ssl(const string&, const string&);
 
   static const struct {
     const char* proto;
     backend* (*make)(const string&, const string&);
   } backends[] = {
     { "imap", imap4tcp },
-    { "imaps", imap4ssl }
+    { "imaps", imap4ssl },
+    { "pop", pop3tcp },
+    { "pops", pop3ssl }
   };
 
   _recent = -1;
@@ -328,6 +342,6 @@ mailbox::fetchmail()
   }
   if (!be.get()) throw error("Invalid protocol.");
   be->login(_uri.user, _passwd);
-  _recent = be->fetch(_mails, _uri.path);
+  _recent = be->fetch(*this, _uri.path);
   be->logout();
 }
