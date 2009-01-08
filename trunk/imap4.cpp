@@ -17,8 +17,7 @@
 #endif
 
 /** imap4 - imap4 protocol backend
- * This class is a mailbox::backend for IMAP4 protocol, and it is an abstract
- * class.
+ * This class is a mailbox::backend for IMAP4 protocol.
  */
 class imap4 : public mailbox::backend {
   unsigned _seq; // sequencial number for the tag.
@@ -54,7 +53,7 @@ public:
   imap4() : _seq(_seqinit()) {}
   void login(const string& user, const string& passwd);
   void logout();
-  int fetch(list<mail>& mails, const string& path);
+  int fetch(mailbox& mbox, const string& path);
 };
 
 void
@@ -73,7 +72,7 @@ imap4::logout()
 }
 
 int
-imap4::fetch(list<mail>& mails, const string& path)
+imap4::fetch(mailbox& mbox, const string& path)
 {
   resp_t resp = _command("EXAMINE", path.empty() ? "INBOX" : arg_t().q(path));
   if (resp.type != "OK") throw mailbox::error(resp.data);
@@ -83,9 +82,8 @@ imap4::fetch(list<mail>& mails, const string& path)
   size_t copies = 0;
   for (parse_t ids = resp.data; ids;) {
     string uid = ids.token();
-    list<mail>::const_iterator p = mails.begin();
-    while (p != mails.end() && p->uid() != uid) ++p;
-    if (p != mails.end()) {
+    const mail* p = mbox.find(uid);
+    if (p) {
       fetched.push_back(*p);
       ++copies;
       continue;
@@ -102,12 +100,14 @@ imap4::fetch(list<mail>& mails, const string& path)
       string item = parse.token();
       string value = parse.token();
       if (item == "BODY[HEADER.FIELDS (SUBJECT FROM DATE)]") {
-	fetched.push_back(mail(uid).header(value));
+	mail m(uid);
+	m.header(value);
+	fetched.push_back(m);
 	break;
       }
     }
   }
-  mails = fetched;
+  mbox.mails(fetched);
   return int(fetched.size() - copies);
 }
 

@@ -66,22 +66,34 @@ BEGIN
  - except semi-colon at start of line:\r\n\
 \r\n\
 ;[mailboxname]\r\n\
-;uri=imap://username@mail.example.com/\r\n\
+;uri=imap://username@imap.example.com/\r\n\
 ;passwd=your password\t; It will be coded later.\r\n\
 ;sound=MailBeep\t\t; A sound alias or path to a wave file.\
  (default: No sound)\r\n\
 ;period=10\t\t; A fetching period in minutes. (default: 15)\r\n\
 \r\n\
 ;[another over SSL]\t; You need the OpenSSL DLLs\r\n\
-;uri=imaps://username@mail.example.com/\r\n\
-:passwd=your password\r\n\
+;uri=imaps://username@imap.example.com/\r\n\
+;passwd=...\r\n\
 ;sound=%windir%\\Media\\chimes.wav\r\n\
 \r\n\
-[(preferences)]\t\t; Settings for preferences.\r\n\
+;[POP3]\r\n\
+;uri=pop://username@pop.example.com/\r\n\
+;passwd=...\r\n\
+\r\n\
+;[POP3 recents]\t; Summary of recents only.\r\n\
+;uri=pop://username@pop.example.com/recent\r\n\
+;passwd=...\r\n\
+\r\n\
+;[POP3 over SSL]\t; You need the OpenSSL DLLs\r\n\
+;uri=pops://username@pop.example.com/\r\n\
+;passwd=...\r\n\
+\r\n\
+[(preferences)]\r\n\
 ;icon=32\t\t; Size of the mascot icon.(default: 64)\r\n\
 ;notice=5,1\t\t; Period to show the balloon, and switch to show\
- the summary window when mail is fetched.(default: 10,0)\r\n\
-;autoclose=5\t\t; Period to close the summary window.(default: 3)\r\n\
+ the summary when mail is fetched.(default: 10,0)\r\n\
+;autoclose=5\t\t; Period to show the summary.(default: 3)\r\n\
 ;delay=30\t\t; Delay seconds to the first fetching.(default: 0)\r\n\
 "
     ID_TEXT_ABOUT		"\

@@ -51,7 +51,7 @@ public:
   const pair<string, string>& from() const { return _from; }
   time_t date() const { return _date; }
   const string& sender() const { return _from.first; }
-  mail& header(const string& headers);
+  bool header(const string& headers);
 public:
   // decoder - parse and decode a message.
   class decoder : public tokenizer {
@@ -84,6 +84,7 @@ class mailbox {
   string _passwd;
   list<mail> _mails;
   int _recent;
+  list<string> _ignore;
 public:
   mailbox(const string& name = string())
     : _next(NULL), _name(name), _recent(0) {}
@@ -94,7 +95,13 @@ public:
   bool uri(const string& uri, const string& passwd = string());
   const string& name() const { return _name; }
   const list<mail>& mails() const { return _mails; }
+  const list<mail>& mails(const list<mail>& mails)
+  { return _mails = mails; }
   int recent() const { return _recent; }
+  const mail* find(const string& uid) const;
+  const list<string>& ignore() const { return _ignore; }
+  const list<string>& ignore(const list<string>& ignore)
+  { return _ignore = ignore; }
   void fetchmail();
 public:
   class backend {
@@ -119,7 +126,7 @@ public:
     void ssl(const string& host, const string& port);
     virtual void login(const string& user, const string& passwd) = 0;
     virtual void logout() = 0;
-    virtual int fetch(list<mail>& mails, const string& path) = 0;
+    virtual int fetch(mailbox& mbox, const string& path) = 0;
   };
 public:
   class error : public exception {

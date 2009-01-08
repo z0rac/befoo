@@ -76,18 +76,20 @@ iconv::operator()(const string& text) const
 /*
  * Functions of the class mail.
  */
-mail&
+bool
 mail::header(const string& headers)
 {
+  bool read = false;
   decoder de(headers);
   while (de) {
-    switch (de.field("SUBJECT\0FROM\0DATE\0")) {
+    switch (de.field("SUBJECT\0FROM\0DATE\0STATUS\0")) {
     case 0: _subject = decoder(de.field()).unstructured(); break;
     case 1: _from = decoder(de.field()).address(); break;
     case 2: _date = decoder(de.field()).date(); break;
+    case 3: read = de.field().find_first_of('R') != string::npos; break;
     }
   }
-  return *this;
+  return read;
 }
 
 /*

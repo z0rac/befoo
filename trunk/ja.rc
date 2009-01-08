@@ -39,16 +39,28 @@ BEGIN
 (デフォルト:着信音なし)\r\n\
 ;period=10\t\t; 分単位のメール確認間隔。(デフォルト:15分)\r\n\
 \r\n\
-;[SSLを使用]\t\t; OpenSSLのDLLが必要です。\r\n\
+;[SSLを使用]\t\t; OpenSSLのDLLが必要。\r\n\
 ;uri=imaps://username@mail.example.com/\r\n\
-:passwd=パスワード\r\n\
+;passwd=...\r\n\
 ;sound=%windir%\\Media\\chimes.wav\r\n\
+\r\n\
+;[POP3]\r\n\
+;uri=pop://username@pop.example.com/\r\n\
+;passwd=...\r\n\
+\r\n\
+;[POP3新着]\t\t; 新着のみ一覧表示。\r\n\
+;uri=pop://username@pop.example.com/recent\r\n\
+;passwd=...\r\n\
+\r\n\
+;[POP3でSSL使用]\t; OpenSSLのDLLが必要。\r\n\
+;uri=pops://username@pop.example.com/\r\n\
+;passwd=...\r\n\
 \r\n\
 [(preferences)]\t\t; 動作設定。\r\n\
 ;icon=32\t\t; アイコンのサイズ。(デフォルト: 64)\r\n\
-;notice=5,1\t\t; メール確認時のバルーン表示秒数と\
-一覧ウインドウの表示/非表示。(デフォルト: 10,0)\r\n\
-;autoclose=5\t\t; 一覧ウインドウの表示秒数。(デフォルト: 3)\r\n\
+;notice=5,1\t\t; メール確認後のバルーン表示秒数と\
+一覧の表示/非表示。(デフォルト: 10,0)\r\n\
+;autoclose=5\t\t; 一覧の表示秒数。(デフォルト: 3)\r\n\
 ;delay=30\t\t; 1回目のメール確認までの秒数。(デフォルト: 0)\r\n\
 "
     ID_TEXT_ABOUT		"\
