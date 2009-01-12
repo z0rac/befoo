@@ -63,6 +63,7 @@ public:
   void invalidate() const { InvalidateRect(_hwnd, NULL, TRUE); }
   bool hascursor(bool child = true) const;
   POINT extent() const;
+  RECT bounds() const;
 public:
   class command {
   public:

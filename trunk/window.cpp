@@ -150,6 +150,15 @@ window::extent() const
   return (POINT&)r.right;
 }
 
+RECT
+window::bounds() const
+{
+  assert(_hwnd);
+  RECT r;
+  GetWindowRect(_hwnd, &r);
+  return r;
+}
+
 HWND
 window::_new(LPCSTR classname, LPCSTR menu, HWND owner)
 {

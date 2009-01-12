@@ -34,7 +34,7 @@ namespace {
     void _initialize();
   public:
     summary(const window& parent);
-    void initialize(const mailbox* mboxes);
+    int initialize(const mailbox* mboxes);
   };
 }
 
@@ -79,7 +79,7 @@ summary::_initialize()
   }
 }
 
-void
+int
 summary::initialize(const mailbox* mboxes)
 {
   _initialize();
@@ -97,6 +97,8 @@ summary::initialize(const mailbox* mboxes)
 	(mb->name());
     }
   }
+  int n = max(ListView_GetItemCount(hwnd()) - 1 , 0);
+  return HIWORD(ListView_ApproximateViewRect(hwnd(), -1, -1, n)) - extent().y;
 }
 
 summary::item::item(const window& w)
@@ -130,6 +132,7 @@ summary::item::operator()(const win32::wstr& s)
 namespace {
   class summarywindow : public appwindow {
     summary _summary;
+    int _resized;
     struct _autoclose : public window::timer {
       int sec;
       void reset(window& source)
@@ -141,7 +144,7 @@ namespace {
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
     void release();
     void limit(LPMINMAXINFO info);
-    void resize(int w, int h) { _summary.move(0, 0, w, h); }
+    void resize(int w, int h);
   public:
     summarywindow(const mailbox* mboxes);
     ~summarywindow() { if (hwnd()) release(); }
@@ -149,7 +152,7 @@ namespace {
 }
 
 summarywindow::summarywindow(const mailbox* mboxes)
-  : _summary(self())
+  : _summary(self()), _resized(-1)
 {
   style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
 	WS_THICKFRAME | WS_CLIPCHILDREN,
@@ -158,14 +161,24 @@ summarywindow::summarywindow(const mailbox* mboxes)
   setting prefs = setting::preferences();
   RECT r;
   GetWindowRect(GetDesktopWindow(), &r);
+  LONG top = r.top, bottom = r.bottom;
   InflateRect(&r, (r.right - r.left) / 4, (r.bottom - r.top) / 4);
   prefs["summary"](r.left)(r.top)(r.right)(r.bottom);
   move(adjust(r));
-  _summary.initialize(mboxes);
+  int h = _summary.initialize(mboxes);
+  if (h > 0) {
+    r.bottom += h;
+    if (r.bottom > bottom) {
+      r.top -= r.bottom - bottom, r.bottom = bottom;
+      if (r.top < top) r.top = top;
+    }
+    move(r);
+  }
   prefs["autoclose"](_autoclose.sec = 3);
   _autoclose.reset(*this);
   show(true, false);
   foreground(true);
+  _resized = 0;
 }
 
 LRESULT
@@ -184,12 +197,13 @@ summarywindow::dispatch(UINT m, WPARAM w, LPARAM l)
 void
 summarywindow::release()
 {
-  try {
-    RECT r;
-    GetWindowRect(hwnd(), &r);
-    setting::preferences()("summary", setting::tuple
-			   (r.left)(r.top)(r.right)(r.bottom));
-  } catch (...) {}
+  if (_resized > 0) {
+    try {
+      RECT r = bounds();
+      setting::preferences()("summary", setting::tuple
+			     (r.left)(r.top)(r.right)(r.bottom));
+    } catch (...) {}
+  }
 }
 
 void
@@ -197,6 +211,16 @@ summarywindow::limit(LPMINMAXINFO info)
 {
   info->ptMinTrackSize.x = 200;
   info->ptMinTrackSize.y = 80;
+}
+
+void
+summarywindow::resize(int w, int h)
+{
+  if (!_resized) {
+    RECT r = _summary.bounds();
+    _resized = int(r.right - r.left != w || r.bottom - r.top != h) ;
+  }
+  _summary.move(0, 0, w, h);
 }
 
 window*
