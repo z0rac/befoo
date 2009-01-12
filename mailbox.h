@@ -115,6 +115,8 @@ public:
     };
     auto_ptr<_stream> _st;
   protected:
+    int tls() const;
+    void starttls();
     string read(size_t size);
     string readline();
     void write(const char* data, size_t size) { _st->write(data, size); }

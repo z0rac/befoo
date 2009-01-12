@@ -30,9 +30,6 @@ BEGIN
     5, 30, 6, 30, 7, 30, 8, 30 // Animation for no mail.
 END
 
-#undef H
-#undef F
-
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "befoo.exe.manifest"
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US

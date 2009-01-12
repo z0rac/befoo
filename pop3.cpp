@@ -24,7 +24,7 @@ class pop3 : public mailbox::backend {
   bool _ok(bool ok = true);
   string _readline();
   typedef list< pair<string, string> > plist;
-  plist _plist();
+  plist _plist(bool upper = false);
   string _headers();
 public:
   void login(const string& user, const string& passwd);
@@ -36,6 +36,20 @@ void
 pop3::login(const string& user, const string& passwd)
 {
   _ok();
+  if (_command("CAPA", false)) {
+    bool uidl = false, stls = false;
+    plist capa(_plist(true));
+    plist::iterator p = capa.begin();
+    for (; p != capa.end(); ++p) {
+      if (p->first == "UIDL") uidl = true;
+      else if (p->first == "STLS") stls = true;
+    }
+    if (!uidl) throw mailbox::error("server not support UIDL command");
+    if (stls && !tls()) {
+      _command("STLS");
+      starttls();
+    }
+  }
   _command("USER " + user);
   _command("PASS " + passwd);
 }
@@ -107,7 +121,7 @@ pop3::_readline()
 }
 
 pop3::plist
-pop3::_plist()
+pop3::_plist(bool upper)
 {
   plist result;
   for (;;) {
@@ -115,6 +129,10 @@ pop3::_plist()
     if (!line.empty() && line[0] == '.') {
       line.assign(line, 1, line.size() - 1);
       if (line.empty()) break;
+    }
+    if (upper) {
+      string::iterator p = line.begin();
+      for (; p !=line.end(); ++p) *p = toupper(*p);
     }
     pair<string, string> ps;
     string::size_type i = line.find_first_of(' ');
