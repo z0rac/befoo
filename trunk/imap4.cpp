@@ -117,12 +117,24 @@ imap4::_initialize()
   resp_t resp = _response();
   static const char PREAUTH[] = "PREAUTH";
   if (resp.tag == "*" && (resp.type == "OK" || resp.type == PREAUTH)) {
+    bool auth = resp.type == PREAUTH;
+    bool imap = false;
+    bool stls = false;
     static const char CAPABILITY[] = "CAPABILITY";
     resp = _command(CAPABILITY, arg_t(), CAPABILITY);
     if (resp.type == CAPABILITY) {
+      static const char STARTTLS[] = "STARTTLS";
       for (parse_t caps = resp.data; caps;) {
 	string s = caps.token();
-	if (s == "IMAP4" || s == "IMAP4REV1") return resp.type == PREAUTH;
+	if (s == "IMAP4" || s == "IMAP4REV1") imap = true;
+	else if (s == STARTTLS) stls = true;
+      }
+      if (imap) {
+	if (stls && !tls()) {
+	  _command(STARTTLS);
+	  starttls();
+	}
+	return auth;
       }
     }
   }

@@ -30,6 +30,9 @@ namespace {
     void close();
     void read(char* buf, size_t size);
     void write(const char* data, size_t size);
+    virtual bool tls() const { return false; }
+    mailbox::backend::stream* starttls();
+    int setfd(int fd) { assert(_fd == INVALID_SOCKET); return _fd = fd; }
   };
 }
 
@@ -120,6 +123,7 @@ namespace {
     SSL_read _read;
     SSL_write _write;
     static void _dummy() {};
+    int _connect(int fd);
   public:
     sslstream();
     ~sslstream();
@@ -127,6 +131,9 @@ namespace {
     void close();
     void read(char* buf, size_t size);
     void write(const char* data, size_t size);
+    bool tls() const { return true; }
+    int setfd(int fd) { return _connect(tcpstream::setfd(fd)); }
+    static bool avail() { return sslstream::_ssleay != NULL; }
   public:
     struct error : public mailbox::error {
       error() : mailbox::error(emsg()) {}
@@ -166,10 +173,9 @@ sslstream::~sslstream()
 }
 
 int
-sslstream::open(const string& host, const string& port)
+sslstream::_connect(int fd)
 {
   assert(!_ssl);
-  int fd = tcpstream::open(host, port);
   try {
     if (!(_ssl = SSL(SSL_new)(_ctx)) ||
 	!SSL(SSL_set_fd)(_ssl, fd) ||
@@ -180,6 +186,12 @@ sslstream::open(const string& host, const string& port)
     throw;
   }
   return fd;
+}
+
+int
+sslstream::open(const string& host, const string& port)
+{
+  return _connect(tcpstream::open(host, port));
 }
 
 void
@@ -205,6 +217,17 @@ sslstream::write(const char* data, size_t size)
 {
   assert(_ssl);
   if (_write(_ssl, data, size) != int(size)) throw error();
+}
+
+mailbox::backend::stream*
+tcpstream::starttls()
+{
+  assert(_fd != INVALID_SOCKET);
+  auto_ptr<sslstream> st(new sslstream);
+  SOCKET fd = _fd;
+  _fd = INVALID_SOCKET;
+  st->setfd(fd);
+  return st.release();
 }
 
 sslstream::openssl::openssl()
@@ -237,6 +260,19 @@ mailbox::backend::ssl(const string& host, const string& port)
 {
   _st.reset(new sslstream);
   _st->open(host, port);
+}
+
+int
+mailbox::backend::tls() const
+{
+  return static_cast<tcpstream*>(_st.get())->tls() ? 1 :
+    sslstream::avail() ? 0 : -1;
+}
+
+void
+mailbox::backend::starttls()
+{
+  _st.reset(static_cast<tcpstream*>(_st.get())->starttls());
 }
 
 string
