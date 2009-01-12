@@ -381,8 +381,7 @@ void
 mascotwindow::_release()
 {
   try {
-    RECT r;
-    GetWindowRect(hwnd(), &r);
+    RECT r = bounds();
     setting::preferences()
       ("mascot", setting::tuple(r.left)(r.top)(!visible()));
   } catch (...) {}
