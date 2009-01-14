@@ -40,7 +40,7 @@ BEGIN
 ;period=10\t\t; 分単位のメール確認間隔。(デフォルト:15分)\r\n\
 \r\n\
 ;[SSLを使用]\t\t; OpenSSLのDLLが必要。\r\n\
-;uri=imaps://username@mail.example.com/\r\n\
+;uri=imap+ssl://username@mail.example.com/\r\n\
 ;passwd=...\r\n\
 ;sound=%windir%\\Media\\chimes.wav\r\n\
 \r\n\
@@ -49,11 +49,11 @@ BEGIN
 ;passwd=...\r\n\
 \r\n\
 ;[POP3新着]\t\t; 新着のみ一覧表示。\r\n\
-;uri=pop://username@pop.example.com/recent\r\n\
+;uri=pop://username@pop.example.com/#recent\r\n\
 ;passwd=...\r\n\
 \r\n\
 ;[POP3でSSL使用]\t; OpenSSLのDLLが必要。\r\n\
-;uri=pops://username@pop.example.com/\r\n\
+;uri=pop+ssl://username@pop.example.com/\r\n\
 ;passwd=...\r\n\
 \r\n\
 [(preferences)]\t\t; 動作設定。\r\n\

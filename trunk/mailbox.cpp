@@ -304,40 +304,49 @@ mailbox::backend::readline()
 }
 
 /*
+ * Functions of the class uri
+ */
+void
+uri::parse(const string& uri)
+{
+  for (int i = scheme; i <= fragment; ++i) _part[i].clear();
+
+  string::size_type i = uri.find_first_of('#');
+  if (i != string::npos) _part[fragment] = uri.substr(i + 1);
+
+  string t(uri, 0, min(uri.find_first_of('?'), i));
+  i = t.find("://");
+  if (i != string::npos) {
+    _part[scheme].assign(t, 0, i);
+    t.erase(0, i + 3);
+  }
+  i = t.find_first_of('/');
+  if (i != string::npos) {
+    _part[path] = t.substr(i + 1);
+    t.erase(i);
+  }
+  i = t.find_first_of('@');
+  if (i != string::npos) {
+    _part[user].assign(t, 0, i);
+    t.erase(0, i + 1);
+  }
+  i = t.find_last_not_of("0123456789");
+  if (i != string::npos && t[i] == ':') {
+    _part[port] = t.substr(i + 1);
+    t.erase(i);
+  }
+  _part[host] = t;
+}
+
+/*
  * Functions of the class mailbox
  */
-bool
-mailbox::uri(const string& uri, const string& passwd)
+void
+mailbox::uripasswd(const string& uri, const string& passwd)
 {
   static sslstream::openssl openssl;
-  _uri.proto.clear();
-  _uri.user.clear();
-  _uri.host.clear();
-  _uri.port.clear();
-  _uri.path.clear();
-  _passwd.clear();
-
-  string::size_type i;
-  string::size_type n = uri.find("://");
-  if (n == string::npos) return false;
-  _uri.proto.assign(uri, 0, n), i = n + 3;
-  n = uri.find_first_of('@', i);
-  if (n == string::npos) return false;
-  _uri.user.assign(uri, i, n - i), i = n + 1;
-  n = uri.find_first_of(":/", i);
-  if (n != string::npos) {
-    _uri.host.assign(uri, i, n - i), i = n + 1;
-    if (uri[n] == ':') {
-      n = uri.find_first_of('/', i);
-      if (n == string::npos) n = uri.size();
-      _uri.port.assign(uri, i, n - i), i = n + (n < uri.size());
-    }
-    _uri.path = uri.substr(i);
-  } else {
-    _uri.host = uri.substr(i);
-  }
+  _uri.parse(uri);
   _passwd = passwd;
-  return true;
 }
 
 const mail*
@@ -359,25 +368,25 @@ mailbox::fetchmail()
   extern backend* pop3ssl(const string&, const string&);
 
   static const struct {
-    const char* proto;
+    const char* scheme;
     backend* (*make)(const string&, const string&);
   } backends[] = {
     { "imap", imap4tcp },
-    { "imaps", imap4ssl },
+    { "imap+ssl", imap4ssl },
     { "pop", pop3tcp },
-    { "pops", pop3ssl }
+    { "pop+ssl", pop3ssl }
   };
 
   _recent = -1;
   auto_ptr<backend> be;
   for (int i = 0; i < int(sizeof(backends) / sizeof(*backends)); ++i) {
-    if (_uri.proto == backends[i].proto) {
-      be.reset(backends[i].make(_uri.host, _uri.port));
+    if (_uri[uri::scheme] == backends[i].scheme) {
+      be.reset(backends[i].make(_uri[uri::host], _uri[uri::port]));
       break;
     }
   }
-  if (!be.get()) throw error("Invalid protocol.");
-  be->login(_uri.user, _passwd);
-  _recent = be->fetch(*this, _uri.path);
+  if (!be.get()) throw error("Invalid scheme.");
+  be->login(_uri[uri::user], _passwd);
+  _recent = be->fetch(*this, _uri);
   be->logout();
 }

@@ -19,8 +19,6 @@ class tokenizer {
 protected:
   string _s;
   string::size_type _next;
-  static bool digit(const string& s, int& value);
-  static string uppercase(string s);
   string uppercase(string::size_type to) const
   { return uppercase(_s.substr(_next, to - _next)); }
   string::size_type findf(const char* s) const
@@ -36,6 +34,9 @@ public:
   const string& data() const { return _s; }
   string remain() const { return *this ? _s.substr(_next) : string(); }
   int peek() const { return _next < _s.size() ? _s[_next] & 255 : -1; }
+
+  static bool digit(const string& s, int& value);
+  static string uppercase(string s);
 };
 
 class mail {
@@ -77,10 +78,19 @@ public:
   };
 };
 
+class uri {
+public:
+  const string& operator[](int i) const { return _part[i]; }
+  void parse(const string& uri);
+  enum { scheme, user, host, port, path, fragment };
+private:
+  string _part[fragment + 1];
+};
+
 class mailbox {
   mailbox* _next;
   string _name;
-  struct { string proto, user, host, port, path; } _uri;
+  uri _uri;
   string _passwd;
   list<mail> _mails;
   int _recent;
@@ -92,8 +102,8 @@ public:
   const mailbox* next() const { return _next; }
   mailbox* next() { return _next; }
   mailbox* next(mailbox* next) { return _next = next; }
-  bool uri(const string& uri, const string& passwd = string());
   const string& name() const { return _name; }
+  void uripasswd(const string& uri, const string& passwd);
   const list<mail>& mails() const { return _mails; }
   const list<mail>& mails(const list<mail>& mails)
   { return _mails = mails; }
@@ -128,7 +138,7 @@ public:
     void ssl(const string& host, const string& port);
     virtual void login(const string& user, const string& passwd) = 0;
     virtual void logout() = 0;
-    virtual int fetch(mailbox& mbox, const string& path) = 0;
+    virtual int fetch(mailbox& mbox, const uri& uri) = 0;
   };
 public:
   class error : public exception {

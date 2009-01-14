@@ -96,7 +96,7 @@ model::_load()
     mbox* mb = new mbox(name);
     auto_ptr<mbox> hold(mb);
     int period;
-    mb->uri(s["uri"], s.cipher("passwd"));
+    mb->uripasswd(s["uri"], s.cipher("passwd"));
     s["period"](period = 15);
     s["sound"].sep(0)(mb->sound);
     mb->period = period > 0 ? period * 60000U : 0;
@@ -227,6 +227,23 @@ namespace cmd {
   };
 }
 
+namespace {
+  void
+  patch()
+  {
+    list<string> mbs = setting::mailboxes();
+    for (list<string>::iterator p = mbs.begin(); p != mbs.end(); ++p) {
+      setting s = setting::mailbox(*p);
+      string uri = s["uri"];
+      string::size_type i = uri.find("imaps://");
+      if (i != string::npos) {
+	uri.replace(i, 5, "imap+ssl");
+	s("uri", uri);
+      }
+    }
+  }
+}
+
 /*
  * WinMain - main function
  */
@@ -239,6 +256,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
   try {
     static win32 befoo("befoo:79585F30-DD15-446C-B414-152D31324970");
     static winsock winsock;
+    patch();
     auto_ptr<model> m(new model);
     auto_ptr<window> w(mascot());
     w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
