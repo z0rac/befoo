@@ -25,8 +25,8 @@ class imap4 : public mailbox::backend {
   // arg_t - argument type.
   struct arg_t : public string {
     arg_t() {}
-    arg_t(const string& arg) : string(arg) {}
-    arg_t(const char* arg) : string(arg) {}
+    arg_t(const string& arg) { operator()(arg); }
+    arg_t(const char* arg) { operator()(arg); }
     arg_t& operator()(const string& arg);
     arg_t& q(const string& arg);
   };
@@ -53,7 +53,7 @@ public:
   imap4() : _seq(_seqinit()) {}
   void login(const string& user, const string& passwd);
   void logout();
-  int fetch(mailbox& mbox, const string& path);
+  int fetch(mailbox& mbox, const uri& uri);
 };
 
 void
@@ -72,8 +72,9 @@ imap4::logout()
 }
 
 int
-imap4::fetch(mailbox& mbox, const string& path)
+imap4::fetch(mailbox& mbox, const uri& uri)
 {
+  const string& path = uri[uri::path];
   resp_t resp = _command("EXAMINE", path.empty() ? "INBOX" : arg_t().q(path));
   if (resp.type != "OK") throw mailbox::error(resp.data);
   resp = _command("UID SEARCH", "UNSEEN", "SEARCH");
@@ -156,8 +157,7 @@ imap4::_command(const char* name, const arg_t& args, const char* res)
 {
   string tag = _tag();
   { // send a command message to the server.
-    string msg = tag + ' ' + name;
-    if (!args.empty()) msg += ' ' + args;
+    string msg = tag + ' ' + name + args;
     write(msg + "\r\n");
     LOG("S: " << msg << '\n');
   }
@@ -251,7 +251,7 @@ imap4::_readline()
 imap4::arg_t&
 imap4::arg_t::operator()(const string& arg)
 {
-  if (!arg.empty()) append(empty() ? arg : ' ' + arg);
+  append(' ' + arg);
   return *this;
 }
 
@@ -265,7 +265,8 @@ imap4::arg_t::q(const string& arg)
     qst[1] = arg[n];
     esc.append(arg, i, n - i).append(qst, 2);
   }
-  return operator()('"' + esc + arg.substr(i) + '"');
+  append(" \"" + esc + arg.substr(i) + '"');
+  return *this;
 }
 
 /*

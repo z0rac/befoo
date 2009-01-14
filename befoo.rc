@@ -70,7 +70,7 @@ BEGIN
 ;period=10\t\t; A fetching period in minutes. (default: 15)\r\n\
 \r\n\
 ;[another over SSL]\t; You need the OpenSSL DLLs\r\n\
-;uri=imaps://username@imap.example.com/\r\n\
+;uri=imap+ssl://username@imap.example.com/\r\n\
 ;passwd=...\r\n\
 ;sound=%windir%\\Media\\chimes.wav\r\n\
 \r\n\
@@ -79,11 +79,11 @@ BEGIN
 ;passwd=...\r\n\
 \r\n\
 ;[POP3 recents]\t; Summary of recents only.\r\n\
-;uri=pop://username@pop.example.com/recent\r\n\
+;uri=pop://username@pop.example.com/#recent\r\n\
 ;passwd=...\r\n\
 \r\n\
 ;[POP3 over SSL]\t; You need the OpenSSL DLLs\r\n\
-;uri=pops://username@pop.example.com/\r\n\
+;uri=pop+ssl://username@pop.example.com/\r\n\
 ;passwd=...\r\n\
 \r\n\
 [(preferences)]\r\n\

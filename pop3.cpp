@@ -29,7 +29,7 @@ class pop3 : public mailbox::backend {
 public:
   void login(const string& user, const string& passwd);
   void logout();
-  int fetch(mailbox& mbox, const string& path);
+  int fetch(mailbox& mbox, const uri& uri);
 };
 
 void
@@ -61,12 +61,12 @@ pop3::logout()
 }
 
 int
-pop3::fetch(mailbox& mbox, const string& path)
+pop3::fetch(mailbox& mbox, const uri& uri)
 {
   const list<string>& ignore = mbox.ignore();
   list<string> ignored;
   list<mail> fetched;
-  bool recent = path == "recent";
+  bool recent = uri[uri::fragment] == "recent";
   int count = 0;
   _command("UIDL");
   plist uidl(_plist());
@@ -130,10 +130,7 @@ pop3::_plist(bool upper)
       line.assign(line, 1, line.size() - 1);
       if (line.empty()) break;
     }
-    if (upper) {
-      string::iterator p = line.begin();
-      for (; p !=line.end(); ++p) *p = toupper(*p);
-    }
+    if (upper) line = tokenizer::uppercase(line);
     pair<string, string> ps;
     string::size_type i = line.find_first_of(' ');
     ps.first.assign(line, 0, i);
