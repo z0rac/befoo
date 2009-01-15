@@ -36,6 +36,7 @@ public:
   int peek() const { return _next < _s.size() ? _s[_next] & 255 : -1; }
 
   static bool digit(const string& s, int& value);
+  static bool digit(const string& s) { int v; return digit(s, v); }
   static string uppercase(string s);
 };
 
@@ -128,9 +129,9 @@ public:
     int tls() const;
     void starttls();
     string read(size_t size);
-    string readline();
+    string read();
     void write(const char* data, size_t size) { _st->write(data, size); }
-    void write(const string& data) { _st->write(data.data(), data.size()); }
+    void write(const string& data);
   public:
     typedef _stream stream;
     virtual ~backend() {}

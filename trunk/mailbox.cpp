@@ -292,15 +292,26 @@ mailbox::backend::read(size_t size)
 }
 
 string
-mailbox::backend::readline()
+mailbox::backend::read()
 {
-  string result;
   char c;
+  _st->read(&c, 1);
+  string result(1, c);
   do {
-    _st->read(&c, 1);
-    result += c;
-  } while (c != '\n');
-  return result;
+    do {
+      _st->read(&c, 1);
+      result.push_back(c);
+    } while (c != '\012');
+  } while (result[result.size() - 2] != '\015');
+  return result.erase(result.size() - 2); // remove CRLF
+}
+
+void
+mailbox::backend::write(const string& data)
+{
+  string ln(data);
+  ln.append("\015\012");
+  write(ln.data(), ln.size());
 }
 
 /*
@@ -385,7 +396,7 @@ mailbox::fetchmail()
       break;
     }
   }
-  if (!be.get()) throw error("Invalid scheme.");
+  if (!be.get()) throw error("invalid scheme");
   be->login(_uri[uri::user], _passwd);
   _recent = be->fetch(*this, _uri);
   be->logout();

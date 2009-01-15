@@ -82,6 +82,7 @@ summary::_initialize()
 int
 summary::initialize(const mailbox* mboxes)
 {
+  int h = extent().y;
   _initialize();
   for (const mailbox* mb = mboxes; mb; mb = mb->next()) {
     const list<mail>& mails = mb->mails();
@@ -97,8 +98,8 @@ summary::initialize(const mailbox* mboxes)
 	(mb->name());
     }
   }
-  int n = max(ListView_GetItemCount(hwnd()) - 1 , 0);
-  return HIWORD(ListView_ApproximateViewRect(hwnd(), -1, -1, n)) - extent().y;
+  int n = ListView_GetItemCount(hwnd()) - 1;
+  return HIWORD(ListView_ApproximateViewRect(hwnd(), -1, -1, n)) - h;
 }
 
 summary::item::item(const window& w)
