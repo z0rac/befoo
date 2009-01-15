@@ -5,7 +5,6 @@
  * the license terms, see the LICENSE.txt file included with the program.
  */
 #include "mailbox.h"
-#include <stack>
 
 #if _DEBUG >= 2
 #include <iostream>
@@ -22,15 +21,6 @@
 class imap4 : public mailbox::backend {
   unsigned _seq; // sequencial number for the tag.
 
-  // arg_t - argument type.
-  struct arg_t : public string {
-    arg_t() {}
-    arg_t(const string& arg) { operator()(arg); }
-    arg_t(const char* arg) { operator()(arg); }
-    arg_t& operator()(const string& arg);
-    arg_t& q(const string& arg);
-  };
-
   // parse_t - imap4 response parser.
   struct parse_t : public tokenizer {
     parse_t() {}
@@ -41,14 +31,23 @@ class imap4 : public mailbox::backend {
   // resp_t - response type.
   struct resp_t { string tag, type, data; };
 
-  bool _initialize();
   string _tag();
-  resp_t _command(const char* name,
-		  const arg_t& args = arg_t(),
-		  const char* res = NULL);
+  static string _quote(const string& arg);
+  string _command(const char* cmd, const char* res = NULL);
+  string _command(const string& cmd, const char* res = NULL)
+  { return _command(cmd.c_str(), res); }
   resp_t _response();
-  string _readline();
+  string _read();
   unsigned _seqinit() const { return unsigned(this) + time(NULL); }
+#ifdef _DEBUG
+  using backend::read;
+  string read()
+  {
+    string line = backend::read();
+    LOG("R: " << line << endl);
+    return line;
+  }
+#endif
 public:
   imap4() : _seq(_seqinit()) {}
   void login(const string& user, const string& passwd);
@@ -59,9 +58,35 @@ public:
 void
 imap4::login(const string& user, const string& passwd)
 {
-  if (!_initialize()) {
-    resp_t resp = _command("LOGIN", arg_t().q(user).q(passwd));
-    if (resp.type != "OK") throw mailbox::error(resp.data);
+  static const char notimap[] = "server not IMAP4 compliant";
+  resp_t resp = _response();
+  bool preauth = resp.type == "PREAUTH";
+  if (resp.tag != "*" || !preauth && resp.type != "OK") {
+    throw mailbox::error(notimap);
+  }
+  bool imap = false;
+  bool stls = false;
+  static const char CAPABILITY[] = "CAPABILITY";
+  static const char STARTTLS[] = "STARTTLS";
+  string cap = _command(CAPABILITY, CAPABILITY);
+  for (parse_t caps(cap); caps;) {
+    string s = caps.token();
+    if (s == "IMAP4" || s == "IMAP4REV1") imap = true;
+    else if (s == STARTTLS) stls = true;
+  }
+  if (!imap) throw mailbox::error(notimap);
+  if (stls && !tls()) {
+    _command(STARTTLS);
+    starttls();
+    if (!preauth) cap = _command(CAPABILITY, CAPABILITY);
+  }
+  if (!preauth) {
+    for (parse_t caps(cap); caps;) {
+      if (caps.token() == "LOGINDISABLED") {
+	throw mailbox::error("login disabled");
+      }
+    }
+    _command("LOGIN" + _quote(user) + _quote(passwd));
   }
 }
 
@@ -75,13 +100,10 @@ int
 imap4::fetch(mailbox& mbox, const uri& uri)
 {
   const string& path = uri[uri::path];
-  resp_t resp = _command("EXAMINE", path.empty() ? "INBOX" : arg_t().q(path));
-  if (resp.type != "OK") throw mailbox::error(resp.data);
-  resp = _command("UID SEARCH", "UNSEEN", "SEARCH");
-  if (resp.type != "SEARCH") throw mailbox::error(resp.data);
+  _command(path.empty() ? "EXAMINE INBOX" : "EXAMINE" + _quote(path));
   list<mail> fetched;
   size_t copies = 0;
-  for (parse_t ids = resp.data; ids;) {
+  for (parse_t ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
     string uid = ids.token();
     const mail* p = mbox.find(uid);
     if (p) {
@@ -90,13 +112,11 @@ imap4::fetch(mailbox& mbox, const uri& uri)
       continue;
     }
     LOG("Fetch mail: " << uid << endl);
-    static const char param[] = "BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]";
-    resp = _command("UID FETCH", arg_t(uid)(param), "FETCH");
-    parse_t parse = resp.data;
+    parse_t parse(_command("UID FETCH " + uid +
+			   " BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]",
+			   "FETCH"));
     parse.token(); // drop sequence#
-    if (resp.type != "FETCH" || parse.peek() != '(') {
-      throw mailbox::error(resp.data);
-    }
+    if (parse.peek() != '(') throw mailbox::error(parse.data());
     for (parse = parse.token(true); parse;) {
       string item = parse.token();
       string value = parse.token();
@@ -112,36 +132,6 @@ imap4::fetch(mailbox& mbox, const uri& uri)
   return int(fetched.size() - copies);
 }
 
-bool
-imap4::_initialize()
-{
-  resp_t resp = _response();
-  static const char PREAUTH[] = "PREAUTH";
-  if (resp.tag == "*" && (resp.type == "OK" || resp.type == PREAUTH)) {
-    bool auth = resp.type == PREAUTH;
-    bool imap = false;
-    bool stls = false;
-    static const char CAPABILITY[] = "CAPABILITY";
-    resp = _command(CAPABILITY, arg_t(), CAPABILITY);
-    if (resp.type == CAPABILITY) {
-      static const char STARTTLS[] = "STARTTLS";
-      for (parse_t caps = resp.data; caps;) {
-	string s = caps.token();
-	if (s == "IMAP4" || s == "IMAP4REV1") imap = true;
-	else if (s == STARTTLS) stls = true;
-      }
-      if (imap) {
-	if (stls && !tls()) {
-	  _command(STARTTLS);
-	  starttls();
-	}
-	return auth;
-      }
-    }
-  }
-  throw mailbox::error("server not IMAP4 compliant");
-}
-
 string
 imap4::_tag()
 {
@@ -152,22 +142,34 @@ imap4::_tag()
   return string(s, 4);
 }
 
-imap4::resp_t
-imap4::_command(const char* name, const arg_t& args, const char* res)
+string
+imap4::_quote(const string& arg)
 {
-  string tag = _tag();
-  { // send a command message to the server.
-    string msg = tag + ' ' + name + args;
-    write(msg + "\r\n");
-    LOG("S: " << msg << '\n');
+  string esc;
+  char qst[] = "\\ ";
+  string::size_type i = 0, n;
+  for (; (n = arg.find_first_of("\"\\", i)) != string::npos; i = n + 1) {
+    qst[1] = arg[n];
+    esc.append(arg, i, n - i).append(qst, 2);
   }
+  return " \"" + esc + arg.substr(i) + '"';
+}
+
+string
+imap4::_command(const char* cmd, const char* res)
+{
+  const string tag = _tag();
+  // send a command message to the server.
+  write(tag + ' ' + cmd);
+  LOG("S: " << tag << " " << cmd << endl);
+
   resp_t resp;
   string untagged;
   bool bye = false;
   for (;;) {
     resp = _response();
     if (res && resp.type == "OK") {
-      parse_t parse = resp.data;
+      parse_t parse(resp.data);
       if (parse.peek() == '[') {
 	parse = parse.token(true);
 	if (parse.token() == res) untagged = parse.remain();
@@ -180,21 +182,18 @@ imap4::_command(const char* name, const arg_t& args, const char* res)
   if (resp.tag != tag) {
     throw mailbox::error("unexpected tagged response");
   }
-  if (bye && stricmp(name, "LOGOUT") != 0) throw mailbox::error("bye");
-  if (resp.type == "BAD") {
-    throw mailbox::error(string(name) + " error: BAD " + resp.data);
+  if (bye && stricmp(cmd, "LOGOUT") != 0) throw mailbox::error("bye");
+  if (resp.type != "OK") {
+    throw mailbox::error(resp.type + " " + resp.data);
   }
-  if (res && resp.type == "OK") {
-    resp.type = res, resp.data = untagged;
-  }
-  return resp;
+  return untagged;
 }
 
 imap4::resp_t
 imap4::_response()
 {
+  parse_t parse(_read());
   resp_t resp;
-  parse_t parse = _readline();
   resp.tag = parse.token();
   if (resp.tag == "+") { // continuation
     resp.data = parse.remain();
@@ -204,7 +203,7 @@ imap4::_response()
   if (resp.tag.empty() || resp.type.empty()) {
     throw mailbox::error("unexpected response: " + parse.data());
   }
-  if (parse && resp.type.find_first_not_of("0123456789") == string::npos) {
+  if (parse && parse_t::digit(resp.type)) {
     resp.data = resp.type, resp.type = parse.token();
   }
   if (parse) {
@@ -215,14 +214,11 @@ imap4::_response()
 }
 
 string
-imap4::_readline()
+imap4::_read()
 {
-  string line = readline();
-  if (line.empty()) throw mailbox::error("socket error: EOF");
-  line.resize(line.size() - 2); // remove CRLF
-  LOG("R: " << line << endl);
-  if (line.size() > 1 && (line[0] != '+' || line[1] != ' ')) {
-    while (*line.rbegin() == '}') {
+  string line = read();
+  if (!line.empty() && line[0] != '+') {
+    while (line[line.size() - 1] == '}') {
       string::size_type i = line.find_last_of('{');
       if (i == string::npos) break;
       const char* p = line.c_str();
@@ -234,39 +230,10 @@ imap4::_readline()
 	LOG(literal);
 	line += literal;
       }
-      { // read a following line.
-	string follow = readline();
-	follow.resize(follow.size() - 2); // remove CRLF
-	LOG(follow << endl);
-	line += follow;
-      }
+      line += read(); // read a following line.
     }
   }
   return line;
-}
-
-/*
- * Functions of the class imap4::arg_t
- */
-imap4::arg_t&
-imap4::arg_t::operator()(const string& arg)
-{
-  append(' ' + arg);
-  return *this;
-}
-
-imap4::arg_t&
-imap4::arg_t::q(const string& arg)
-{
-  string esc;
-  char qst[] = "\\ ";
-  string::size_type i = 0, n;
-  for (; (n = arg.find_first_of("\"\\", i)) != string::npos; i = n + 1) {
-    qst[1] = arg[n];
-    esc.append(arg, i, n - i).append(qst, 2);
-  }
-  append(" \"" + esc + arg.substr(i) + '"');
-  return *this;
 }
 
 /*
@@ -285,19 +252,20 @@ imap4::parse_t::token(bool open)
     } else if (_s[i] == ' ') {
       _next = i + 1;
     } else if (_s[i] == '[' || result.empty()) {
-      stack<char> st;
       result += _s[i];
-      for (st.push(_s[i++]); !st.empty();) {
+      for (string st(1, _s[i++]); !st.empty();) {
 	_next = i;
 	if (_next >= _s.size()) {
 	  throw mailbox::error("invalid token: " + _s);
 	}
-	switch (st.top()) {
+	string::size_type sp = st.size() - 1;
+	switch (st[sp]) {
 	case '"':
 	  i = findq("\"", i);
-	  if (i == string::npos) break;
-	  result.append(_s, _next, ++i - _next);
-	  st.pop();
+	  if (i != string::npos) {
+	    result.append(_s, _next, ++i - _next);
+	    st.erase(sp);
+	  }
 	  break;
 	case '{':
 	  {
@@ -307,19 +275,20 @@ imap4::parse_t::token(bool open)
 	    i += string::size_type(end - p) + 1;
 	    if (*end == '}' && i <= _s.size()) {
 	      result.append(_s, _next, i - _next);
-	      st.pop();
+	      st.erase(sp);
 	    } else {
 	      i = string::npos;
 	    }
 	  }
 	  break;
 	default:
-	  delim[0] = st.top() == '[' ? ']' : ')';
+	  delim[0] = st[sp] == '[' ? ']' : ')';
 	  i = findf(delim, i);
-	  if (i == string::npos) break;
-	  if (_s[i] == delim[0]) st.pop();
-	  else st.push(_s[i]);
-	  result += uppercase(++i);
+	  if (i != string::npos) {
+	    if (_s[i] == delim[0]) st.erase(sp);
+	    else st.push_back(_s[i]);
+	    result += uppercase(++i);
+	  }
 	  break;
 	}
       }
@@ -332,8 +301,8 @@ imap4::parse_t::token(bool open)
 	  result.assign(result, 1, result.size() - 2);
 	  break;
 	case '{':
-	  i = result.find_first_of('}');
-	  if (i != string::npos) result = result.substr(i + 1);
+	  assert(result.find_first_of('}') != string::npos);
+	  result.erase(0, result.find_first_of('}') + 1);
 	  break;
 	}
       }

@@ -22,10 +22,18 @@
 class pop3 : public mailbox::backend {
   bool _command(const string& cmd, bool ok = true);
   bool _ok(bool ok = true);
-  string _readline();
   typedef list< pair<string, string> > plist;
   plist _plist(bool upper = false);
   string _headers();
+#ifdef _DEBUG
+  using backend::read;
+  string read()
+  {
+    string line = backend::read();
+    LOG("R: " << line << endl);
+    return line;
+  }
+#endif
 public:
   void login(const string& user, const string& passwd);
   void logout();
@@ -38,9 +46,9 @@ pop3::login(const string& user, const string& passwd)
   _ok();
   if (_command("CAPA", false)) {
     bool uidl = false, stls = false;
-    plist capa(_plist(true));
-    plist::iterator p = capa.begin();
-    for (; p != capa.end(); ++p) {
+    plist cap(_plist(true));
+    plist::iterator p = cap.begin();
+    for (; p != cap.end(); ++p) {
       if (p->first == "UIDL") uidl = true;
       else if (p->first == "STLS") stls = true;
     }
@@ -48,7 +56,13 @@ pop3::login(const string& user, const string& passwd)
     if (stls && !tls()) {
       _command("STLS");
       starttls();
+      _command("CAPA");
+      cap = _plist(true);
     }
+    for (p = cap.begin(); p != cap.end(); ++p) {
+      if (p->first == "USER") break;
+    }
+    if (p == cap.end()) throw mailbox::error("login disabled");
   }
   _command("USER " + user);
   _command("PASS " + passwd);
@@ -96,28 +110,18 @@ pop3::fetch(mailbox& mbox, const uri& uri)
 bool
 pop3::_command(const string& cmd, bool ok)
 {
-  write(cmd + "\r\n");
-  LOG("S: " << cmd << '\n');
+  write(cmd);
+  LOG("S: " << cmd << endl);
   return _ok(ok);
 }
 
 bool
 pop3::_ok(bool ok)
 {
-  string line = _readline();
+  string line = read();
   bool resp = line.substr(0, line.find_first_of(' ')) == "+OK";
   if (ok && !resp) throw mailbox::error(line);
   return resp;
-}
-
-string
-pop3::_readline()
-{
-  string line = readline();
-  if (line.empty()) throw mailbox::error("socket error: EOF");
-  line.resize(line.size() - 2); // remove CRLF
-  LOG("R: " << line << endl);
-  return line;
 }
 
 pop3::plist
@@ -125,7 +129,7 @@ pop3::_plist(bool upper)
 {
   plist result;
   for (;;) {
-    string line = _readline();
+    string line = read();
     if (!line.empty() && line[0] == '.') {
       line.assign(line, 1, line.size() - 1);
       if (line.empty()) break;
@@ -147,15 +151,15 @@ string
 pop3::_headers()
 {
   string result;
-  string line = _readline();
-  for (; !line.empty(); line = _readline()) {
+  string line = read();
+  for (; !line.empty(); line = read()) {
     if (line[0] == '.') {
       if (line.size() == 1) break;
-      line.assign(line, 1, line.size() - 1);
+      line.erase(0, 1);
     }
-    result += line + "\r\n";
+    result += line + "\015\012";
   }
-  while (line.size() != 1 || line[0] != '.') line = _readline();
+  while (line.size() != 1 || line[0] != '.') line = read();
   return result;
 }
 
