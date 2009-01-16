@@ -38,13 +38,13 @@ window::~window()
   if (_hwnd) _release(!child());
 }
 
-void
+int
 window::eventloop()
 {
   for (;;) {
     MSG msg;
     switch (GetMessage(&msg, NULL, 0, 0)) {
-    case 0: return;
+    case 0: return int(msg.wParam);
     case -1: continue;
     }
     TranslateMessage(&msg);

@@ -87,8 +87,7 @@ pop3::fetch(mailbox& mbox, const uri& uri)
   plist::iterator uidp = uidl.begin();
   for (; uidp != uidl.end(); ++uidp) {
     string uid = uidp->second;
-    if (recent && mbox.find(uid) ||
-	find(ignore.begin(), ignore.end(), uid) != ignore.end()) {
+    if (find(ignore.begin(), ignore.end(), uid) != ignore.end()) {
       ignored.push_back(uid);
       continue;
     }
@@ -99,6 +98,7 @@ pop3::fetch(mailbox& mbox, const uri& uri)
       ignored.push_back(uid);
       continue;
     }
+    if (recent) ignored.push_back(uid);
     fetched.push_back(m);
     count += int(recent || !mbox.find(uid));
   }

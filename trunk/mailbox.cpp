@@ -177,8 +177,8 @@ sslstream::_connect(int fd)
 {
   assert(!_ssl);
   try {
-    if (!(_ssl = SSL(SSL_new)(_ctx)) ||
-	!SSL(SSL_set_fd)(_ssl, fd) ||
+    _ssl = SSL(SSL_new)(_ctx);
+    if (!_ssl || !SSL(SSL_set_fd)(_ssl, fd) ||
 	SSL(SSL_connect)(_ssl) != 1) throw error();
   } catch (...) {
     tcpstream::close();
@@ -317,10 +317,21 @@ mailbox::backend::write(const string& data)
 /*
  * Functions of the class uri
  */
+uri::operator string() const
+{
+  string s = _part[scheme] + "://";
+  if (!_part[user].empty()) s += _part[user] + '@';
+  s += _part[host];
+  if (!_part[port].empty()) s += ':' + _part[port];
+  s += '/' + _part[path];
+  if (!_part[fragment].empty()) s += '#' + _part[fragment];
+  return s;
+}
+
 void
 uri::parse(const string& uri)
 {
-  for (int i = scheme; i <= fragment; ++i) _part[i].clear();
+  for (int ui = scheme; ui <= fragment; ++ui) _part[ui].clear();
 
   string::size_type i = uri.find_first_of('#');
   if (i != string::npos) _part[fragment] = uri.substr(i + 1);

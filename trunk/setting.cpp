@@ -32,11 +32,12 @@ namespace {
     static string _path;
     string _section;
     static bool _prepare();
+    static string _get(const char* section, const char* key);
   public:
     profile(const string& section) : _section(section) {}
     string get(const char* key) const;
     void put(const char* key, const char* value);
-    static string get(const char* section = NULL, const char* key = NULL);
+    static string sections() { return _get(NULL, NULL); }
     static bool edit();
   };
   string profile::_path;
@@ -75,9 +76,16 @@ profile::_prepare()
 }
 
 string
+profile::_get(const char* section, const char* key)
+{
+  return _prepare() ?
+    win32::profile(section, key, _path.c_str()) : string();
+}
+
+string
 profile::get(const char* key) const
 {
-  return get(_section.c_str(), key);
+  return _get(_section.c_str(), key);
 }
 
 void
@@ -86,13 +94,6 @@ profile::put(const char* key, const char* value)
   if (_prepare()) {
     WritePrivateProfileString(_section.c_str(), key, value, _path.c_str());
   }
-}
-
-string
-profile::get(const char* section, const char* key)
-{
-  return _prepare() ?
-    win32::profile(section, key, _path.c_str()) : string();
 }
 
 bool
@@ -136,10 +137,17 @@ setting::preferences()
   return new profile("(preferences)");
 }
 
+setting
+setting::preferences(const char* name)
+{
+  assert(name && name[0]);
+  return new profile(string("(") + name + ")");
+}
+
 list<string>
 setting::mailboxes()
 {
-  list<string> sect(manip(profile::get()).sep(0).split());
+  list<string> sect(manip(profile::sections()).sep(0).split());
   for (list<string>::iterator p = sect.begin(); p != sect.end();) {
     // skip sections matched with the pattern "(.*)".
     p =  p->empty() || (*p)[0] == '(' && *p->rbegin() == ')' ? sect.erase(p) : ++p;
@@ -158,6 +166,42 @@ setting::edit()
 {
   LOG("Edit setting." << endl);
   return profile::edit();
+}
+
+list<string>
+setting::cache(_str key)
+{
+  list<string> result;
+  profile cache(string("(cache:") + key.c_str + ")");
+  list<string> keys(manip(cache.get(NULL)).sep(0).split());
+  for (list<string>::iterator p = keys.begin(); p != keys.end(); ++p) {
+    result.push_back(cache.get(p->c_str()));
+  }
+  return result;
+}
+
+void
+setting::cache(_str key, const list<string>& data)
+{
+  if (!data.empty()) {
+    profile cache(string("(cache:") + key.c_str + ")");
+    long i = 0;
+    for (list<string>::const_iterator p = data.begin(); p != data.end(); ++p) {
+      char s[35];
+      cache.put(_ltoa(++i, s, 10), p->c_str());
+    }
+  }
+}
+
+void
+setting::cacheclear()
+{
+  list<string> sect(manip(profile::sections()).sep(0).split());
+  for (list<string>::iterator p = sect.begin(); p != sect.end(); ++p) {
+    if (!p->empty() && *p->rbegin() == ')' && p->find("(cache:") == 0) {
+      profile(*p).put(NULL, NULL);
+    }
+  }
 }
 
 static const char code64[] =
