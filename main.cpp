@@ -46,7 +46,7 @@ namespace {
     model();
     ~model() { _release(); }
     const mailbox* mailboxes() const { return _mailboxes; }
-    model& reload();
+    void cache();
     model& fetch(window& source, bool force = true);
     bool fetching() const { return _fetching != 0; }
   private:
@@ -100,19 +100,20 @@ model::_load()
     s["period"](period = 15);
     s["sound"].sep(0)(mb->sound);
     mb->period = period > 0 ? period * 60000U : 0;
+    mb->ignore(setting::cache(mb->uristr()));
     hold.release();
     if (last) last = last->next(mb);
     else last = _mailboxes = mb;
   }
+  setting::cacheclear();
 }
 
-model&
-model::reload()
+void
+model::cache()
 {
-  LOG("Reload settings." << endl);
-  _release();
-  _load();
-  return *this;
+  for (mailbox* p = _mailboxes; p; p = p->next()) {
+    setting::cache(p->uristr(), p->ignore());
+  }
 }
 
 model&
@@ -217,8 +218,7 @@ namespace cmd {
   struct setting : public window::command {
     model& _model;
     setting(model& model) : _model(model) {}
-    void execute(window& source)
-    { if (::setting::edit()) _model.reload().fetch(source); }
+    void execute(window&) { if (::setting::edit()) PostQuitMessage(1); }
     UINT state(window&) { return _model.fetching() ? MFS_DISABLED : 0; }
   };
 
@@ -235,11 +235,38 @@ namespace {
     for (list<string>::iterator p = mbs.begin(); p != mbs.end(); ++p) {
       setting s = setting::mailbox(*p);
       string uri = s["uri"];
-      string::size_type i = uri.find("imaps://");
-      if (i != string::npos) {
-	uri.replace(i, 5, "imap+ssl");
-	s("uri", uri);
-      }
+      if (uri.empty()) continue;
+      string::size_type i;
+      i = uri.find("imaps://");
+      if (i != string::npos) uri.replace(i, 5, "imap+ssl");
+      i = uri.find("pops://");
+      if (i != string::npos) uri.replace(i, 4, "pop+ssl");
+      s("uri", uri);
+    }
+    setting prefs = setting::preferences();
+    string s;
+    s = prefs["columns"];
+    if (!s.empty()) {
+      string w = prefs["summary"];
+      setting::preferences("summary")
+	("window", w)("columns", s);
+      prefs.erase("summary").erase("columns");
+    }
+    s = prefs["mascot"];
+    if (!s.empty()) {
+      int x, y, tray;
+      static_cast<setting::manip>(s)(x = 0)(y = 0)(tray = 0);
+      setting::preferences("mascot")
+	("position", setting::tuple(x)(y))("tray", tray);
+      prefs.erase("mascot");
+    }
+    s = prefs["notice"];
+    if (!s.empty()) {
+      int balloon, summary, ac;
+      static_cast<setting::manip>(s)(balloon = 10)(summary = 0);
+      prefs["autoclose"](ac = 3);
+      prefs("balloon", balloon)("summary", setting::tuple(ac)(summary));
+      prefs.erase("notice").erase("autoclose");
     }
   }
 }
@@ -257,16 +284,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     static win32 befoo("befoo:79585F30-DD15-446C-B414-152D31324970");
     static winsock winsock;
     patch();
-    auto_ptr<model> m(new model);
-    auto_ptr<window> w(mascot());
-    w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
-    w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
-    w->addcmd(ID_MENU_SETTINGS, new cmd::setting(*m));
-    w->addcmd(ID_MENU_EXIT, new cmd::exit);
     int delay;
     setting::preferences()["delay"](delay = 0);
-    w->settimer(*m, delay > 0 ? delay * 1000 : 1);
-    window::eventloop();
+    for (int qc = 1; qc > 0; delay = 0) {
+      auto_ptr<model> m(new model);
+      auto_ptr<window> w(mascot());
+      w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
+      w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
+      w->addcmd(ID_MENU_SETTINGS, new cmd::setting(*m));
+      w->addcmd(ID_MENU_EXIT, new cmd::exit);
+      w->settimer(*m, delay > 0 ? delay * 1000 : 1);
+      qc = window::eventloop();
+      m->cache();
+    }
     return 0;
   } catch (...) {}
   return -1;

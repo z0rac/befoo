@@ -29,7 +29,7 @@ protected:
   void style(DWORD style, DWORD ex = 0) const;
   virtual LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
   virtual void release() {}
-  virtual void resize(int w, int h) {}
+  virtual void resize(int, int) {}
   virtual void execute(int id);
 
   struct commctrl {
@@ -49,7 +49,7 @@ public:
   window(LPCSTR classname, LPCSTR menu = NULL, HWND owner = NULL);
   window(LPCSTR classname, const window& parent, int id = -1);
   virtual ~window();
-  static void eventloop();
+  static int eventloop();
   static void broadcast(UINT m, WPARAM w, LPARAM l);
 public:
   HWND hwnd() const { return _hwnd; }
@@ -66,10 +66,12 @@ public:
   RECT bounds() const;
 public:
   class command {
+    command(const command&); void operator=(const command&); // disable to copy
   public:
+    command() {}
     virtual ~command() {}
     virtual void execute(window& source) = 0;
-    virtual UINT state(window& source) { return 0; }
+    virtual UINT state(window&) { return 0; }
   };
   struct cmdp : public auto_ptr<command> {
     typedef auto_ptr<command> super;
@@ -100,9 +102,9 @@ class appwindow : public window {
   static LPCSTR _classname();
 protected:
   LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
-  virtual void draw(HDC hDC) {}
-  virtual void erase(HDC hDC) {}
-  virtual void limit(LPMINMAXINFO info) {}
+  virtual void draw(HDC) {}
+  virtual void erase(HDC) {}
+  virtual void limit(LPMINMAXINFO) {}
 
   const RECT& adjust(RECT& bounds, int border = 8) const;
 public:

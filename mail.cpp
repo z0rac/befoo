@@ -269,7 +269,7 @@ mail::decoder::eword(const string& text,
       if (n < 3 || p == end || text[p++] != '=') continue;
       i = p;
     }
-    char c = toupper(text[q[1]]);
+    int c = toupper(text[q[1]]);
     if (q[2] - q[1] != 2 || c != 'B' && c != 'Q') continue;
     try {
       string s(text, q[2], i - q[2] - 2);
@@ -395,7 +395,9 @@ tokenizer::digit(const string& s, int& value)
 string
 tokenizer::uppercase(string s)
 {
-  for (string::iterator p = s.begin(); p != s.end(); ++p) *p = toupper(*p);
+  for (string::iterator p = s.begin(); p != s.end(); ++p) {
+    *p = static_cast<char>(toupper(*p));
+  }
   return s;
 }
 

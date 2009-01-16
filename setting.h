@@ -25,7 +25,7 @@ class setting {
 public:
   typedef _repository repository;
   setting(const setting& s) : _rep(const_cast<setting&>(s)._rep) {}
-  setting operator=(const setting& s)
+  const setting& operator=(const setting& s)
   { _rep = const_cast<setting&>(s)._rep; return *this; }
 public:
   struct _str {
@@ -56,6 +56,8 @@ public:
   { _rep->put(key, value.c_str()); return *this; }
   setting& operator()(_str key, const char* value)
   { _rep->put(key, value); return *this; }
+  setting& operator()(_str key, long value)
+  { return operator()(key, tuple(value)); }
 
   // manip - use for separated input parameters.
   // Examples:
@@ -70,9 +72,10 @@ public:
     bool next(long& v);
   public:
     manip(const string& s);
+    manip& operator()() { next(); return *this; }
     manip& operator()(string& v);
     template<typename _Ty> manip& operator()(_Ty& v)
-    { long i; next(i) && (v = static_cast<_Ty>(i)); return *this; }
+    { long i; if (next(i)) v = static_cast<_Ty>(i); return *this; }
     operator const string&() const { return _s; }
     manip& sep(char sep) { _sep = sep; return *this; }
     list<string> split();
@@ -89,12 +92,17 @@ public:
   manip operator[](_str key) const { return manip(_rep->get(key)); }
 public:
   static setting preferences();
+  static setting preferences(const char* name);
   static list<string> mailboxes();
   static setting mailbox(const string& id);
   static bool edit();
+  static list<string> cache(_str key);
+  static void cache(_str key, const list<string>& data);
+  static void cacheclear();
 public:
   string cipher(_str key);
   setting& cipher(_str key, const string& value);
+  setting& erase(_str key) { _rep->put(key, NULL); return *this; }
 };
 
 #endif

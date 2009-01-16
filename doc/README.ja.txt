@@ -1,4 +1,4 @@
-befoo - IMAP4メールチェッカー <http://sourceforge.jp/projects/befoo>
+befoo - IMAP4メールチェッカー <http://sourceforge.jp/projects/befoo/>
 
 概要:
 -----
@@ -19,6 +19,7 @@ OpenSSLランタイム(ssleay32.dllとlibeay32.dll)をインストールすれば、SSL
 ライセンス:
 -----------
 GNU GPLに基づいて配布されます。詳細はLICENSE.txtをお読みください。
+日本語訳 <http://www.opensource.jp/gpl/gpl.ja.html.euc-jp>
 
 
 バグレポート:

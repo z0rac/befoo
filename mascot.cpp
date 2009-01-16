@@ -382,8 +382,9 @@ mascotwindow::_release()
 {
   try {
     RECT r = bounds();
-    setting::preferences()
-      ("mascot", setting::tuple(r.left)(r.top)(!visible()));
+    setting::preferences("mascot")
+      ("position", setting::tuple(r.left)(r.top))
+      ("tray", !visible());
   } catch (...) {}
 }
 
@@ -491,13 +492,17 @@ mascotwindow::mascotwindow()
   setting prefs = setting::preferences();
   prefs["icon"](_size = size());
   if (!_size) _size = GetSystemMetrics(SM_CXICON);
+  prefs["balloon"](_balloon = 10);
+  prefs["summary"]()(_summary = 0);
+
+  prefs = setting::preferences("mascot");
   RECT r;
   int tray;
-  prefs["mascot"](r.left = 0)(r.top = 0)(tray = 0);
+  prefs["position"](r.left = 0)(r.top = 0);
+  prefs["tray"](tray = 0);
   r.right = r.left + _size;
   r.bottom = r.top + _size;
   move(adjust(r, _size / 4));
-  prefs["notice"](_balloon = 10)(_summary = 0);
   trayicon(tray != 0);
 }
 

@@ -56,7 +56,7 @@ summary::release()
     for (int i = 1; i < 4; ++i) {
       tuple(ListView_GetColumnWidth(hwnd(), i));
     }
-    setting::preferences()("columns", tuple);
+    setting::preferences("summary")("columns", tuple);
   } catch (...) {}
 }
 
@@ -65,7 +65,7 @@ summary::_initialize()
 {
   list<string> column = win32::exe.texts(ID_TEXT_SUMMARY_COLUMN);
   const int n = column.size();
-  list<int> width = setting::preferences()["columns"].split<int>();
+  list<int> width = setting::preferences("summary")["columns"].split<int>();
   list<int>::iterator wp = width.begin();
   LVCOLUMN col = { LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM };
   int cx = 0, ex = extent().x;
@@ -159,12 +159,12 @@ summarywindow::summarywindow(const mailbox* mboxes)
 	WS_THICKFRAME | WS_CLIPCHILDREN,
 	WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
   SetWindowText(hwnd(), win32::exe.text(ID_TEXT_SUMMARY_TITLE).c_str());
-  setting prefs = setting::preferences();
   RECT r;
   GetWindowRect(GetDesktopWindow(), &r);
   LONG top = r.top, bottom = r.bottom;
-  InflateRect(&r, (r.right - r.left) / 4, (r.bottom - r.top) / 4);
-  prefs["summary"](r.left)(r.top)(r.right)(r.bottom);
+  InflateRect(&r, (r.left - r.right) / 4, (r.top - r.bottom) / 4);
+  setting::preferences("summary")
+    ["window"](r.left)(r.top)(r.right)(r.bottom);
   move(adjust(r));
   int h = _summary.initialize(mboxes);
   if (h > 0) {
@@ -175,7 +175,7 @@ summarywindow::summarywindow(const mailbox* mboxes)
     }
     move(r);
   }
-  prefs["autoclose"](_autoclose.sec = 3);
+  setting::preferences()["summary"](_autoclose.sec = 3);
   _autoclose.reset(*this);
   show(true, false);
   foreground(true);
@@ -201,8 +201,8 @@ summarywindow::release()
   if (_resized > 0) {
     try {
       RECT r = bounds();
-      setting::preferences()("summary", setting::tuple
-			     (r.left)(r.top)(r.right)(r.bottom));
+      setting::preferences("summary")
+	("window", setting::tuple(r.left)(r.top)(r.right)(r.bottom));
     } catch (...) {}
   }
 }

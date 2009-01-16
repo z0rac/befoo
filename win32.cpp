@@ -336,7 +336,7 @@ namespace {
 	if (!ent) return h_errno;
 	sa.sin_port = ent->s_port;
       } else {
-	sa.sin_port = htons(n);
+	sa.sin_port = htons(static_cast<u_short>(n));
       }
     }
 

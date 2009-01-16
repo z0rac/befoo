@@ -82,6 +82,7 @@ public:
 class uri {
 public:
   const string& operator[](int i) const { return _part[i]; }
+  operator string() const;
   void parse(const string& uri);
   enum { scheme, user, host, port, path, fragment };
 private:
@@ -104,6 +105,7 @@ public:
   mailbox* next() { return _next; }
   mailbox* next(mailbox* next) { return _next = next; }
   const string& name() const { return _name; }
+  string uristr() const { return _uri; }
   void uripasswd(const string& uri, const string& passwd);
   const list<mail>& mails() const { return _mails; }
   const list<mail>& mails(const list<mail>& mails)

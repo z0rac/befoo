@@ -5,6 +5,7 @@
  * the license terms, see the LICENSE.txt file included with the program.
  */
 #include "mailbox.h"
+#include <cassert>
 
 #if _DEBUG >= 2
 #include <iostream>
@@ -38,7 +39,7 @@ class imap4 : public mailbox::backend {
   { return _command(cmd.c_str(), res); }
   resp_t _response();
   string _read();
-  unsigned _seqinit() const { return unsigned(this) + time(NULL); }
+  unsigned _seqinit() const { return unsigned(this) + unsigned(time(NULL)); }
 #ifdef _DEBUG
   using backend::read;
   string read()
@@ -182,7 +183,7 @@ imap4::_command(const char* cmd, const char* res)
   if (resp.tag != tag) {
     throw mailbox::error("unexpected tagged response");
   }
-  if (bye && stricmp(cmd, "LOGOUT") != 0) throw mailbox::error("bye");
+  if (bye && _stricmp(cmd, "LOGOUT") != 0) throw mailbox::error("bye");
   if (resp.type != "OK") {
     throw mailbox::error(resp.type + " " + resp.data);
   }
