@@ -10,15 +10,15 @@
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 #pragma code_page(1252)
 
-0 ICON DISCARDABLE "ico/app.ico"
-1 ICON DISCARDABLE "ico/jump1.ico"
-2 ICON DISCARDABLE "ico/jump2.ico"
-3 ICON DISCARDABLE "ico/jump3.ico"
-4 ICON DISCARDABLE "ico/jump4.ico"
-5 ICON DISCARDABLE "ico/sleep1.ico"
-6 ICON DISCARDABLE "ico/sleep2.ico"
-7 ICON DISCARDABLE "ico/sleep3.ico"
-8 ICON DISCARDABLE "ico/sleep4.ico"
+0 ICON DISCARDABLE "../ico/app.ico"
+1 ICON DISCARDABLE "../ico/jump1.ico"
+2 ICON DISCARDABLE "../ico/jump2.ico"
+3 ICON DISCARDABLE "../ico/jump3.ico"
+4 ICON DISCARDABLE "../ico/jump4.ico"
+5 ICON DISCARDABLE "../ico/sleep1.ico"
+6 ICON DISCARDABLE "../ico/sleep2.ico"
+7 ICON DISCARDABLE "../ico/sleep3.ico"
+8 ICON DISCARDABLE "../ico/sleep4.ico"
 
 1 RCDATA DISCARDABLE
 BEGIN

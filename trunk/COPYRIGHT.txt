@@ -7,5 +7,5 @@ for more information about this license.
 Some files are taken and modified from other projects:
  - ico/*.ico from the gunbiff project, GNU GPL
    <http://gnubiff.sourceforge.net/>
- - mingw/mthr.c from the MinGW project, public domain
+ - src/mingw/mthr.c from the MinGW project, public domain
    <http://www.mingw.org/>
