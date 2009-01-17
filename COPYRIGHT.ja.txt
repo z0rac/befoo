@@ -6,5 +6,5 @@ befooはGNU GPLバージョン2以降の同意に基づいて再頒布できます。
 以下のファイルは他のプロジェクトから取得、改変されています。
 ・ico/*.ico
 　gnubiffプロジェクト<http://gnubiff.sourceforge.net/>。GNU GPL。
-・mingw/mthr.c
+・src/mingw/mthr.c
 　MinGWプロジェクト<http://www.mingw.org/>。パブリックドメイン。
