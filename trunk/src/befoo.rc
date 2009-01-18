@@ -86,12 +86,13 @@ BEGIN
 ;uri=pop+ssl://username@pop.example.com/\r\n\
 ;passwd=...\r\n\
 \r\n\
-[(preferences)]\r\n\
+;[(preferences)]\r\n\
 ;icon=32\t\t; Size of the mascot icon.(default: 64)\r\n\
-;notice=5,1\t\t; Period to show the balloon, and switch to show\
- the summary when mail is fetched.(default: 10,0)\r\n\
-;autoclose=5\t\t; Period to show the summary.(default: 3)\r\n\
+;balloon=5\t\t; Period to show the balloon.(default: 10)\r\n\
+;summary=5,1\t\t; Period to show the summary, and switch to show\
+ the summary when mail is fetched.(default: 3,0)\r\n\
 ;delay=30\t\t; Delay seconds to the first fetching.(default: 0)\r\n\
+\r\n\
 "
     ID_TEXT_ABOUT		"\
 (C) 2009 TSUBAKIMOTO Hiroya\n\

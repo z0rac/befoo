@@ -33,7 +33,7 @@ class imap4 : public mailbox::backend {
   struct resp_t { string tag, type, data; };
 
   string _tag();
-  static string _quote(const string& arg);
+  static string _arg(const string& arg);
   string _command(const char* cmd, const char* res = NULL);
   string _command(const string& cmd, const char* res = NULL)
   { return _command(cmd.c_str(), res); }
@@ -87,7 +87,7 @@ imap4::login(const string& user, const string& passwd)
 	throw mailbox::error("login disabled");
       }
     }
-    _command("LOGIN" + _quote(user) + _quote(passwd));
+    _command("LOGIN" + _arg(user) + _arg(passwd));
   }
 }
 
@@ -101,7 +101,7 @@ int
 imap4::fetch(mailbox& mbox, const uri& uri)
 {
   const string& path = uri[uri::path];
-  _command(path.empty() ? "EXAMINE INBOX" : "EXAMINE" + _quote(path));
+  _command("EXAMINE" + _arg(path.empty() ? "INBOX" : path));
   list<mail> fetched;
   size_t copies = 0;
   for (parse_t ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
@@ -144,16 +144,24 @@ imap4::_tag()
 }
 
 string
-imap4::_quote(const string& arg)
+imap4::_arg(const string& arg)
 {
-  string esc;
-  char qst[] = "\\ ";
-  string::size_type i = 0, n;
-  for (; (n = arg.find_first_of("\"\\", i)) != string::npos; i = n + 1) {
-    qst[1] = arg[n];
-    esc.append(arg, i, n - i).append(qst, 2);
+  if (!arg.empty()) {
+    string::const_iterator p = arg.begin();
+    while (p != arg.end() &&
+	   *p > 32 && *p < 127 && !strchr("(){%*\"\\", *p)) ++p;
+    if (p == arg.end()) return ' ' + arg;
   }
-  return " \"" + esc + arg.substr(i) + '"';
+  string esc(" \"");
+  for (string::size_type i = 0;;) {
+    string::size_type n = arg.find_first_of("\"\\", i);
+    esc.append(arg, i, n - i);
+    if (n == string::npos) break;
+    char qst[] = { '\\', arg[n] };
+    esc.append(qst, 2);
+    i = n + 1;
+  }
+  return esc + '"';
 }
 
 string
@@ -185,7 +193,7 @@ imap4::_command(const char* cmd, const char* res)
   }
   if (bye && _stricmp(cmd, "LOGOUT") != 0) throw mailbox::error("bye");
   if (resp.type != "OK") {
-    throw mailbox::error(resp.type + " " + resp.data);
+    throw mailbox::error(resp.type + ' ' + resp.data);
   }
   return untagged;
 }

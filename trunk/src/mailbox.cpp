@@ -349,7 +349,7 @@ uri::parse(const string& uri)
   }
   i = t.find_first_of('@');
   if (i != string::npos) {
-    _part[user].assign(t, 0, i);
+    _part[user].assign(t, 0, min(t.find_first_of(';'), i));
     t.erase(0, i + 1);
   }
   i = t.find_last_not_of("0123456789");
@@ -408,7 +408,12 @@ mailbox::fetchmail()
     }
   }
   if (!be.get()) throw error("invalid scheme");
-  be->login(_uri[uri::user], _passwd);
+  string u(_uri[uri::user]), pw(_passwd);
+  if (u.empty()) {
+    u = "ANONYMOUS";
+    if (pw.empty()) pw = "befoo@";
+  }
+  be->login(u, pw);
   _recent = be->fetch(*this, _uri);
   be->logout();
 }
