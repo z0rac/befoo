@@ -76,12 +76,12 @@ imap4::login(const string& user, const string& passwd)
     else if (s == STARTTLS) stls = true;
   }
   if (!imap) throw mailbox::error(notimap);
-  if (stls && !tls()) {
-    _command(STARTTLS);
-    starttls();
-    if (!preauth) cap = _command(CAPABILITY, CAPABILITY);
-  }
   if (!preauth) {
+    if (stls && !tls()) {
+      _command(STARTTLS);
+      starttls();
+      cap = _command(CAPABILITY, CAPABILITY);
+    }
     for (parse_t caps(cap); caps;) {
       if (caps.token() == "LOGINDISABLED") {
 	throw mailbox::error("login disabled");
