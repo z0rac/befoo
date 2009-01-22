@@ -123,8 +123,8 @@ public:
       virtual ~_stream() {}
       virtual int open(const string& host, const string& port) = 0;
       virtual void close() = 0;
-      virtual void read(char* buf, size_t size) = 0;
-      virtual void write(const char* data, size_t size) = 0;
+      virtual size_t read(char* buf, size_t size) = 0;
+      virtual size_t write(const char* data, size_t size) = 0;
     };
     auto_ptr<_stream> _st;
   protected:
@@ -132,7 +132,7 @@ public:
     void starttls();
     string read(size_t size);
     string read();
-    void write(const char* data, size_t size) { _st->write(data, size); }
+    void write(const char* data, size_t size);
     void write(const string& data);
   public:
     typedef _stream stream;

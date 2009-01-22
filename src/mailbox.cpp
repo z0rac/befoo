@@ -28,8 +28,8 @@ namespace {
     ~tcpstream();
     int open(const string& host, const string& port);
     void close();
-    void read(char* buf, size_t size);
-    void write(const char* data, size_t size);
+    size_t read(char* buf, size_t size);
+    size_t write(const char* data, size_t size);
     virtual bool tls() const { return false; }
     mailbox::backend::stream* starttls();
     int setfd(int fd) { assert(_fd == INVALID_SOCKET); return _fd = fd; }
@@ -73,18 +73,22 @@ tcpstream::close()
   }
 }
 
-void
+size_t
 tcpstream::read(char* buf, size_t size)
 {
   assert(_fd != INVALID_SOCKET);
-  if (size_t(recv(_fd, buf, size, 0)) != size) throw winsock::error();
+  int n = recv(_fd, buf, size, 0);
+  if (n <= 0) throw winsock::error();
+  return size_t(n);
 }
 
-void
+size_t
 tcpstream::write(const char* data, size_t size)
 {
   assert(_fd != INVALID_SOCKET);
-  if (size_t(send(_fd, data, size, 0)) != size) throw winsock::error();
+  int n = send(_fd, data, size, 0);
+  if (n <= 0) throw winsock::error();
+  return size_t(n);
 }
 
 /** sslstream - stream of SSL session.
@@ -129,8 +133,8 @@ namespace {
     ~sslstream();
     int open(const string& host, const string& port);
     void close();
-    void read(char* buf, size_t size);
-    void write(const char* data, size_t size);
+    size_t read(char* buf, size_t size);
+    size_t write(const char* data, size_t size);
     bool tls() const { return true; }
     int setfd(int fd) { return _connect(tcpstream::setfd(fd)); }
     static bool avail() { return sslstream::_ssleay != NULL; }
@@ -205,18 +209,22 @@ sslstream::close()
   }
 }
 
-void
+size_t
 sslstream::read(char* buf, size_t size)
 {
   assert(_ssl);
-  if (_read(_ssl, buf, size) != int(size)) throw error();
+  int n = _read(_ssl, buf, size);
+  if (n <= 0) throw error();
+  return size_t(n);
 }
 
-void
+size_t
 sslstream::write(const char* data, size_t size)
 {
   assert(_ssl);
-  if (_write(_ssl, data, size) != int(size)) throw error();
+  int n = _write(_ssl, data, size);
+  if (n <= 0) throw error();
+  return size_t(n);
 }
 
 mailbox::backend::stream*
@@ -279,14 +287,11 @@ string
 mailbox::backend::read(size_t size)
 {
   string result;
-  char buf[256];
-  for (; size > sizeof(buf); size -= sizeof(buf)) {
-    _st->read(buf, sizeof(buf));
-    result.append(buf, sizeof(buf));
-  }
-  if (size) {
-    _st->read(buf, size);
-    result.append(buf, size);
+  while (size) {
+    char buf[256];
+    size_t n = _st->read(buf, min(size, sizeof(buf)));
+    result.append(buf, n);
+    size -= n;
   }
   return result;
 }
@@ -304,6 +309,15 @@ mailbox::backend::read()
     } while (c != '\012');
   } while (result[result.size() - 2] != '\015');
   return result.erase(result.size() - 2); // remove CRLF
+}
+
+void
+mailbox::backend::write(const char* data, size_t size)
+{
+  while (size) {
+    size_t n = _st->write(data, size);
+    data += n, size -= n;
+  }
 }
 
 void
