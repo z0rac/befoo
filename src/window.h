@@ -30,6 +30,7 @@ protected:
   virtual LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
   virtual void release() {}
   virtual void resize(int, int) {}
+  virtual LRESULT notify(WPARAM w, LPARAM l);
   virtual void execute(int id);
 
   struct commctrl {
@@ -102,6 +103,7 @@ class appwindow : public window {
   static LPCSTR _classname();
 protected:
   LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
+  LRESULT notify(WPARAM w, LPARAM l);
   virtual void draw(HDC) {}
   virtual void erase(HDC) {}
   virtual void limit(LPMINMAXINFO) {}

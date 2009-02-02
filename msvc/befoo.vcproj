@@ -67,6 +67,7 @@
 				GenerateManifest="false"
 				GenerateDebugInformation="true"
 				SubSystem="1"
+				RandomizedBaseAddress="0"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -148,6 +149,7 @@
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
+				RandomizedBaseAddress="0"
 				TargetMachine="1"
 			/>
 			<Tool
