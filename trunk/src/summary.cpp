@@ -9,6 +9,7 @@
 #include "setting.h"
 #include "win32.h"
 #include "window.h"
+#include <cassert>
 
 #ifdef _DEBUG
 #include <iostream>
@@ -19,6 +20,11 @@
 #define LOG(s)
 #endif
 
+#ifndef HDF_SORTDOWN
+#define HDF_SORTDOWN 0x0200
+#define HDF_SORTUP   0x0400
+#endif
+
 /** summary - summary view window
  */
 namespace {
@@ -27,25 +33,49 @@ namespace {
       HWND _h;
     public:
       item(const window& w);
-      item& operator()(const string& s);
-      item& operator()(const win32::wstr& s);
+      item& operator()(LPCSTR s);
+      item& operator()(LPCWSTR s);
+      item& operator()(const string& s) { return operator()(s.c_str()); }
     };
+    time_t* _dates;
+    pair<size_t, string>* _mboxes;
+    int _column;
+    int _order;
+    string _datetmp;
+    static int CALLBACK cmptxt(LPARAM l1, LPARAM l2, LPARAM lsort)
+    { return reinterpret_cast<summary*>(lsort)->_cmptxt(int(l1), int(l2)); }
+    static int CALLBACK cmpparam(LPARAM l1, LPARAM l2, LPARAM lsort)
+    { return reinterpret_cast<summary*>(lsort)->_cmpparam(l1, l2); }
+  protected:
     void release();
+    LRESULT notify(WPARAM w, LPARAM l);
     void _initialize();
+    void _sort(int column, int order);
+    int _cmptxt(int s1, int s2) const;
+    int _cmpparam(LPARAM s1, LPARAM s2) const;
   public:
     summary(const window& parent);
+    ~summary();
     int initialize(const mailbox* mboxes);
   };
 }
 
 summary::summary(const window& parent)
-  : window(WC_LISTVIEW, parent)
+  : window(WC_LISTVIEW, parent), _dates(NULL), _mboxes(NULL),
+    _column(3), _order(1)
 {
   static commctrl listview(ICC_LISTVIEW_CLASSES);
-  style(LVS_REPORT | LVS_NOSORTHEADER, WS_EX_CLIENTEDGE);
+  style(LVS_REPORT, WS_EX_CLIENTEDGE);
   ListView_SetExtendedListViewStyle
     (hwnd(), LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_LABELTIP);
+  setting::preferences("summary")["sort"](_column)(_order);
   show();
+}
+
+summary::~summary()
+{
+  delete [] _dates;
+  delete [] _mboxes;
 }
 
 void
@@ -56,8 +86,41 @@ summary::release()
     for (int i = 1; i < 4; ++i) {
       tuple(ListView_GetColumnWidth(hwnd(), i));
     }
-    setting::preferences("summary")("columns", tuple);
+    setting::preferences("summary")
+      ("columns", tuple)
+      ("sort", setting::tuple(_column)(_order));
   } catch (...) {}
+}
+
+LRESULT
+summary::notify(WPARAM w, LPARAM l)
+{
+  switch (LPNMHDR(l)->code) {
+  case LVN_GETDISPINFOA:
+    switch (LPNMLVDISPINFOA(l)->item.iSubItem) {
+    case 2:
+      {
+	time_t t = _dates[LPNMLVDISPINFOA(l)->item.lParam];
+	_datetmp = t == time_t(-1) ? "" :
+	  win32::date(t, DATE_LONGDATE) + " " + win32::time(t, TIME_NOSECONDS);
+	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(_datetmp.c_str());
+      }
+      break;
+    case 3:
+      {
+	const pair<size_t, string>* p = _mboxes;
+	while (size_t(LPNMLVDISPINFOA(l)->item.lParam) >= p->first) ++p;
+	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(p->second.c_str());
+      }
+      break;
+    }
+    return 0;
+  case LVN_COLUMNCLICK:
+    _sort(LPNMLISTVIEW(l)->iSubItem,
+	  LPNMLISTVIEW(l)->iSubItem == _column ? -_order : 1);
+    return 0;
+  }
+  return window::notify(w, l);
 }
 
 void
@@ -79,25 +142,99 @@ summary::_initialize()
   }
 }
 
+void
+summary::_sort(int column, int order)
+{
+  HWND hdr = ListView_GetHeader(hwnd());
+  HDITEM hdi = { HDI_FORMAT };
+  if (column != _column) {
+    Header_GetItem(hdr, _column, &hdi);
+    hdi.fmt &= ~(HDF_SORTDOWN | HDF_SORTUP);
+    Header_SetItem(hdr, _column, &hdi);
+  }
+  Header_GetItem(hdr, column, &hdi);
+  hdi.fmt &= ~(HDF_SORTDOWN | HDF_SORTUP);
+  hdi.fmt |= order > 0 ? HDF_SORTUP : HDF_SORTDOWN;
+  Header_SetItem(hdr, column, &hdi);
+  _column = column, _order = order;
+  if (column < 2) {
+    ListView_SortItemsEx(hwnd(), &cmptxt, WPARAM(this));
+  } else {
+    ListView_SortItems(hwnd(), &cmpparam, WPARAM(this));
+  }
+}
+
+int
+summary::_cmptxt(int s1, int s2) const
+{
+  struct textbuf {
+    LPWSTR data;
+    textbuf() : data(NULL) {}
+    ~textbuf() { delete [] data; }
+    LPWSTR operator()(size_t n)
+    {
+      assert(n);
+      delete [] data, data = NULL;
+      return data = new WCHAR[n];
+    }
+  } tb[2];
+  int si[] = { s1, s2 };
+  for (int i = 0; i < 2; ++i) {
+    LVITEMW lv = { LVIF_TEXT };
+    lv.iSubItem = _column;
+    lv.cchTextMax = 256;
+    int n;
+    do {
+      lv.pszText = tb[i](lv.cchTextMax <<= 1);
+      n = SendMessage(hwnd(), LVM_GETITEMTEXTW, si[i], LPARAM(&lv));
+    } while (n == lv.cchTextMax - 1);
+  }
+  return _wcsicmp(tb[0].data, tb[1].data) * _order;
+}
+
+int
+summary::_cmpparam(LPARAM s1, LPARAM s2) const
+{
+  size_t v1, v2;
+  if (_column == 2) {
+    v1 = size_t(_dates[s1]);
+    v2 = size_t(_dates[s2]);
+  } else {
+    for (v1 = 0; _mboxes[v1].first <= size_t(s1);) ++v1;
+    for (v2 = 0; _mboxes[v2].first <= size_t(s2);) ++v2;
+  }
+  return v1 < v2 ? -_order : int(v1 != v2) * _order;
+}
+
 int
 summary::initialize(const mailbox* mboxes)
 {
   int h = extent().y;
   _initialize();
+  int mbn = 0;
+  size_t mails = 0;
   for (const mailbox* mb = mboxes; mb; mb = mb->next()) {
-    const list<mail>& mails = mb->mails();
-    LOG("Summary[" << mb->name() << "](" << mails.size() << ")..." << endl);
-    list<mail>::const_iterator mp = mails.begin();
-    for (; mp != mails.end(); ++mp) {
+    mails += mb->mails().size();
+    ++mbn;
+  }
+  _dates = new time_t[mails];
+  _mboxes = new pair<size_t, string>[mbn];
+  mbn = 0, mails = 0;
+  for (const mailbox* mb = mboxes; mb; mb = mb->next()) {
+    LOG("Summary[" << mb->name() << "](" << mb->mails().size() << ")..." << endl);
+    _mboxes[mbn].first = mails + mb->mails().size();
+    _mboxes[mbn++].second = mb->name();
+    list<mail>::const_iterator mp = mb->mails().begin();
+    for (; mp != mb->mails().end(); ++mp) {
+      _dates[mails++] = mp->date();
       item(*this)
 	(win32::wstr(mp->subject(), CP_UTF8))
 	(win32::wstr(mp->sender(), CP_UTF8))
-	(mp->date() == time_t(-1) ? "" :
-	 win32::date(mp->date(), DATE_LONGDATE) + " " +
-	 win32::time(mp->date(), TIME_NOSECONDS))
-	(mb->name());
+	(LPSTR_TEXTCALLBACK)
+	(LPSTR_TEXTCALLBACK);
     }
   }
+  _sort(_column, _order);
   int n = ListView_GetItemCount(hwnd()) - 1;
   return HIWORD(ListView_ApproximateViewRect(hwnd(), -1, -1, n)) - h;
 }
@@ -106,24 +243,26 @@ summary::item::item(const window& w)
   : _h(w.hwnd())
 {
   ZeroMemory(this, sizeof(LVITEMA));
+  mask = LVIF_PARAM;
+  iItem = lParam = ListView_GetItemCount(_h);
+  ListView_InsertItem(_h, this);
   mask = LVIF_TEXT;
-  iItem = ListView_GetItemCount(_h);
 }
 
 summary::item&
-summary::item::operator()(const string& s)
+summary::item::operator()(LPCSTR s)
 {
-  pszText = LPSTR(s.c_str());
-  SendMessage(_h, iSubItem ? LVM_SETITEMA : LVM_INSERTITEMA, 0, LPARAM(this));
+  pszText = LPSTR(s);
+  SendMessage(_h, LVM_SETITEMA, 0, LPARAM(this));
   ++iSubItem;
   return *this;
 }
 
 summary::item&
-summary::item::operator()(const win32::wstr& s)
+summary::item::operator()(LPCWSTR s)
 {
-  pszText = LPSTR(LPCWSTR(s));
-  SendMessage(_h, iSubItem ? LVM_SETITEMW : LVM_INSERTITEMW, 0, LPARAM(this));
+  pszText = LPSTR(s);
+  SendMessage(_h, LVM_SETITEMW, 0, LPARAM(this));
   ++iSubItem;
   return *this;
 }

@@ -95,6 +95,7 @@ icon::reset(int type)
 namespace {
   class tooltips : public window, window::timer {
     void wakeup(window&) { clearballoon(); }
+    LRESULT notify(WPARAM w, LPARAM l);
   public:
     tooltips(const window& owner);
     void tip(const string& text);
@@ -168,6 +169,16 @@ tooltips::clearballoon()
   SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
   SendMessage(hwnd(), TTM_SETTITLEA, 0, LPARAM(""));
   style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, WS_EX_TOOLWINDOW);
+}
+
+LRESULT
+tooltips::notify(WPARAM w, LPARAM l)
+{
+  switch (LPNMHDR(l)->code) {
+  case TTN_SHOW: reset(false); return 0;
+  case TTN_POP: reset(LPNMHDR(l)->idFrom == 1); return 0;
+  }
+  return window::notify(w, l);
 }
 
 /** iconwindow - icon window with system tray
@@ -261,12 +272,6 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_SHOWWINDOW:
     _tips.clearballoon();
     return 0;
-  case WM_NOTIFY:
-    switch (LPNMHDR(l)->code) {
-    case TTN_SHOW: _tips.reset(false); return 0;
-    case TTN_POP: _tips.reset(LPNMHDR(l)->idFrom == 1); return 0;
-    }
-    break;
   case WM_MOUSELEAVE:
     _tips.reset(hascursor());
     return 0;

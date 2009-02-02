@@ -251,11 +251,19 @@ window::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_SIZE:
     resize(LOWORD(l), HIWORD(l));
     break;
+  case WM_NOTIFY:
+    return notify(w, l);
   case WM_COMMAND:
     if (!GET_WM_COMMAND_HWND(w, l)) execute(GET_WM_COMMAND_CMD(w,l));
     break;
   }
   return CallWindowProc(_callback, _hwnd, m, w, l);
+}
+
+LRESULT
+window::notify(WPARAM w, LPARAM l)
+{
+  return CallWindowProc(_callback, _hwnd, WM_NOTIFY, w, l);
 }
 
 void
@@ -393,6 +401,13 @@ appwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     return 0;
   }
   return window::dispatch(m, w, l);
+}
+
+LRESULT
+appwindow::notify(WPARAM w, LPARAM l)
+{
+  return LPNMHDR(l)->hwndFrom == hwnd() ? 0 :
+    SendMessage(LPNMHDR(l)->hwndFrom, WM_NOTIFY, w, l);
 }
 
 const RECT&

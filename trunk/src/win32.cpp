@@ -42,9 +42,9 @@ namespace {
     ~textbuf() { delete [] data; }
     char* operator()(size_t n)
     {
+      assert(n);
       delete [] data, data = NULL;
-      if (n) data = new char[n];
-      return data;
+      return data = new char[n];
     }
   };
 }
