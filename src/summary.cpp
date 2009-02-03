@@ -37,22 +37,19 @@ namespace {
       item& operator()(LPCWSTR s);
       item& operator()(const string& s) { return operator()(s.c_str()); }
     };
+    enum column { SUBJECT, SENDER, DATE, MAILBOX, LAST };
     time_t* _dates;
     pair<size_t, string>* _mboxes;
     int _column;
     int _order;
-    string _datetmp;
-    static int CALLBACK cmptxt(LPARAM l1, LPARAM l2, LPARAM lsort)
-    { return reinterpret_cast<summary*>(lsort)->_cmptxt(int(l1), int(l2)); }
-    static int CALLBACK cmpparam(LPARAM l1, LPARAM l2, LPARAM lsort)
-    { return reinterpret_cast<summary*>(lsort)->_cmpparam(l1, l2); }
+    string _tmp;
+    int _compare(LPARAM s1, LPARAM s2) const;
+    static int CALLBACK compare(LPARAM l1, LPARAM l2, LPARAM lsort);
   protected:
     void release();
     LRESULT notify(WPARAM w, LPARAM l);
     void _initialize();
     void _sort(int column, int order);
-    int _cmptxt(int s1, int s2) const;
-    int _cmpparam(LPARAM s1, LPARAM s2) const;
   public:
     summary(const window& parent);
     ~summary();
@@ -82,12 +79,12 @@ void
 summary::release()
 {
   try {
-    setting::tuple tuple(ListView_GetColumnWidth(hwnd(), 0));
-    for (int i = 1; i < 4; ++i) {
-      tuple(ListView_GetColumnWidth(hwnd(), i));
+    setting::tuple columns(ListView_GetColumnWidth(hwnd(), 0));
+    for (int i = 1; i < LAST; ++i) {
+      columns(ListView_GetColumnWidth(hwnd(), i));
     }
     setting::preferences("summary")
-      ("columns", tuple)
+      ("columns", columns)
       ("sort", setting::tuple(_column)(_order));
   } catch (...) {}
 }
@@ -98,15 +95,15 @@ summary::notify(WPARAM w, LPARAM l)
   switch (LPNMHDR(l)->code) {
   case LVN_GETDISPINFOA:
     switch (LPNMLVDISPINFOA(l)->item.iSubItem) {
-    case 2:
+    case DATE:
       {
 	time_t t = _dates[LPNMLVDISPINFOA(l)->item.lParam];
-	_datetmp = t == time_t(-1) ? "" :
+	_tmp = t == time_t(-1) ? "" :
 	  win32::date(t, DATE_LONGDATE) + " " + win32::time(t, TIME_NOSECONDS);
-	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(_datetmp.c_str());
+	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(_tmp.c_str());
       }
       break;
-    case 3:
+    case MAILBOX:
       {
 	const pair<size_t, string>* p = _mboxes;
 	while (size_t(LPNMLVDISPINFOA(l)->item.lParam) >= p->first) ++p;
@@ -157,16 +154,29 @@ summary::_sort(int column, int order)
   hdi.fmt |= order > 0 ? HDF_SORTUP : HDF_SORTDOWN;
   Header_SetItem(hdr, column, &hdi);
   _column = column, _order = order;
-  if (column < 2) {
-    ListView_SortItemsEx(hwnd(), &cmptxt, WPARAM(this));
-  } else {
-    ListView_SortItems(hwnd(), &cmpparam, WPARAM(this));
-  }
+  SendMessage(hwnd(), column < DATE ? LVM_SORTITEMSEX : LVM_SORTITEMS,
+	      WPARAM(this), LPARAM(&compare));
 }
 
-int
-summary::_cmptxt(int s1, int s2) const
+inline int
+summary::_compare(LPARAM s1, LPARAM s2) const
 {
+  switch (_column) {
+  case DATE:
+    {
+      size_t v1 = size_t(_dates[s1]);
+      size_t v2 = size_t(_dates[s2]);
+      return v1 < v2 ? -_order : int(v1 != v2) * _order;
+    }
+  case MAILBOX:
+    {
+      size_t v1 = 0, v2 = 0;
+      while (_mboxes[v1].first <= size_t(s1)) ++v1;
+      while (_mboxes[v2].first <= size_t(s2)) ++v2;
+      return v1 < v2 ? -_order : int(v1 != v2) * _order;
+    }
+  }
+
   struct textbuf {
     LPWSTR data;
     textbuf() : data(NULL) {}
@@ -192,18 +202,10 @@ summary::_cmptxt(int s1, int s2) const
   return _wcsicmp(tb[0].data, tb[1].data) * _order;
 }
 
-int
-summary::_cmpparam(LPARAM s1, LPARAM s2) const
+int CALLBACK
+summary::compare(LPARAM l1, LPARAM l2, LPARAM lsort)
 {
-  size_t v1, v2;
-  if (_column == 2) {
-    v1 = size_t(_dates[s1]);
-    v2 = size_t(_dates[s2]);
-  } else {
-    for (v1 = 0; _mboxes[v1].first <= size_t(s1);) ++v1;
-    for (v2 = 0; _mboxes[v2].first <= size_t(s2);) ++v2;
-  }
-  return v1 < v2 ? -_order : int(v1 != v2) * _order;
+  return reinterpret_cast<summary*>(lsort)->_compare(l1, l2);
 }
 
 int
@@ -211,15 +213,16 @@ summary::initialize(const mailbox* mboxes)
 {
   int h = extent().y;
   _initialize();
-  int mbn = 0;
   size_t mails = 0;
+  int mbn = 0;
   for (const mailbox* mb = mboxes; mb; mb = mb->next()) {
     mails += mb->mails().size();
     ++mbn;
   }
+  assert(!_dates && !_mboxes);
   _dates = new time_t[mails];
   _mboxes = new pair<size_t, string>[mbn];
-  mbn = 0, mails = 0;
+  mails = 0, mbn = 0;
   for (const mailbox* mb = mboxes; mb; mb = mb->next()) {
     LOG("Summary[" << mb->name() << "](" << mb->mails().size() << ")..." << endl);
     _mboxes[mbn].first = mails + mb->mails().size();
