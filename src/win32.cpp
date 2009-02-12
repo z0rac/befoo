@@ -91,6 +91,24 @@ win32::_datetime(time_t utc, DWORD flags, _dtfn fn)
   return string();
 }
 
+HANDLE
+win32::shell(const string& cmd, unsigned flags)
+{
+  assert(!(flags & ~(SEE_MASK_CONNECTNETDRV | SEE_MASK_FLAG_DDEWAIT |
+		     SEE_MASK_FLAG_NO_UI | SEE_MASK_NOCLOSEPROCESS)));
+  textbuf tmp;
+  lstrcpyA(tmp(cmd.size() + 1), cmd.c_str());
+  PathRemoveArgs(tmp.data);
+  string::size_type i = lstrlen(tmp.data);
+  if (i < cmd.size()) i = cmd.find_first_not_of(" \t", i + 1);
+  SHELLEXECUTEINFO info = {
+    sizeof(SHELLEXECUTEINFO), flags, NULL, "open",
+    tmp.data, i < cmd.size() ? tmp.data + i : NULL, NULL, SW_SHOWNORMAL
+  };
+  return !ShellExecuteEx(&info) ? NULL :
+    (flags & SEE_MASK_NOCLOSEPROCESS) ? info.hProcess : INVALID_HANDLE_VALUE;
+}
+
 #ifdef _MT
 #if defined(__MINGW32__)
 extern "C" void __mingwthr_run_key_dtors(void);

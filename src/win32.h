@@ -27,6 +27,7 @@ public:
   { return _datetime(utc, flags, GetDateFormat); }
   static string time(time_t utc, DWORD flags = 0)
   { return _datetime(utc, flags, GetTimeFormat); }
+  static HANDLE shell(const string& cmd, unsigned flags = 0);
 #ifdef _MT
   static HANDLE thread(void (*func)(void*), void* param);
 #endif

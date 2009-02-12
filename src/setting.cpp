@@ -31,6 +31,7 @@ namespace {
   class profile : public setting::repository {
     static string _path;
     string _section;
+    static bool _appendix(const char* file, char* path);
     static bool _prepare();
     static string _get(const char* section, const char* key);
   public:
@@ -44,14 +45,19 @@ namespace {
 }
 
 bool
+profile::_appendix(const char* file, char* path)
+{
+  return GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
+    PathRemoveFileSpec(path) && PathAppend(path, file) &&
+    PathFileExists(path);
+}
+
+bool
 profile::_prepare()
 {
   if (_path.empty()) {
     char path[MAX_PATH];
-    if (GetModuleFileName(NULL, path, sizeof(path)) < sizeof(path) &&
-	PathRemoveFileSpec(path) &&
-	PathAppend(path, INI_FILE) &&
-	PathFileExists(path) ||
+    if (_appendix(INI_FILE, path) ||
 	SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
 			NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
 	PathAppend(path, APP_NAME "\\" INI_FILE) &&
@@ -102,27 +108,26 @@ profile::edit()
   if (!_prepare()) return false;
 
   WritePrivateProfileString(NULL, NULL, NULL, _path.c_str()); // flush entries.
-  HANDLE h = CreateFile(_path.c_str(), GENERIC_READ,
-			FILE_SHARE_READ | FILE_SHARE_WRITE,
-			NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (h == INVALID_HANDLE_VALUE) throw win32::error();
+  HANDLE fh = CreateFile(_path.c_str(), GENERIC_READ,
+			 FILE_SHARE_READ | FILE_SHARE_WRITE,
+			 NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (fh == INVALID_HANDLE_VALUE) throw win32::error();
 
   FILETIME before = { 0 };
-  GetFileTime(h, NULL, NULL, &before);
+  GetFileTime(fh, NULL, NULL, &before);
   FILETIME after = before;
-  SHELLEXECUTEINFO info = {
-    sizeof(SHELLEXECUTEINFO),
-    SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT,
-    NULL, "open", _path.c_str(), NULL , NULL, SW_SHOWNORMAL
-  };
-  if (ShellExecuteEx(&info)) {
-    if (info.hProcess) {
-      WaitForSingleObject(info.hProcess, INFINITE);
-      CloseHandle(info.hProcess);
-    }
-    GetFileTime(h, NULL, NULL, &after);
+  char s[MAX_PATH];
+  HANDLE h = win32::shell(_appendix("extend.dll", s) &&
+			  GetShortPathName(s, s, sizeof(s)) < sizeof(s) ?
+			  string("rundll32.exe ") + s + ",settingdlg " + _path :
+			  '"' + _path + '"',
+			  SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
+  if (h) {
+    WaitForSingleObject(h, INFINITE);
+    CloseHandle(h);
+    GetFileTime(fh, NULL, NULL, &after);
   }
-  CloseHandle(h);
+  CloseHandle(fh);
 
   return CompareFileTime(&before, &after) != 0;
 }
