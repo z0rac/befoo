@@ -50,6 +50,7 @@ namespace {
     LRESULT notify(WPARAM w, LPARAM l);
     void _initialize();
     void _sort(int column, int order);
+    void _open();
   public:
     summary(const window& parent);
     ~summary();
@@ -62,7 +63,7 @@ summary::summary(const window& parent)
     _column(3), _order(1)
 {
   static commctrl listview(ICC_LISTVIEW_CLASSES);
-  style(LVS_REPORT, WS_EX_CLIENTEDGE);
+  style(LVS_REPORT | LVS_SINGLESEL, WS_EX_CLIENTEDGE);
   ListView_SetExtendedListViewStyle
     (hwnd(), LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_LABELTIP);
   setting::preferences("summary")["sort"](_column)(_order);
@@ -115,6 +116,9 @@ summary::notify(WPARAM w, LPARAM l)
   case LVN_COLUMNCLICK:
     _sort(LPNMLISTVIEW(l)->iSubItem,
 	  LPNMLISTVIEW(l)->iSubItem == _column ? -_order : 1);
+    return 0;
+  case NM_DBLCLK:
+    _open();
     return 0;
   }
   return window::notify(w, l);
@@ -206,6 +210,21 @@ int CALLBACK
 summary::compare(LPARAM l1, LPARAM l2, LPARAM lsort)
 {
   return reinterpret_cast<summary*>(lsort)->_compare(l1, l2);
+}
+
+void
+summary::_open()
+{
+  int item = ListView_GetNextItem(hwnd(), WPARAM(-1), LVNI_SELECTED);
+  if (item >= 0) {
+    LVITEM lv = { LVIF_PARAM, item };
+    if (ListView_GetItem(hwnd(), &lv)) {
+      size_t i = 0;
+      while (_mboxes[i].first <= size_t(lv.lParam)) ++i;
+      string mua = setting::mailbox(_mboxes[i].second)["mua"];
+      if (!mua.empty()) win32::shell(mua);
+    }
+  }
 }
 
 int
