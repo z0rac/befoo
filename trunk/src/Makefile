@@ -7,25 +7,25 @@
 NAME = befoo
 OPTS = -mwin32 -m32 -mthreads
 OPTS += -mno-cygwin
-CFLAGS = ${OPTS}
-LDFLAGS = ${OPTS} -mwindows
+CFLAGS = $(OPTS)
+LDFLAGS = $(OPTS) -mwindows
 
 ifdef debug
-CFLAGS += -D_DEBUG=${debug} -g -Wall
+CFLAGS += -D_DEBUG=$(debug) -g -Wall
 LDFLAGS += -Wl,--subsystem,console
 else
 CFLAGS += -DNDEBUG -Os
 LDFLAGS += -Wl,--strip-all -Wl,-O1 -Wl,--as-needed
 endif
-CPPFLAGS = ${CFLAGS}
+CPPFLAGS = $(CFLAGS)
 
-PROG = ${NAME}.exe
+PROG = $(NAME).exe
 OBJS = main.o imap4.o pop3.o mail.o mailbox.o
 OBJS += mascot.o summary.o setting.o window.o win32.o mingw/mthr.o
 L10N = ja.rc
 LIBS = -lstdc++ -lws2_32 -lcomctl32 -limagehlp -lshlwapi -lwinmm
 
-RSRC = ${PROG}.manifest ../ico/app.ico
+RSRC = $(PROG).manifest ../ico/app.ico
 RSRC += ../ico/jump1.ico ../ico/jump2.ico ../ico/jump3.ico ../ico/jump4.ico
 RSRC += ../ico/sleep1.ico ../ico/sleep2.ico ../ico/sleep3.ico ../ico/sleep4.ico
 
@@ -35,17 +35,17 @@ RSRC += ../ico/sleep1.ico ../ico/sleep2.ico ../ico/sleep3.ico ../ico/sleep4.ico
 .rc.res:
 	windres --output-format=coff --input=$< --output=$@
 
-all: ${PROG}
+all: $(PROG)
 
-${PROG}: ${OBJS} ${NAME}.res
-	gcc ${LDFLAGS} -o $@ ${OBJS} ${NAME}.res ${LIBS}
+$(PROG): $(OBJS) $(NAME).res
+	gcc $(LDFLAGS) -o $@ $(OBJS) $(NAME).res $(LIBS)
 
-${OBJS}: win32.h Makefile
+$(OBJS): win32.h Makefile
 main.o mascot.o summary.o: define.h mailbox.h window.h setting.h
 mail.o mailbox.o imap4.o pop3.o: mailbox.h
 window.o: window.h
 setting.o: setting.h
-${NAME}.res: ${L10N} ${RSRC} Makefile
+$(NAME).res: $(L10N) $(RSRC) Makefile
 
 clean:
 	@rm -f *.o *.res *~ mingw/*.o
