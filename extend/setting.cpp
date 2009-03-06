@@ -4,25 +4,11 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
-#include "define.h"
 #include "setting.h"
 #include "win32.h"
 #include <cassert>
 #include <ctime>
-#include <imagehlp.h>
 #include <shlobj.h>
-#include <shlwapi.h>
-
-#ifdef _DEBUG
-#include <iostream>
-#define DBG(s) s
-#define LOG(s) (cout << s)
-#else
-#define DBG(s)
-#define LOG(s)
-#endif
-
-#define INI_FILE APP_NAME ".ini"
 
 /** profile - implement for setting::repository.
  * This is using Windows API for .INI file.
@@ -31,61 +17,21 @@ namespace {
   class profile : public setting::repository {
     static string _path;
     string _section;
-    static bool _appendix(const char* file, char* path);
-    static bool _prepare();
     static string _get(const char* section, const char* key);
   public:
     profile(const string& section) : _section(section) {}
     string get(const char* key) const;
     void put(const char* key, const char* value);
     static string sections() { return _get(NULL, NULL); }
-    static bool edit();
+    static void path(const string& path) { _path = path; }
   };
   string profile::_path;
-}
-
-bool
-profile::_appendix(const char* file, char* path)
-{
-  return GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
-    PathRemoveFileSpec(path) && PathAppend(path, file) &&
-    PathFileExists(path);
-}
-
-bool
-profile::_prepare()
-{
-  if (_path.empty()) {
-    char path[MAX_PATH];
-    if (_appendix(INI_FILE, path) ||
-	SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
-			NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
-	PathAppend(path, APP_NAME "\\" INI_FILE) &&
-	MakeSureDirectoryPathExists(path)) {
-      LOG("Using the setting file: " << path << endl);
-      _path = path;
-
-      // write the example for settings.
-      string example = win32::exe.text(ID_TEXT_SETTINGS);
-      HANDLE h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, 0,
-			    NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-      if (h != INVALID_HANDLE_VALUE) {
-	DWORD n;
-	WriteFile(h, example.data(), example.size(), &n, NULL);
-	CloseHandle(h);
-      }
-    } else {
-      _path = "*";
-    }
-  }
-  return _path[0] != '*';
 }
 
 string
 profile::_get(const char* section, const char* key)
 {
-  return _prepare() ?
-    win32::profile(section, key, _path.c_str()) : string();
+  return win32::profile(section, key, _path.c_str());
 }
 
 string
@@ -97,49 +43,23 @@ profile::get(const char* key) const
 void
 profile::put(const char* key, const char* value)
 {
-  if (_prepare()) {
-    string tmp;
-    if (value && value[0] == '"' && value[strlen(value) - 1] == '"') {
-      tmp = '"' + string(value) + '"';
-      value = tmp.c_str();
-    }
-    WritePrivateProfileString(_section.c_str(), key, value, _path.c_str());
+  string tmp;
+  if (value && value[0] == '"' && value[strlen(value) - 1] == '"') {
+    tmp = '"' + string(value) + '"';
+    value = tmp.c_str();
   }
-}
-
-bool
-profile::edit()
-{
-  if (!_prepare()) return false;
-
-  WritePrivateProfileString(NULL, NULL, NULL, _path.c_str()); // flush entries.
-  HANDLE fh = CreateFile(_path.c_str(), GENERIC_READ,
-			 FILE_SHARE_READ | FILE_SHARE_WRITE,
-			 NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (fh == INVALID_HANDLE_VALUE) throw win32::error();
-
-  FILETIME before = { 0 };
-  GetFileTime(fh, NULL, NULL, &before);
-  FILETIME after = before;
-  char s[MAX_PATH];
-  HANDLE h = win32::shell(_appendix("extend.dll", s) &&
-			  GetShortPathName(s, s, sizeof(s)) < sizeof(s) ?
-			  string("rundll32.exe ") + s + ",settingdlg " + _path :
-			  '"' + _path + '"',
-			  SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
-  if (h) {
-    WaitForSingleObject(h, INFINITE);
-    CloseHandle(h);
-    GetFileTime(fh, NULL, NULL, &after);
-  }
-  CloseHandle(fh);
-
-  return CompareFileTime(&before, &after) != 0;
+  WritePrivateProfileString(_section.c_str(), key, value, _path.c_str());
 }
 
 /*
  * Functions of class setting
  */
+void
+setting::file(const string& path)
+{
+  profile::path(path);
+}
+
 setting
 setting::preferences()
 {
@@ -171,13 +91,6 @@ setting::mailbox(const string& id)
   return new profile(id);
 }
 
-bool
-setting::edit()
-{
-  LOG("Edit setting." << endl);
-  return profile::edit();
-}
-
 list<string>
 setting::cache(_str key)
 {
@@ -199,17 +112,6 @@ setting::cache(_str key, const list<string>& data)
     for (list<string>::const_iterator p = data.begin(); p != data.end(); ++p) {
       char s[35];
       cache.put(_ltoa(++i, s, 10), p->c_str());
-    }
-  }
-}
-
-void
-setting::cacheclear()
-{
-  list<string> sect(manip(profile::sections()).sep(0).split());
-  for (list<string>::iterator p = sect.begin(); p != sect.end(); ++p) {
-    if (!p->empty() && *p->rbegin() == ')' && p->find("(cache:") == 0) {
-      profile(*p).put(NULL, NULL);
     }
   }
 }

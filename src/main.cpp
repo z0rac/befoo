@@ -63,7 +63,6 @@ namespace {
 model::model()
   : _mailboxes(NULL), _last(GetTickCount()), _fetching(0)
 {
-  assert(_model == NULL);
   try {
     _load();
   } catch (...) {

@@ -6,10 +6,18 @@
 #
 NAME = befoo
 SRCDIR = src
+EXTDIR = extend
 
-all:
-	${MAKE} -C ${SRCDIR}
-	mv ${SRCDIR}/${NAME}.exe .
+all:	$(NAME).exe extend.dll
+
+$(NAME).exe:
+	$(MAKE) -C $(SRCDIR)
+	mv $(SRCDIR)/$(NAME).exe .
+
+extend.dll:
+	$(MAKE) -C $(EXTDIR)
+	mv $(EXTDIR)/extend.dll .
 
 clean:
-	${MAKE} -C ${SRCDIR} clean
+	$(MAKE) -C $(SRCDIR) clean
+	$(MAKE) -C $(EXTDIR) clean
