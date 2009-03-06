@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="befoo"
-	ProjectGUID="{D82E3F1A-2543-41FC-8388-BCEBB710A614}"
-	RootNamespace="befoo"
+	Name="extend"
+	ProjectGUID="{BFDE788B-D681-4F39-98E2-E4686391BD4D}"
+	RootNamespace="extend"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -19,8 +19,8 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
-			ConfigurationType="1"
+			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			ConfigurationType="2"
 			CharacterSet="0"
 			>
 			<Tool
@@ -41,11 +41,11 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS=1"
-				StringPooling="true"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;EXTEND_EXPORTS;ISOLATION_AWARE_ENABLED=1;_CRT_SECURE_NO_WARNINGS=1"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
+				BufferSecurityCheck="false"
 				RuntimeTypeInfo="false"
 				UsePrecompiledHeader="0"
 				WarningLevel="4"
@@ -62,12 +62,12 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="shlwapi.lib imagehlp.lib ws2_32.lib comctl32.lib winmm.lib"
+				AdditionalDependencies="shlwapi.lib comctl32.lib winmm.lib"
 				LinkIncremental="2"
 				GenerateManifest="false"
 				GenerateDebugInformation="true"
-				SubSystem="1"
-				RandomizedBaseAddress="0"
+				SubSystem="2"
+				RandomizedBaseAddress="1"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -95,8 +95,8 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
-			ConfigurationType="1"
+			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			ConfigurationType="2"
 			CharacterSet="0"
 			WholeProgramOptimization="1"
 			>
@@ -120,9 +120,7 @@
 				Optimization="1"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				OmitFramePointers="true"
-				EnableFiberSafeOptimizations="true"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS=1"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;EXTEND_EXPORTS;ISOLATION_AWARE_ENABLED=1;_CRT_SECURE_NO_WARNINGS=1"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="false"
 				EnableFunctionLevelLinking="true"
@@ -142,14 +140,14 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="shlwapi.lib imagehlp.lib ws2_32.lib comctl32.lib winmm.lib"
+				AdditionalDependencies="shlwapi.lib comctl32.lib winmm.lib"
 				LinkIncremental="1"
 				GenerateManifest="false"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				RandomizedBaseAddress="0"
+				RandomizedBaseAddress="1"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -184,43 +182,19 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="..\src\imap4.cpp"
+				RelativePath="..\extend\main.cpp"
 				>
 			</File>
 			<File
-				RelativePath="..\src\mail.cpp"
+				RelativePath="..\extend\setting.cpp"
 				>
 			</File>
 			<File
-				RelativePath="..\src\mailbox.cpp"
+				RelativePath="..\extend\settingdlg.cpp"
 				>
 			</File>
 			<File
-				RelativePath="..\src\main.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\src\mascot.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\src\pop3.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\src\setting.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\src\summary.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\src\win32.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\src\window.cpp"
+				RelativePath="..\extend\win32.cpp"
 				>
 			</File>
 		</Filter>
@@ -230,23 +204,19 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="..\src\define.h"
+				RelativePath="..\extend\define.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\mailbox.h"
+				RelativePath="..\extend\resource.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\setting.h"
+				RelativePath="..\extend\setting.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\win32.h"
-				>
-			</File>
-			<File
-				RelativePath="..\src\window.h"
+				RelativePath="..\extend\win32.h"
 				>
 			</File>
 		</Filter>
@@ -256,7 +226,7 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 			<File
-				RelativePath="..\src\befoo.rc"
+				RelativePath="..\extend\extend.rc"
 				>
 			</File>
 		</Filter>

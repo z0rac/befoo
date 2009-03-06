@@ -221,7 +221,8 @@ summary::_open()
     if (ListView_GetItem(hwnd(), &lv)) {
       size_t i = 0;
       while (_mboxes[i].first <= size_t(lv.lParam)) ++i;
-      string mua = setting::mailbox(_mboxes[i].second)["mua"];
+      string mua;
+      setting::mailbox(_mboxes[i].second)["mua"].sep(0)(mua);
       if (!mua.empty()) win32::shell(mua);
     }
   }
