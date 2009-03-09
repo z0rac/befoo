@@ -104,7 +104,9 @@ BEGIN
     IDS_FILTER_SOUND              "Sound (*.wav)/*.wav/"
     IDS_FILTER_PROGRAM            "Program (*.exe)/*.exe/"
     IDS_MSGBOX_DELETE             "Confirm Mailbox Delete/Are you sure you want to delete '%s'?/"
-    IDS_MSG_NAME_EXISTS           "The specified name already exists.\nPlease enter a different name."
+    IDS_MSG_ITEM_REQUIRED         "This item is required."
+    IDS_MSG_INVALID_CHAR          "You cannot use this character here."
+    IDS_MSG_NAME_EXISTS           "The specified name already exists. Please enter a different name."
 END
 
 LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
