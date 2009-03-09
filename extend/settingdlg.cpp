@@ -18,6 +18,8 @@
 namespace {
   class dialog {
     HWND _hwnd;
+    mutable HWND _tips;
+    mutable bool _balloon;
     static BOOL CALLBACK _dlgproc(HWND h, UINT m, WPARAM w, LPARAM l);
   protected:
     struct textbuf {
@@ -35,6 +37,7 @@ namespace {
     virtual void done(bool ok);
     virtual bool action(int id, int cmd);
   public:
+    dialog() : _hwnd(NULL), _tips(NULL), _balloon(false) {}
     virtual ~dialog() {}
     HWND hwnd() const { return _hwnd; }
     HWND item(int id) const { return GetDlgItem(_hwnd, id); }
@@ -48,7 +51,10 @@ namespace {
 		   const string& dir = string()) const;
     string listitem(int id) const;
     void editselect(int id, int start = 0, int end = -1) const;
-    int msgbox(const string& msg, UINT flags = 0);
+    int msgbox(const string& msg, UINT flags = 0) const;
+    void balloon(int id, const string& msg) const;
+    void clearballoon() const;
+    void error(int id, const string& msg, int start = 0, int end = -1) const;
     int modal(int id, HWND parent);
   };
 }
@@ -66,6 +72,7 @@ dialog::_dlgproc(HWND h, UINT m, WPARAM w, LPARAM l)
     }
     dialog* dp = reinterpret_cast<dialog*>(GetWindowLongPtr(h, GWLP_USERDATA));
     if (dp && m == WM_COMMAND) {
+      dp->clearballoon();
       return dp->action(GET_WM_COMMAND_ID(w, l), GET_WM_COMMAND_CMD(w, l));
     }
   } catch (...) {}
@@ -157,7 +164,7 @@ dialog::editselect(int id, int start, int end) const
 }
 
 int
-dialog::msgbox(const string& msg, UINT flags)
+dialog::msgbox(const string& msg, UINT flags) const
 {
   string t[2];
   if (!msg.empty()) {
@@ -170,6 +177,49 @@ dialog::msgbox(const string& msg, UINT flags)
     }
   }
   return MessageBox(_hwnd, t[0].c_str(), t[1].c_str(), flags);
+}
+
+void
+dialog::balloon(int id, const string& msg) const
+{
+  TOOLINFO ti = { sizeof(TOOLINFO), TTF_TRACK, _hwnd };
+  if (!_tips) {
+    _tips = CreateWindow(TOOLTIPS_CLASS, NULL,
+			 WS_POPUP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE,
+			 CW_USEDEFAULT, CW_USEDEFAULT,
+			 CW_USEDEFAULT, CW_USEDEFAULT,
+			 _hwnd, NULL, win32::instance, NULL);
+    if (_tips) SendMessage(_tips, TTM_ADDTOOL, 0, LPARAM(&ti));
+  }
+  if (_tips) {
+    ti.lpszText = LPSTR(msg.c_str());
+    SendMessage(_tips, TTM_UPDATETIPTEXT, 0, LPARAM(&ti));
+    RECT r;
+    GetWindowRect(item(id), &r);
+    SendMessage(_tips, TTM_TRACKPOSITION, 0,
+		MAKELPARAM((r.left + r.right) / 2, (r.top + r.bottom) / 2));
+    SendMessage(_tips, TTM_TRACKACTIVATE, TRUE, LPARAM(&ti));
+    _balloon = true;
+  }
+  MessageBeep(MB_OK);
+}
+
+void
+dialog::clearballoon() const
+{
+  if (_balloon) {
+    TOOLINFO ti = { sizeof(TOOLINFO), 0, _hwnd };
+    SendMessage(_tips, TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
+    _balloon = false;
+  }
+}
+
+void
+dialog::error(int id, const string& msg, int start, int end) const
+{
+  editselect(id, start, end);
+  balloon(id, msg);
+  throw FALSE;
 }
 
 int
@@ -265,9 +315,7 @@ uridlg::done(bool ok)
     if (!s.empty()) uri += s + '@';
     s = gettext(IDC_EDIT_ADDRESS);
     if (s.empty()) {
-      editselect(IDC_EDIT_ADDRESS);
-      MessageBeep(MB_ICONINFORMATION);
-      return;
+      error(IDC_EDIT_ADDRESS, win32::instance.text(IDS_MSG_ITEM_REQUIRED));
     }
     uri += s;
     if (i >= sizeof(_proto) / sizeof(_proto[0]) ||
@@ -369,33 +417,26 @@ mailboxdlg::done(bool ok)
   if (ok) {
     string name = gettext(IDC_EDIT_NAME);
     if (name.empty()) {
-      editselect(IDC_EDIT_NAME);
-      MessageBeep(MB_ICONINFORMATION);
-      return;
-    } else if (name[0] == '(' && *name.rbegin() == ')') {
-      editselect(IDC_EDIT_NAME, 0, 1);
-      MessageBeep(MB_ICONINFORMATION);
-      return;
-    } else {
+      error(IDC_EDIT_NAME, win32::instance.text(IDS_MSG_ITEM_REQUIRED));
+    }
+    if (name[0] == '(' && *name.rbegin() == ')') {
+      error(IDC_EDIT_NAME, win32::instance.text(IDS_MSG_INVALID_CHAR), 0, 1);
+    }
+    {
       const char* np = name.c_str();
       const char* p = StrChr(np, ']');
       if (p) {
-	editselect(IDC_EDIT_NAME, p - np, p - np + 1);
-	MessageBeep(MB_ICONINFORMATION);
-	return;
+	int n = MultiByteToWideChar(GetACP(), 0, np, p - np, NULL, 0);
+	error(IDC_EDIT_NAME, win32::instance.text(IDS_MSG_INVALID_CHAR), n, n + 1);
       }
     }
     setting s = setting::mailbox(name);
     if (name != _name && !string(s["passwd"]).empty()) {
-      editselect(IDC_EDIT_NAME);
-      MessageBeep(MB_ICONINFORMATION);
-      return;
+      error(IDC_EDIT_NAME, win32::instance.text(IDS_MSG_NAME_EXISTS));
     }
     string uri = gettext(IDC_COMBO_SERVER);
     if (uri.empty()) {
-      editselect(IDC_COMBO_SERVER);
-      MessageBeep(MB_ICONINFORMATION);
-      return;
+      error(IDC_COMBO_SERVER, win32::instance.text(IDS_MSG_ITEM_REQUIRED));
     }
     s("uri", uri);
     s.cipher("passwd", gettext(IDC_EDIT_PASSWD));
@@ -519,7 +560,7 @@ namespace {
     bool action(int id, int cmd);
     void _mailbox(bool edit = false);
     void _delete();
-    void _enablebuttons(bool en);
+    void _enablebuttons();
     void _enableicon(bool en);
   };
 }
@@ -532,7 +573,7 @@ maindlg::initialize()
   for (; p != mboxes.end(); ++p) {
     ListBox_AddString(item(IDC_LIST_MAILBOX), p->c_str());
   }
-  _enablebuttons(false);
+  _enablebuttons();
 
   setting pref(setting::preferences());
   int n, b;
@@ -586,7 +627,7 @@ maindlg::action(int id, int cmd)
       _mailbox(true);
       break;
     case LBN_SELCHANGE:
-      _enablebuttons(ListBox_GetCurSel(item(IDC_LIST_MAILBOX)) != LB_ERR);
+      _enablebuttons();
       break;
     }
     return true;
@@ -610,7 +651,7 @@ maindlg::_mailbox(bool edit)
     if (!name.empty()) ListBox_DeleteString(h, ListBox_GetCurSel(h));
     ListBox_AddString(h, dlg.name().c_str());
     ListBox_SetCurSel(h, ListBox_GetCount(h) - 1);
-    _enablebuttons(true);
+    _enablebuttons();
   }
 }
 
@@ -624,12 +665,14 @@ maindlg::_delete()
     setting::mailbox(name).erase(NULL);
     HWND h = item(IDC_LIST_MAILBOX);
     ListBox_DeleteString(h, ListBox_GetCurSel(h));
+    _enablebuttons();
   }
 }
 
 void
-maindlg::_enablebuttons(bool en)
+maindlg::_enablebuttons()
 {
+  bool en = ListBox_GetCurSel(item(IDC_LIST_MAILBOX)) != LB_ERR;
   enable(IDC_BUTTON_EDIT, en);
   enable(IDC_BUTTON_DELETE, en);
 }

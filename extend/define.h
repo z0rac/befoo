@@ -49,4 +49,6 @@
 #define IDS_FILTER_SOUND                        40000
 #define IDS_FILTER_PROGRAM                      40001
 #define IDS_MSGBOX_DELETE                       40002
-#define IDS_MSG_NAME_EXISTS                     40003
+#define IDS_MSG_ITEM_REQUIRED                   40003
+#define IDS_MSG_INVALID_CHAR                    40004
+#define IDS_MSG_NAME_EXISTS                     40005
