@@ -20,9 +20,11 @@
 /** tcpstream - stream of TCP session.
  * This instance should be created by the function mailbox::backend::tcp.
  */
+#define TCP_TIMEOUT 60
 namespace {
   class tcpstream : public mailbox::backend::stream {
     SOCKET _fd;
+    void _timeout(int opt, int sec);
   public:
     tcpstream() : _fd(INVALID_SOCKET) {}
     ~tcpstream();
@@ -39,6 +41,14 @@ namespace {
 tcpstream::~tcpstream()
 {
   close();
+}
+
+void
+tcpstream::_timeout(int opt, int sec)
+{
+  assert(_fd != INVALID_SOCKET);
+  struct timeval tv = { sec, 0 };
+  setsockopt(_fd, SOL_SOCKET, opt, (const char*)&tv, sizeof(tv));
 }
 
 int
@@ -58,6 +68,8 @@ tcpstream::open(const string& host, const string& port)
   }
   winsock::freeaddrinfo(ai);
   if (_fd == INVALID_SOCKET) throw winsock::error();
+  _timeout(SO_SNDTIMEO, TCP_TIMEOUT);
+  _timeout(SO_RCVTIMEO, TCP_TIMEOUT);
   return _fd;
 }
 
