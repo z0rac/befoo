@@ -47,7 +47,7 @@ void
 tcpstream::_timeout(int opt, int sec)
 {
   assert(_fd != INVALID_SOCKET);
-  struct timeval tv = { sec, 0 };
+  DWORD tv = sec * 1000;
   setsockopt(_fd, SOL_SOCKET, opt, (const char*)&tv, sizeof(tv));
 }
 
