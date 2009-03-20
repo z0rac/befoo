@@ -45,7 +45,7 @@ main.o mascot.o summary.o: define.h mailbox.h window.h setting.h
 mail.o mailbox.o imap4.o pop3.o: mailbox.h
 window.o: window.h
 setting.o: setting.h
-$(NAME).res: $(L10N) $(RSRC) Makefile
+$(NAME).res: $(L10N) $(RSRC) define.h Makefile
 
 clean:
 	@rm -f *.o *.res *~ mingw/*.o
