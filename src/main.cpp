@@ -119,25 +119,26 @@ model&
 model::fetch(window& source, bool force)
 {
   win32::xlock::up lock(_key);
-  unsigned next = 10;
+  if (!_fetching && !_fetched.empty()) {
+    source.settimer(*this, 1); // delay to fetch.
+    return *this;
+  }
+  LOG("Fetch mails..." << endl);
+  unsigned next = 0;
   mbox* fetch = NULL;
-  if (_fetching || _fetched.empty()) {
-    LOG("Fetch mails..." << endl);
-    DWORD elapse = GetTickCount() - _last;
-    _last += elapse;
-    next = 0;
-    for (mailbox* p = _mailboxes; p; p = p->next()) {
-      mbox* mb = static_cast<mbox*>(p);
-      if (!mb->period) continue; // No fetching by the setting.
-      if (force || mb->next <= elapse) {
-	unsigned late = force ? 0 : (elapse - mb->next) % mb->period;
-	mb->next = mb->period - late;
-	mb->fetch = fetch, fetch = mb;
-      } else {
-	mb->next -= elapse;
-      }
-      if (!next || next > mb->next) next = mb->next;
+  DWORD elapse = GetTickCount() - _last;
+  _last += elapse;
+  for (mailbox* p = _mailboxes; p; p = p->next()) {
+    mbox* mb = static_cast<mbox*>(p);
+    if (!mb->period) continue; // No fetching by the setting.
+    if (force || mb->next <= elapse) {
+      unsigned late = force ? 0 : (elapse - mb->next) % mb->period;
+      mb->next = mb->period - late;
+      mb->fetch = fetch, fetch = mb;
+    } else {
+      mb->next -= elapse;
     }
+    if (!next || next > mb->next) next = mb->next;
   }
   source.settimer(*this, next);
   for (; fetch; fetch = fetch->fetch) {
@@ -160,21 +161,23 @@ model::_done(mbox& mb)
     PlaySound(name, NULL, SND_NODEFAULT | SND_NOWAIT | SND_ASYNC|
 	      (*PathFindExtension(name) ? SND_FILENAME : SND_ALIAS));
   }
-
-  win32::xlock::up lock(_key);
-  if (--_fetching == 0) {
-    LOG("Done all fetching." << endl);
-    int recent = 0;
-    int unseen = 0;
-    for (const mailbox* p = _mailboxes; p; p = p->next()) {
-      int n = p->recent();
-      if (n > 0) recent += n;
-      unseen += p->mails().size();
-    }
-    window::broadcast(WM_APP, MAKEWPARAM(recent, unseen), LPARAM(&_fetched));
-    LOG("***** HEAP SIZE [" << win32::cheapsize() << ", "
-	<< win32::heapsize() << "] *****" << endl);
+  {
+    win32::xlock::up lock(_key);
+    if (--_fetching) return;
   }
+  LOG("Done all fetching." << endl);
+  int recent = 0;
+  int unseen = 0;
+  for (const mailbox* p = _mailboxes; p; p = p->next()) {
+    int n = p->recent();
+    if (n > 0) recent += n;
+    unseen += p->mails().size();
+  }
+  window::broadcast(WM_APP, MAKEWPARAM(recent, unseen), LPARAM(&_fetched));
+  win32::xlock::up lock(_key);
+  _fetched.clear();
+  LOG("***** HEAP SIZE [" << win32::cheapsize() << ", "
+      << win32::heapsize() << "] *****" << endl);
 }
 
 void

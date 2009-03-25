@@ -430,14 +430,7 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     }
     return 0;
   case WM_APP: // broadcast
-    {
-      struct hold {
-	list<mailbox*>* mboxes;
-	hold(LPARAM l) : mboxes(reinterpret_cast<list<mailbox*>*>(l)) {}
-	~hold() { if (mboxes) mboxes->clear(); }
-      } param(l);
-      update(LOWORD(w), HIWORD(w), param.mboxes);
-    }
+    update(LOWORD(w), HIWORD(w), reinterpret_cast<list<mailbox*>*>(l));
     return 0;
   }
   return iconwindow::dispatch(m, w, l);
