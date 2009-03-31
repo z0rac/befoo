@@ -236,6 +236,12 @@ namespace cmd {
   struct exit : public window::command {
     void execute(window&) { LOG("Exit." << endl); PostQuitMessage(0); }
   };
+
+  struct logoff : public window::command {
+    model& _model;
+    logoff(model& model) : _model(model) {}
+    void execute(window&) { _model.cache(); }
+  };
 }
 
 namespace {
@@ -304,6 +310,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
       w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
       w->addcmd(ID_MENU_SETTINGS, new cmd::setting(*m));
       w->addcmd(ID_MENU_EXIT, new cmd::exit);
+      w->addcmd(ID_EVENT_LOGOFF, new cmd::logoff(*m));
       w->settimer(*m, delay > 0 ? delay * 1000 : 1);
       qc = window::eventloop();
       m->cache();
