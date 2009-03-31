@@ -18,6 +18,8 @@
 #define ID_MENU_ABOUT          90
 #define ID_MENU_EXIT           99
 
+#define ID_EVENT_LOGOFF        (-1)
+
 #define ID_TEXT_FETCHING       1
 #define ID_TEXT_FETCHED_MAIL   2
 #define ID_TEXT_FETCH_ERROR    3
