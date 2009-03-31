@@ -403,6 +403,9 @@ LRESULT
 mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
 {
   switch (m) {
+  case WM_ENDSESSION:
+    if (w) _release();
+    break;
   case WM_LBUTTONDOWN:
     if (!intray()) {
       ReleaseCapture();
