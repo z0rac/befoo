@@ -38,7 +38,6 @@ namespace {
 	: mailbox(name), period(0), next(0) {}
     };
     mailbox* _mailboxes;
-    DWORD _last;
     void _load();
     void _release();
     void wakeup(window& source) { fetch(source, false); }
@@ -52,8 +51,10 @@ namespace {
   private:
     // the class to control fetching
     win32::xlock _key;
+    DWORD _last;
     unsigned _fetching;
     list<mailbox*> _fetched;
+    int _summary;
     void _done(mbox& mb);
     static void _thread(void* param);
   };
@@ -61,10 +62,11 @@ namespace {
 }
 
 model::model()
-  : _mailboxes(NULL), _last(GetTickCount()), _fetching(0)
+  : _mailboxes(NULL), _last(GetTickCount()), _fetching(0), _summary(0)
 {
   try {
     _load();
+    setting::preferences()["summary"]()(_summary);
   } catch (...) {
     _release();
     throw;
@@ -174,6 +176,13 @@ model::_done(mbox& mb)
     unseen += p->mails().size();
   }
   window::broadcast(WM_APP, MAKEWPARAM(recent, unseen), LPARAM(&_fetched));
+  if (recent && _summary) {
+    list<mailbox*>::const_iterator p = _fetched.begin();
+    while (p != _fetched.end() && (*p)->recent() <= 0) ++p;
+    if (p != _fetched.end()) {
+      window::broadcast(WM_COMMAND, MAKEWPARAM(0, ID_MENU_SUMMARY), 0);
+    }
+  }
   win32::xlock::up lock(_key);
   _fetched.clear();
   LOG("***** HEAP SIZE [" << win32::cheapsize() << ", "

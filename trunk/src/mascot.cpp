@@ -279,7 +279,9 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     case NIN_KEYSELECT: l = WM_LBUTTONDBLCLK; break;
     default: return 0;
     }
-    PostMessage(hwnd(), l, 0, GetMessagePos());
+    POINT pt;
+    GetCursorPos(&pt);
+    PostMessage(hwnd(), l, 0, MAKELPARAM(pt.x, pt.y));
     return 0;
   default:
     if (m == tbc && intray()) _trayicon(true);
@@ -374,7 +376,6 @@ namespace {
     menu _menu;
     int _size;
     int _balloon;
-    int _summary;
     void _release();
   protected:
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
@@ -465,6 +466,7 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
       }
       newer = newer || n > 0;
     }
+    ReplyMessage(0);
     status(win32::exe.textf(ID_TEXT_FETCHED_MAIL, recent, unseen));
     if (!info.empty()) {
       balloon(info.erase(info.size() - 1), _balloon ? _balloon : 10,
@@ -472,7 +474,6 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 			      ID_TEXT_BALLOON_ERROR),
 	      newer ? NIIF_INFO : NIIF_ERROR);
     }
-    if (_summary && newer) execute(ID_MENU_SUMMARY);
     reset((unseen == 0) + 1);
   } else {
     status(win32::exe.text(ID_TEXT_FETCHING));
@@ -487,7 +488,6 @@ mascotwindow::mascotwindow()
   prefs["icon"](_size = size());
   if (!_size) _size = GetSystemMetrics(SM_CXICON);
   prefs["balloon"](_balloon = 10);
-  prefs["summary"]()(_summary = 0);
 
   prefs = setting::preferences("mascot");
   RECT r;
