@@ -206,6 +206,7 @@ namespace {
     iconwindow();
     ~iconwindow() { if (hwnd()) _trayicon(false); }
     void trayicon(bool tray);
+    bool intray() const { return !visible(); }
   };
 }
 
@@ -222,11 +223,7 @@ iconwindow::_trayicon(bool tray)
       if (Shell_NotifyIcon(NIM_MODIFY, &ni)) break;
       Sleep(1000);
     }
-#if _WIN32_WINNT >= 0x600
-    ni.uVersion = NOTIFYICON_VERSION_4;
-#else
     ni.uVersion = NOTIFYICON_VERSION;
-#endif
     Shell_NotifyIcon(NIM_SETVERSION, &ni);
   } else {
     Shell_NotifyIcon(NIM_DELETE, &ni);
@@ -237,7 +234,7 @@ iconwindow::_trayicon(bool tray)
 void
 iconwindow::_update()
 {
-  if (!visible()) {
+  if (intray()) {
     NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
     ni.uFlags = NIF_ICON;
     ni.hIcon = _icon;
@@ -250,7 +247,7 @@ iconwindow::_update()
 void
 iconwindow::_updatetips()
 {
-  if (!visible()) {
+  if (intray()) {
     NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
     ni.uFlags = NIF_TIP;
     lstrcpyn(ni.szTip, _status.c_str(), sizeof(ni.szTip));
@@ -275,8 +272,17 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_MOUSELEAVE:
     _tips.reset(hascursor());
     return 0;
+  case WM_USER: // from tray icon
+    switch (l) {
+    case WM_CONTEXTMENU: break;
+    case NIN_SELECT: l = WM_LBUTTONDOWN; break;
+    case NIN_KEYSELECT: l = WM_LBUTTONDBLCLK; break;
+    default: return 0;
+    }
+    PostMessage(hwnd(), l, 0, GetMessagePos());
+    return 0;
   default:
-    if (m == tbc && !visible()) _trayicon(true);
+    if (m == tbc && intray()) _trayicon(true);
     break;
   }
   return appwindow::dispatch(m, w, l);
@@ -296,7 +302,7 @@ bool
 iconwindow::popup(const menu& menu, DWORD pt)
 {
   bool t = appwindow::popup(menu, pt);
-  if (!t && !visible()) {
+  if (!t && intray()) {
     NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
     Shell_NotifyIcon(NIM_SETFOCUS, &ni);
   }
@@ -329,7 +335,7 @@ void
 iconwindow::balloon(const string& text, unsigned sec,
 		    const string& title, int icon)
 {
-  if (!visible()) {
+  if (intray()) {
     NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
     ni.uFlags = NIF_INFO;
     lstrcpyn(ni.szInfo, text.c_str(), sizeof(ni.szInfo));
@@ -389,7 +395,7 @@ mascotwindow::_release()
     RECT r = bounds();
     setting::preferences("mascot")
       ("position", setting::tuple(r.left)(r.top))
-      ("tray", !visible());
+      ("tray", intray());
   } catch (...) {}
 }
 
@@ -398,36 +404,23 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
 {
   switch (m) {
   case WM_LBUTTONDOWN:
-    ReleaseCapture();
-    PostMessage(hwnd(), WM_SYSCOMMAND, SC_MOVE | HTCAPTION, l);
-    break;
+    if (!intray()) {
+      ReleaseCapture();
+      PostMessage(hwnd(), WM_SYSCOMMAND, SC_MOVE | HTCAPTION, l);
+      break;
+    }
+    // fall down
   case WM_LBUTTONDBLCLK:
     execute(_menu);
     return 0;
   case WM_CONTEXTMENU:
-    if (l == ~LPARAM(0)) {
+    if (l == ~LPARAM(0) && !intray()) {
       POINT pt = extent();
       pt.x >>= 1, pt.y >>= 1;
       ClientToScreen(hwnd(), &pt);
       l = MAKELPARAM(pt.x, pt.y);
     }
     popup(_menu, l);
-    return 0;
-  case WM_USER: // from tray icon
-    switch (LOWORD(l)) {
-    case WM_CONTEXTMENU:
-#if _WIN32_WINNT >= 0x600
-      popup(_menu, w);
-#else
-      POINT pt;
-      GetCursorPos(&pt);
-      popup(_menu, MAKELPARAM(pt.x, pt.y));
-#endif
-      break;
-    case NIN_SELECT: case NIN_KEYSELECT:
-      execute(_menu);
-      break;
-    }
     return 0;
   case WM_APP: // broadcast
     update(LOWORD(w), HIWORD(w), reinterpret_cast<list<mailbox*>*>(l));
@@ -507,17 +500,16 @@ mascotwindow::mascotwindow()
 namespace cmd {
   class trayicon : public window::command {
     void execute(window& source)
-    { ((mascotwindow&)source).trayicon(source.visible()); }
+    { ((mascotwindow&)source).trayicon(!((mascotwindow&)source).intray()); }
     UINT state(window& source)
-    { return source.visible() ? 0 : MFS_CHECKED; }
+    { return ((mascotwindow&)source).intray() ? MFS_CHECKED : 0; }
   };
 
   class about : public window::command {
     void execute(window& source)
     {
-      ((mascotwindow&)source)
-	.balloon(win32::exe.text(ID_TEXT_ABOUT), 10,
-		 win32::exe.text(ID_TEXT_VERSION));
+      ((mascotwindow&)source).balloon(win32::exe.text(ID_TEXT_ABOUT), 10,
+				      win32::exe.text(ID_TEXT_VERSION));
     }
   };
 }
