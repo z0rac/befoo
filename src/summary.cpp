@@ -348,6 +348,9 @@ LRESULT
 summarywindow::dispatch(UINT m, WPARAM w, LPARAM l)
 {
   switch (m) {
+  case WM_ENDSESSION:
+    if (w) release();
+    break;
   case WM_SETCURSOR:
     _autoclose.reset(*this);
     break;
