@@ -1,0 +1,108 @@
+/*
+ * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ *
+ * This software comes with ABSOLUTELY NO WARRANTY; for details of
+ * the license terms, see the LICENSE.txt file included with the program.
+ */
+#include "define.h"
+#include <winresrc.h>
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+#pragma code_page(1252)
+
+0 ICON DISCARDABLE "../ico/app.ico"
+1 ICON DISCARDABLE "../ico/jump1.ico"
+2 ICON DISCARDABLE "../ico/jump2.ico"
+3 ICON DISCARDABLE "../ico/jump3.ico"
+4 ICON DISCARDABLE "../ico/jump4.ico"
+5 ICON DISCARDABLE "../ico/sleep1.ico"
+6 ICON DISCARDABLE "../ico/sleep2.ico"
+7 ICON DISCARDABLE "../ico/sleep3.ico"
+8 ICON DISCARDABLE "../ico/sleep4.ico"
+
+1 RCDATA DISCARDABLE
+BEGIN
+    6,  // Bytes of header
+    64, // Icon size
+    4,  // Animation frames
+    1, 0, 0L, 0L, 0L, // Animation for fetching.
+    1, 60, 2,  9, 3,  9, 4, 9, // Animation for having mail.
+    5, 30, 6, 30, 7, 30, 8, 30 // Animation for no mail.
+END
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "befoo.exe.manifest"
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+1 MENUEX DISCARDABLE
+BEGIN
+    POPUP ""
+    BEGIN
+	MENUITEM "&Fetch", ID_MENU_FETCH
+	MENUITEM "&Show Summary", ID_MENU_SUMMARY, MFT_STRING, MFS_DEFAULT
+	MENUITEM "", 0, MFT_SEPARATOR
+	MENUITEM "&Tray Icon", ID_MENU_TRAYICON
+	MENUITEM "Settings...", ID_MENU_SETTINGS
+	MENUITEM "", 0, MFT_SEPARATOR
+	MENUITEM "&About befoo", ID_MENU_ABOUT
+	MENUITEM "E&xit", ID_MENU_EXIT
+    END
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    ID_TEXT_FETCHING		"Now fetching"
+    ID_TEXT_FETCHED_MAIL	"%d recent(s), %d unseen(s)"
+    ID_TEXT_FETCH_ERROR		"A fetch error occurred."
+    ID_TEXT_BALLOON_TITLE	"You've got mail."
+    ID_TEXT_BALLOON_ERROR	"Mail fetch failed."
+    ID_TEXT_SUMMARY_TITLE	"Summary - " APP_NAME
+    ID_TEXT_SUMMARY_COLUMN	"Subject/Sender/Date/Mailbox/"
+    ID_TEXT_SETTINGS		"\
+;Enter your mailbox information and preferences like below\
+ - except semi-colon at start of line:\r\n\
+\r\n\
+;[mailboxname]\r\n\
+;uri=imap://username@imap.example.com/\r\n\
+;passwd=your password\t; It will be coded later.\r\n\
+;sound=MailBeep\t\t; A sound alias or path to a wave file.\
+ (default: No sound)\r\n\
+;period=10\t\t; A fetching period in minutes. (default: 15)\r\n\
+\r\n\
+;[another over SSL]\t; You need the OpenSSL DLLs\r\n\
+;uri=imap+ssl://username@imap.example.com/\r\n\
+;passwd=...\r\n\
+;sound=%windir%\\Media\\chimes.wav\r\n\
+\r\n\
+;[POP3]\r\n\
+;uri=pop://username@pop.example.com/\r\n\
+;passwd=...\r\n\
+\r\n\
+;[POP3 recents]\t; Summary of recents only.\r\n\
+;uri=pop://username@pop.example.com/#recent\r\n\
+;passwd=...\r\n\
+\r\n\
+;[POP3 over SSL]\t; You need the OpenSSL DLLs\r\n\
+;uri=pop+ssl://username@pop.example.com/\r\n\
+;passwd=...\r\n\
+\r\n\
+;[(preferences)]\r\n\
+;icon=32\t\t; Size of the mascot icon.(default: 64)\r\n\
+;balloon=5\t\t; Period to show the balloon.(default: 10)\r\n\
+;summary=5,1\t\t; Period to show the summary, and switch to show\
+ the summary when mail is fetched.(default: 3,0)\r\n\
+;delay=30\t\t; Delay seconds to the first fetching.(default: 0)\r\n\
+\r\n\
+"
+    ID_TEXT_ABOUT		"\
+(C) 2009 TSUBAKIMOTO Hiroya\n\
+Befoo comes with ABSOLUTELY NO WARRANTY. This is free software, \
+and you are welcome to redistribute it under certain conditions; \
+for details see <http://www.gnu.org/licenses/>.\
+"
+    ID_TEXT_VERSION             APP_NAME " version " APP_VERSION
+END
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+#pragma code_page(932)
+#include "ja.rc"
