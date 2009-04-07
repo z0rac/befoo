@@ -331,6 +331,8 @@ win32::error::emsg()
  * Functions of the class winsock
  */
 namespace {
+  static win32::mex _key;
+
   int WSAAPI
   _getaddrinfo(const char* node, const char* service,
 	       const struct addrinfo* hints, struct addrinfo** res)
@@ -343,13 +345,12 @@ namespace {
 
     struct sockaddr_in sa = { AF_INET };
     struct addrinfo ai = { 0, AF_INET, SOCK_STREAM, IPPROTO_TCP, sizeof(sa) };
-    static win32::xlock key;
 
     { // service to port number
       char* end;
       unsigned n = strtoul(service, &end, 10);
       if (*end || n > 65535) {
-	win32::xlock::up lockup(key);
+	win32::mex::lock lockup(_key);
 	struct servent* ent = getservbyname(service, "tcp");
 	if (!ent) return h_errno;
 	sa.sin_port = ent->s_port;
@@ -360,7 +361,7 @@ namespace {
 
     sa.sin_addr.s_addr = inet_addr(node);
     if (sa.sin_addr.s_addr == INADDR_NONE) {
-      win32::xlock::up lockup(key);
+      win32::mex::lock lockup(_key);
       struct hostent* ent = gethostbyname(node);
       if (!ent) return h_errno;
       if (ent->h_addrtype != AF_INET ||

@@ -50,7 +50,7 @@ namespace {
     bool fetching() const { return _fetching != 0; }
   private:
     // the class to control fetching
-    win32::xlock _key;
+    win32::mex _key;
     DWORD _last;
     unsigned _fetching;
     list<mailbox*> _fetched;
@@ -120,8 +120,8 @@ model::cache()
 model&
 model::fetch(window& source, bool force)
 {
-  win32::xlock::up lock(_key);
-  if (!_fetching && !_fetched.empty()) {
+  win32::mex::trylock lock(_key);
+  if (!lock) {
     source.settimer(*this, 1); // delay to fetch.
     return *this;
   }
@@ -163,10 +163,10 @@ model::_done(mbox& mb)
     PlaySound(name, NULL, SND_NODEFAULT | SND_NOWAIT | SND_ASYNC|
 	      (*PathFindExtension(name) ? SND_FILENAME : SND_ALIAS));
   }
-  {
-    win32::xlock::up lock(_key);
-    if (--_fetching) return;
-  }
+
+  win32::mex::lock lock(_key);
+  if (--_fetching) return;
+
   LOG("Done all fetching." << endl);
   int recent = 0;
   int unseen = 0;
@@ -183,7 +183,6 @@ model::_done(mbox& mb)
       window::broadcast(WM_COMMAND, MAKEWPARAM(0, ID_MENU_SUMMARY), 0);
     }
   }
-  win32::xlock::up lock(_key);
   _fetched.clear();
   LOG("***** HEAP SIZE [" << win32::cheapsize() << ", "
       << win32::heapsize() << "] *****" << endl);

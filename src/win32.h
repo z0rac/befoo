@@ -60,23 +60,32 @@ public:
     ~dll();
   };
 
-  // xlock - exclusive control
-  class xlock {
+  // mex - exclusive control
+  class mex {
     CRITICAL_SECTION _cs;
-    xlock(const xlock&); void operator=(const xlock&); // disable to copy
+    mex(const mex&); void operator=(const mex&); // disable to copy
   public:
-    xlock() { InitializeCriticalSection(&_cs); }
-    ~xlock() { DeleteCriticalSection(&_cs); }
+    mex() { InitializeCriticalSectionAndSpinCount(&_cs, 4000); }
+    ~mex() { DeleteCriticalSection(&_cs); }
   public:
-    class up {
-      xlock& _lock;
-      up(const up&);
-      void operator=(const up&);
+    class lock {
+      mex& _m;
+      lock(const lock&); void operator=(const lock&);
     public:
-      up(xlock& lock) : _lock(lock) { EnterCriticalSection(&_lock._cs); }
-      ~up() { LeaveCriticalSection(&_lock._cs); }
+      lock(mex& m) : _m(m) { EnterCriticalSection(&m._cs); }
+      ~lock() { LeaveCriticalSection(&_m._cs); }
     };
-    friend class up;
+    friend class lock;
+  public:
+    class trylock {
+      mex* _mp;
+      trylock(const trylock&); void operator=(const trylock&);
+    public:
+      trylock(mex& m) : _mp(TryEnterCriticalSection(&m._cs) ? &m : NULL) {}
+      ~trylock() { if (_mp) LeaveCriticalSection(&_mp->_cs); }
+      operator bool() const { return _mp != NULL; }
+    };
+    friend class trylock;
   };
 
   // wstr - wide character string
