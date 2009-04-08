@@ -122,6 +122,7 @@ tcpstream::write(const char* data, size_t size)
 /** sslstream - stream of SSL session.
  * This instance should be created by the function mailbox::backend::ssl().
  */
+#if USE_OPENSSL
 namespace {
   extern "C" {
     typedef struct { int ssl; } SSL;
@@ -279,6 +280,211 @@ sslstream::write(const char* data, size_t size)
 #undef LIB
 #undef XSSL
 #undef SSL
+#else // !USE_OPENSSL
+
+#define SECURITY_WIN32
+#include <security.h>
+#include <sspi.h>
+#include <schannel.h>
+
+namespace {
+  class sslstream : public tcpstream {
+    CredHandle _cred;
+    CtxtHandle _ctx;
+    SecPkgContext_StreamSizes _sizes;
+    bool _avail;
+    struct buf {
+      char* data;
+      buf() : data(NULL) {}
+      ~buf() { delete [] data; }
+      char* operator()(size_t n)
+      {
+	delete [] data, data = NULL;
+	return data = new char[n];
+      }
+    } _buf;
+    string _rbuf;
+    string::size_type _rest;
+    string _extra;
+    int _connect(int fd);
+  public:
+    sslstream(int fd = -1);
+    ~sslstream();
+    int open(const string& host, const string& port);
+    void close();
+    size_t read(char* buf, size_t size);
+    size_t write(const char* data, size_t size);
+    int tls() const { return 1; }
+    mailbox::backend::stream* starttls() { return NULL; }
+    static bool avail() { return true; }
+  };
+}
+
+sslstream::sslstream(int fd)
+  : tcpstream(fd), _avail(false)
+{
+  SCHANNEL_CRED auth = { 0 };
+  auth.dwVersion = SCHANNEL_CRED_VERSION;
+  auth.grbitEnabledProtocols = SP_PROT_SSL3;
+  auth.dwFlags = (SCH_CRED_NO_DEFAULT_CREDS |
+		  SCH_CRED_MANUAL_CRED_VALIDATION);
+  TimeStamp exp;
+  SECURITY_STATUS ss =
+    AcquireCredentialsHandle(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND,
+			     NULL, &auth, NULL, NULL, &_cred, &exp);
+  if (ss != SEC_E_OK) throw winsock::error(ss);
+  if (fd != -1) _connect(fd);
+}
+
+sslstream::~sslstream()
+{
+  close();
+  FreeCredentialsHandle(&_cred);
+}
+
+int
+sslstream::_connect(int fd)
+{
+  assert(!_avail);
+  try {
+    struct obuf : public SecBuffer {
+      obuf() { cbBuffer = 0, BufferType = SECBUFFER_TOKEN, pvBuffer = 0; }
+      ~obuf() { if (pvBuffer) FreeContextBuffer(pvBuffer); }
+    };
+    SECURITY_STATUS ss;
+    ULONG attr;
+    {
+      obuf out;
+      SecBufferDesc outb = { SECBUFFER_VERSION, 1, &out };
+      ss = InitializeSecurityContext(&_cred, NULL, NULL,
+				     ISC_REQ_ALLOCATE_MEMORY, 0,
+				     SECURITY_NETWORK_DREP,
+				     NULL, 0, &_ctx, &outb, &attr, NULL);
+      if (FAILED(ss)) throw winsock::error(ss);
+      _avail = true;
+      tcpstream::write((const char*)out.pvBuffer, out.cbBuffer);
+    }
+    const size_t buflen = 8192;
+    _buf(buflen);
+    while (ss == SEC_I_CONTINUE_NEEDED) {
+      SecBuffer in =
+	{ tcpstream::read(_buf.data, buflen), SECBUFFER_TOKEN, _buf.data };
+      SecBufferDesc inb = { SECBUFFER_VERSION, 1, &in };
+      obuf out;
+      SecBufferDesc outb = { SECBUFFER_VERSION, 1, &out };
+      ss = InitializeSecurityContext(&_cred, &_ctx, NULL,
+				     ISC_REQ_ALLOCATE_MEMORY, 0,
+				     SECURITY_NETWORK_DREP,
+				     &inb, 0, NULL, &outb, &attr, NULL);
+      if (FAILED(ss)) throw winsock::error(ss);
+      tcpstream::write((const char*)out.pvBuffer, out.cbBuffer);
+    }
+    ss = QueryContextAttributes(&_ctx, SECPKG_ATTR_STREAM_SIZES, &_sizes);
+    if (ss != SEC_E_OK) throw winsock::error(ss);
+    _buf(_sizes.cbHeader + _sizes.cbMaximumMessage + _sizes.cbTrailer);
+  } catch (...) {
+    close();
+    throw;
+  }
+  return fd;
+}
+
+int
+sslstream::open(const string& host, const string& port)
+{
+  return _connect(tcpstream::open(host, port));
+}
+
+void
+sslstream::close()
+{
+  if (_avail) {
+    DeleteSecurityContext(&_ctx);
+    _avail = false;
+  }
+  tcpstream::close();
+}
+
+size_t
+sslstream::read(char* buf, size_t size)
+{
+  assert(_avail);
+  if (!_rbuf.empty()) {
+    size_t n = min<size_t>(size, _rbuf.size() - _rest);
+    memcpy(buf, _rbuf.data() + _rest, n);
+    _rest += n;
+    if (_rest == _rbuf.size()) _rbuf.clear();
+    return n;
+  }
+  _rest = 0;
+  size_t done = 0;
+  size_t n = 0;
+  while (!done) {
+    if (_extra.empty()) {
+      n += tcpstream::read(_buf.data + n, _sizes.cbMaximumMessage - n);
+    } else {
+      memcpy(_buf.data, _extra.data(), n = _extra.size());
+      _extra.clear();
+    }
+    SecBuffer dec[4] = { { n, SECBUFFER_DATA, _buf.data } };
+    SecBufferDesc decb = { SECBUFFER_VERSION, 4, dec };
+    SECURITY_STATUS ss = DecryptMessage(&_ctx, &decb, 0, NULL);
+    switch (ss) {
+    case SEC_E_OK:
+    case SEC_I_RENEGOTIATE:
+      for (int i = 0; i < 4; ++i) {
+	switch(dec[i].BufferType) {
+	case SECBUFFER_DATA:
+	  if (dec[i].cbBuffer) {
+	    size_t n = 0;
+	    if (done < size) {
+	      n = min<size_t>(size - done, dec[i].cbBuffer);
+	      memcpy(buf + done, dec[i].pvBuffer, n);
+	      done += n;
+	    }
+	    _rbuf.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
+	  }
+	  break;
+	case SECBUFFER_EXTRA:
+	  _extra.append((char*)dec[i].pvBuffer, dec[i].cbBuffer);
+	  break;
+	}
+      }
+      n = 0;
+      break;
+    case SEC_E_INCOMPLETE_MESSAGE:
+      if (n < _sizes.cbMaximumMessage) break;
+    default:
+      throw winsock::error(ss);
+    }
+  }
+  return done;
+}
+
+size_t
+sslstream::write(const char* data, size_t size)
+{
+  assert(_avail);
+  size_t done = 0;
+  while (done < size) {
+    size_t n = min<size_t>(size - done, _sizes.cbMaximumMessage);
+    SecBuffer enc[4] = {
+      { _sizes.cbHeader, SECBUFFER_STREAM_HEADER, _buf.data },
+      { n, SECBUFFER_DATA, _buf.data + _sizes.cbHeader },
+      { _sizes.cbTrailer, SECBUFFER_STREAM_TRAILER,
+	_buf.data + _sizes.cbHeader + n }
+    };
+    SecBufferDesc encb = { SECBUFFER_VERSION, 4, enc };
+    memcpy(_buf.data + _sizes.cbHeader, data + done, n);
+    SECURITY_STATUS ss = EncryptMessage(&_ctx, 0, &encb, 0);
+    if (FAILED(ss)) throw winsock::error(ss);
+    tcpstream::write(_buf.data,
+		     enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
+    done += n;
+  }
+  return done;
+}
+#endif // !USE_OPENSSL
 
 int
 tcpstream::tls() const
