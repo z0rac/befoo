@@ -24,17 +24,17 @@
 namespace {
   class tcpstream : public mailbox::backend::stream {
     SOCKET _fd;
-    void _timeout(int opt, int sec);
+  protected:
+    void _wait(int op = -1) const;
   public:
-    tcpstream() : _fd(INVALID_SOCKET) {}
+    tcpstream(SOCKET fd = INVALID_SOCKET) : _fd(fd) {}
     ~tcpstream();
     int open(const string& host, const string& port);
     void close();
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
-    virtual bool tls() const { return false; }
+    int tls() const;
     mailbox::backend::stream* starttls();
-    int setfd(int fd) { assert(_fd == INVALID_SOCKET); return _fd = fd; }
   };
 }
 
@@ -44,11 +44,20 @@ tcpstream::~tcpstream()
 }
 
 void
-tcpstream::_timeout(int opt, int sec)
+tcpstream::_wait(int op) const
 {
-  assert(_fd != INVALID_SOCKET);
-  DWORD tv = sec * 1000;
-  setsockopt(_fd, SOL_SOCKET, opt, (const char*)&tv, sizeof(tv));
+  fd_set fds[2];
+  fd_set* fdsp[2] = { NULL, NULL };
+  for (int i = 0; i < 2; ++i) {
+    if (op >> 1 || op == i) {
+      fdsp[i] = fds + i;
+      FD_ZERO(fdsp[i]);
+      FD_SET(_fd, fdsp[i]);
+    }
+  }
+  timeval tv = { TCP_TIMEOUT, 0 };
+  int n = select(_fd + 1, fdsp[0], fdsp[1], NULL, &tv);
+  if (n <= 0) throw winsock::error(n ? h_errno : WSAETIMEDOUT);
 }
 
 int
@@ -60,7 +69,9 @@ tcpstream::open(const string& host, const string& port)
   for (struct addrinfo* p = ai; p; p = p->ai_next) {
     SOCKET fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (fd == INVALID_SOCKET) continue;
-    if (connect(fd, p->ai_addr, p->ai_addrlen) == 0) {
+    u_long nb = 1;
+    if (connect(fd, p->ai_addr, p->ai_addrlen) == 0 &&
+	ioctlsocket(fd, FIONBIO, &nb) == 0) {
       _fd = fd;
       break;
     }
@@ -68,8 +79,6 @@ tcpstream::open(const string& host, const string& port)
   }
   winsock::freeaddrinfo(ai);
   if (_fd == INVALID_SOCKET) throw winsock::error();
-  _timeout(SO_SNDTIMEO, TCP_TIMEOUT);
-  _timeout(SO_RCVTIMEO, TCP_TIMEOUT);
   return _fd;
 }
 
@@ -89,18 +98,25 @@ size_t
 tcpstream::read(char* buf, size_t size)
 {
   assert(_fd != INVALID_SOCKET);
-  int n = recv(_fd, buf, size, 0);
-  if (n <= 0) throw winsock::error();
-  return size_t(n);
+  for (;;) {
+    int n = recv(_fd, buf, size, 0);
+    if (n > 0) return size_t(n);
+    else if (n == 0 || h_errno != WSAEWOULDBLOCK) throw winsock::error();
+    _wait(0);
+  }
 }
 
 size_t
 tcpstream::write(const char* data, size_t size)
 {
   assert(_fd != INVALID_SOCKET);
-  int n = send(_fd, data, size, 0);
-  if (n <= 0) throw winsock::error();
-  return size_t(n);
+  for (size_t done = 0; done < size;) {
+    int n = send(_fd, data + done, size - done, 0);
+    if (n > 0) done += n;
+    else if (n == 0 || h_errno != WSAEWOULDBLOCK) throw winsock::error();
+    else _wait(1);
+  }
+  return size;
 }
 
 /** sslstream - stream of SSL session.
@@ -123,63 +139,70 @@ namespace {
     typedef int (*SSL_read)(SSL*, void*, int);
     typedef int (*SSL_write)(SSL*, const void*, int);
     typedef int (*SSL_shutdown)(SSL*);
+    typedef int (*SSL_get_error)(SSL*, int);
 
     typedef unsigned long (*ERR_get_error)(void);
     typedef char* (*ERR_error_string)(unsigned long, char*);
   }
-#define SSL(name) name(_ssleay(#name))
-#define XSSL(name) name(_ssleay(#name, FARPROC(_dummy)))
-#define LIB(name) name(_libeay(#name))
+
+  struct openssl {
+    win32::dll ssleay;
+    win32::dll libeay;
+    openssl();
+    static void np() {}
+  };
+  openssl _openssl;
+
+#define SSL(name) name(_openssl.ssleay(#name))
+#define XSSL(name) name(_openssl.ssleay(#name, FARPROC(openssl::np)))
+#define LIB(name) name(_openssl.libeay(#name))
 
   class sslstream : public tcpstream {
-    static win32::module _ssleay;
-    static win32::module _libeay;
     SSL_CTX* _ctx;
     SSL* _ssl;
     SSL_read _read;
     SSL_write _write;
-    static void _dummy() {};
+    int _want(int rc);
     int _connect(int fd);
   public:
-    sslstream();
+    sslstream(int fd = -1);
     ~sslstream();
     int open(const string& host, const string& port);
     void close();
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
-    bool tls() const { return true; }
-    int setfd(int fd) { return _connect(tcpstream::setfd(fd)); }
-    static bool avail() { return sslstream::_ssleay != NULL; }
+    int tls() const { return 1; }
+    mailbox::backend::stream* starttls() { return NULL; }
+    static bool avail() { return _openssl.ssleay && _openssl.libeay; }
   public:
     struct error : public mailbox::error {
       error() : mailbox::error(emsg()) {}
-      static const char* emsg();
+      static string emsg();
     };
     friend struct error;
-
-    class openssl {
-      win32::dll _ssleay;
-      win32::dll _libeay;
-    public:
-      openssl();
-    };
-    friend class openssl;
   };
-  win32::module sslstream::_ssleay;
-  win32::module sslstream::_libeay;
 }
 
-const char*
+openssl::openssl()
+  : ssleay("ssleay32.dll", false), libeay("libeay32.dll", false)
+{
+  if (ssleay && libeay) XSSL(SSL_library_init)();
+}
+
+string
 sslstream::error::emsg()
 {
-  return LIB(ERR_error_string)(LIB(ERR_get_error)(), NULL);
+  char buf[256];
+  return LIB(ERR_error_string)(LIB(ERR_get_error)(), buf);
 }
 
-sslstream::sslstream()
-  : _ssl(NULL), _read(SSL(SSL_read)), _write(SSL(SSL_write))
+sslstream::sslstream(int fd)
+  : tcpstream(fd), _ssl(NULL),
+    _read(SSL(SSL_read)), _write(SSL(SSL_write))
 {
   _ctx = SSL(SSL_CTX_new)(SSL(SSLv23_client_method)());
   if (!_ctx) throw error();
+  if (fd != -1) _connect(fd);
 }
 
 sslstream::~sslstream()
@@ -189,13 +212,24 @@ sslstream::~sslstream()
 }
 
 int
+sslstream::_want(int rc)
+{
+  if (rc > 0) return rc;
+  switch (SSL(SSL_get_error)(_ssl, rc)) {
+  case 2: /* SSL_ERROR_WANT_READ */ _wait(0); return rc;
+  case 3: /* SSL_ERROR_WANT_WRITE */ _wait(1); return rc;
+  }
+  throw error();
+}
+
+int
 sslstream::_connect(int fd)
 {
   assert(!_ssl);
   try {
     _ssl = SSL(SSL_new)(_ctx);
-    if (!_ssl || !SSL(SSL_set_fd)(_ssl, fd) ||
-	SSL(SSL_connect)(_ssl) != 1) throw error();
+    if (!_ssl || !SSL(SSL_set_fd)(_ssl, fd)) throw error();
+    while (_want(SSL(SSL_connect)(_ssl)) < 0) continue;
   } catch (...) {
     tcpstream::close();
     if (_ssl) XSSL(SSL_free)(_ssl), _ssl = NULL;
@@ -225,45 +259,44 @@ size_t
 sslstream::read(char* buf, size_t size)
 {
   assert(_ssl);
-  int n = _read(_ssl, buf, size);
-  if (n <= 0) throw error();
-  return size_t(n);
+  for (;;) {
+    int n = _want(_read(_ssl, buf, size));
+    if (n > 0) return size_t(n);
+  }
 }
 
 size_t
 sslstream::write(const char* data, size_t size)
 {
   assert(_ssl);
-  int n = _write(_ssl, data, size);
-  if (n <= 0) throw error();
-  return size_t(n);
+  for (size_t done = 0; done < size;) {
+    int n = _want(_write(_ssl, data + done, size - done));
+    if (n > 0) done += n;
+  }
+  return size;
+}
+
+#undef LIB
+#undef XSSL
+#undef SSL
+
+int
+tcpstream::tls() const
+{
+  return sslstream::avail() ? 0 : -1;
 }
 
 mailbox::backend::stream*
 tcpstream::starttls()
 {
   assert(_fd != INVALID_SOCKET);
-  auto_ptr<sslstream> st(new sslstream);
   SOCKET fd = _fd;
   _fd = INVALID_SOCKET;
-  st->setfd(fd);
-  return st.release();
+  sslstream* st = new(nothrow) sslstream(fd);
+  if (st) return st;
+  _fd = fd;
+  throw bad_alloc();
 }
-
-sslstream::openssl::openssl()
-  : _ssleay("ssleay32.dll", false),
-    _libeay("libeay32.dll", false)
-{
-  if (_ssleay && _libeay) {
-    SSL(SSL_library_init)();
-    sslstream::_ssleay = _ssleay;
-    sslstream::_libeay = _libeay;
-  }
-}
-
-#undef LIB
-#undef XSSL
-#undef SSL
 
 /*
  * Functions of the class mailbox::backend
@@ -282,17 +315,11 @@ mailbox::backend::ssl(const string& host, const string& port)
   _st->open(host, port);
 }
 
-int
-mailbox::backend::tls() const
-{
-  return static_cast<tcpstream*>(_st.get())->tls() ? 1 :
-    sslstream::avail() ? 0 : -1;
-}
-
 void
 mailbox::backend::starttls()
 {
-  _st.reset(static_cast<tcpstream*>(_st.get())->starttls());
+  stream* st = _st->starttls();
+  if (st) _st.reset(st);
 }
 
 string
@@ -300,7 +327,7 @@ mailbox::backend::read(size_t size)
 {
   string result;
   while (size) {
-    char buf[256];
+    char buf[1024];
     size_t n = _st->read(buf, min(size, sizeof(buf)));
     result.append(buf, n);
     size -= n;
@@ -321,15 +348,6 @@ mailbox::backend::read()
     } while (c != '\012');
   } while (result[result.size() - 2] != '\015');
   return result.erase(result.size() - 2); // remove CRLF
-}
-
-void
-mailbox::backend::write(const char* data, size_t size)
-{
-  while (size) {
-    size_t n = _st->write(data, size);
-    data += n, size -= n;
-  }
 }
 
 void
@@ -392,7 +410,6 @@ uri::parse(const string& uri)
 void
 mailbox::uripasswd(const string& uri, const string& passwd)
 {
-  static sslstream::openssl openssl;
   _uri.parse(uri);
   _passwd = passwd;
 }

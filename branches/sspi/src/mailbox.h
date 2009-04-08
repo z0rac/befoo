@@ -125,14 +125,16 @@ public:
       virtual void close() = 0;
       virtual size_t read(char* buf, size_t size) = 0;
       virtual size_t write(const char* data, size_t size) = 0;
+      virtual int tls() const = 0;
+      virtual _stream* starttls() = 0;
     };
     auto_ptr<_stream> _st;
   protected:
-    int tls() const;
+    int tls() const { return _st->tls(); }
     void starttls();
     string read(size_t size);
     string read();
-    void write(const char* data, size_t size);
+    void write(const char* data, size_t size) { _st->write(data, size); }
     void write(const string& data);
   public:
     typedef _stream stream;
