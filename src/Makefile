@@ -10,6 +10,9 @@ OPTS += -mno-cygwin
 CFLAGS = $(OPTS)
 LDFLAGS = $(OPTS) -mwindows
 
+CFLAGS += -DUSE_OPENSSL=0 # use SSPI SChannel
+CFLAGS += -DUSE_SSL2=0 # use TLSv1 (or SSLv3)
+
 ifdef debug
 CFLAGS += -D_DEBUG=$(debug) -g -Wall
 LDFLAGS += -Wl,--subsystem,console
@@ -23,7 +26,7 @@ PROG = $(NAME).exe
 OBJS = main.o imap4.o pop3.o mail.o mailbox.o
 OBJS += mascot.o summary.o setting.o window.o win32.o mingw/mthr.o
 L10N = ja.rc
-LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lcomctl32 -lwinmm
+LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcomctl32 -lwinmm
 
 RSRC = $(PROG).manifest ../ico/app.ico
 RSRC += ../ico/jump1.ico ../ico/jump2.ico ../ico/jump3.ico ../ico/jump4.ico
