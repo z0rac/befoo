@@ -10,6 +10,9 @@ OPTS += -mno-cygwin
 CFLAGS = $(OPTS)
 LDFLAGS = $(OPTS) -mwindows
 
+CFLAGS += -DUSE_OPENSSL=0 # use SSPI SChannel
+CFLAGS += -DUSE_SSL2=0 # use TLSv1 (or SSLv3)
+
 ifdef debug
 CFLAGS += -D_DEBUG=$(debug) -g -Wall
 LDFLAGS += -Wl,--subsystem,console

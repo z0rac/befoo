@@ -17,10 +17,11 @@
 #define LOG(s)
 #endif
 
+#define TCP_TIMEOUT 60
+
 /** tcpstream - stream of TCP session.
  * This instance should be created by the function mailbox::backend::tcp.
  */
-#define TCP_TIMEOUT 60
 namespace {
   class tcpstream : public mailbox::backend::stream {
     SOCKET _fd;
@@ -133,6 +134,7 @@ namespace {
     typedef SSL_CTX* (*SSL_CTX_new)(SSL_METHOD*);
     typedef void (*SSL_CTX_free)(SSL_CTX*);
     typedef SSL_METHOD* (*SSLv23_client_method)(void);
+    typedef SSL_METHOD* (*TLSv1_client_method)(void);
     typedef SSL* (*SSL_new)(SSL_CTX*);
     typedef void (*SSL_free)(SSL*);
     typedef int (*SSL_set_fd)(SSL*, int);
@@ -201,7 +203,11 @@ sslstream::sslstream(int fd)
   : tcpstream(fd), _ssl(NULL),
     _read(SSL(SSL_read)), _write(SSL(SSL_write))
 {
+#if USE_SSL2
   _ctx = SSL(SSL_CTX_new)(SSL(SSLv23_client_method)());
+#else
+  _ctx = SSL(SSL_CTX_new)(SSL(TLSv1_client_method)());
+#endif
   if (!_ctx) throw error();
   if (fd != -1) _connect(fd);
 }
@@ -287,6 +293,11 @@ sslstream::write(const char* data, size_t size)
 #include <sspi.h>
 #include <schannel.h>
 
+#ifndef SEC_E_CONTEXT_EXPIRED
+#define SEC_E_CONTEXT_EXPIRED (-2146893033)
+#define SEC_I_CONTEXT_EXPIRED 590615
+#endif
+
 namespace {
   class sslstream : public tcpstream {
     CredHandle _cred;
@@ -298,16 +309,21 @@ namespace {
       buf() : data(NULL) {}
       ~buf() { delete [] data; }
       char* operator()(size_t n)
-      {
-	delete [] data, data = NULL;
-	return data = new char[n];
-      }
+      { delete [] data, data = NULL; return data = new char[n]; }
     } _buf;
     string _rbuf;
     string::size_type _rest;
     string _extra;
+    size_t _copyextra(size_t i, size_t size)
+    {
+      size_t n = min<size_t>(_extra.size(), size - i);
+      memcpy(_buf.data + i, _extra.data(), n);
+      _extra.erase(0, n);
+      return n;
+    }
     SECURITY_STATUS _ok(SECURITY_STATUS ss) const
     { if (FAILED(ss)) throw winsock::error(ss); return ss; }
+    SECURITY_STATUS _token(SecBufferDesc* inb = NULL);
     void _handshake();
   public:
     sslstream(int fd = -1);
@@ -325,15 +341,15 @@ namespace {
 sslstream::sslstream(int fd)
   : tcpstream(fd), _avail(false)
 {
-  LOG("AcquireCredentialsHandle: begin" << endl);
-  SCHANNEL_CRED auth = { 0 };
-  auth.dwVersion = SCHANNEL_CRED_VERSION;
-  auth.grbitEnabledProtocols = (SP_PROT_SSL2 | SP_PROT_SSL3 | SP_PROT_TLS1);
-  auth.dwFlags = (SCH_CRED_NO_DEFAULT_CREDS |
-		  SCH_CRED_MANUAL_CRED_VALIDATION);
-  TimeStamp exp;
+  SCHANNEL_CRED auth = { SCHANNEL_CRED_VERSION };
+#if USE_SSL2
+  auth.grbitEnabledProtocols = (SP_PROT_SSL2 | SP_PROT_SSL3);
+#else
+  auth.grbitEnabledProtocols = (SP_PROT_SSL3 | SP_PROT_TLS1);
+#endif
+  auth.dwFlags = (SCH_CRED_NO_DEFAULT_CREDS | SCH_CRED_MANUAL_CRED_VALIDATION);
   _ok(AcquireCredentialsHandle(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND,
-			       NULL, &auth, NULL, NULL, &_cred, &exp));
+			       NULL, &auth, NULL, NULL, &_cred, NULL));
   if (fd != -1) _handshake();
 }
 
@@ -343,65 +359,59 @@ sslstream::~sslstream()
   FreeCredentialsHandle(&_cred);
 }
 
+SECURITY_STATUS
+sslstream::_token(SecBufferDesc* inb)
+{
+  const ULONG req = (ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT |
+		     ISC_REQ_CONFIDENTIALITY | ISC_REQ_EXTENDED_ERROR |
+		     ISC_REQ_STREAM | ISC_REQ_ALLOCATE_MEMORY |
+		     ISC_REQ_USE_SUPPLIED_CREDS); // for Win2kPro
+  ULONG attr;
+  struct obuf : public SecBuffer {
+    obuf() { cbBuffer = 0, BufferType = SECBUFFER_TOKEN, pvBuffer = 0; }
+    ~obuf() { if (pvBuffer) FreeContextBuffer(pvBuffer); }
+  } out;
+  SecBufferDesc outb = { SECBUFFER_VERSION, 1, &out };
+  SECURITY_STATUS ss =
+    InitializeSecurityContext(&_cred, _avail ? &_ctx : NULL,
+			      NULL, req, 0, SECURITY_NATIVE_DREP,
+			      inb, 0, &_ctx, &outb, &attr, NULL);
+  _avail = true;
+  switch (ss) {
+  case SEC_I_COMPLETE_AND_CONTINUE: ss = SEC_I_CONTINUE_NEEDED;
+  case SEC_I_COMPLETE_NEEDED: _ok(CompleteAuthToken(&_ctx, &outb));
+  }
+  tcpstream::write((const char*)out.pvBuffer, out.cbBuffer);
+  return ss;
+}
+
 void
 sslstream::_handshake()
 {
   try {
-    struct obuf : public SecBuffer {
-      obuf() { cbBuffer = 0, BufferType = SECBUFFER_TOKEN, pvBuffer = 0; }
-      ~obuf() { if (pvBuffer) FreeContextBuffer(pvBuffer); }
-    };
-    const ULONG req = (ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT |
-		       ISC_REQ_CONFIDENTIALITY | ISC_REQ_EXTENDED_ERROR |
-		       ISC_REQ_STREAM | ISC_REQ_ALLOCATE_MEMORY);
-    SECURITY_STATUS ss = SEC_I_RENEGOTIATE;
-    ULONG attr;
+    SECURITY_STATUS ss = _extra.empty() ? _token() : SEC_I_CONTINUE_NEEDED;
     const size_t buflen = 16 * 1024;
     _buf(buflen);
     size_t n = 0;
-    if (!_avail) {
-      obuf out;
-      SecBufferDesc outb = { SECBUFFER_VERSION, 1, &out };
-      ss = _ok(InitializeSecurityContext(&_cred, NULL, NULL, req, 0,
-					 SECURITY_NETWORK_DREP,
-					 NULL, 0, &_ctx, &outb, &attr, NULL));
-      _avail = true;
-      switch (ss) {
-      case SEC_I_COMPLETE_AND_CONTINUE: ss = SEC_I_CONTINUE_NEEDED;
-      case SEC_I_COMPLETE_NEEDED: _ok(CompleteAuthToken(&_ctx, &outb));
-      }
-      tcpstream::write((const char*)out.pvBuffer, out.cbBuffer);
-    } else {
-      if (_extra.size() > buflen) throw winsock::error(ss);
-      memcpy(_buf.data, _extra.data(), n = _extra.size());
-    }
-    while (ss == SEC_I_RENEGOTIATE || ss == SEC_I_CONTINUE_NEEDED) {
-      if (ss != SEC_I_RENEGOTIATE && n == 0) {
-	n = tcpstream::read(_buf.data, buflen);
-      }
+    while (ss == SEC_I_CONTINUE_NEEDED) {
+      n += _copyextra(n, buflen);
+      if (n == 0) n = tcpstream::read(_buf.data, buflen);
       SecBuffer in[2] = { { n, SECBUFFER_TOKEN, _buf.data } };
       SecBufferDesc inb = { SECBUFFER_VERSION, 2, in };
-      obuf out;
-      SecBufferDesc outb = { SECBUFFER_VERSION, 1, &out };
-      ss = InitializeSecurityContext(&_cred, &_ctx, NULL, req, 0,
-				     SECURITY_NETWORK_DREP,
-				     &inb, 0, NULL, &outb, &attr, NULL);
+      ss = _token(&inb);
       if (ss == SEC_E_INCOMPLETE_MESSAGE) {
-	if (n >= buflen) throw winsock::error(ss);
-	n += tcpstream::read(_buf.data + n, buflen - n);
-	ss = SEC_I_CONTINUE_NEEDED;
-      } else {
-	switch (_ok(ss)) {
-	case SEC_I_COMPLETE_AND_CONTINUE: ss = SEC_I_CONTINUE_NEEDED;
-	case SEC_I_COMPLETE_NEEDED: _ok(CompleteAuthToken(&_ctx, &outb));
+	if (n < buflen) {
+	  n += tcpstream::read(_buf.data + n, buflen - n);
+	  ss = SEC_I_CONTINUE_NEEDED;
 	}
+      } else {
 	n = 0;
 	if (in[1].BufferType == SECBUFFER_EXTRA) {
 	  n = in[1].cbBuffer;
 	  memmove(_buf.data, _buf.data + in[0].cbBuffer - n, n);
 	}
       }
-      tcpstream::write((const char*)out.pvBuffer, out.cbBuffer);
+      _ok(ss);
     }
     _extra.assign(_buf.data, n);
     _ok(QueryContextAttributes(&_ctx, SECPKG_ATTR_STREAM_SIZES, &_sizes));
@@ -424,6 +434,21 @@ void
 sslstream::close()
 {
   if (_avail) {
+    _rbuf.clear(), _extra.clear();
+    try {
+#if defined(__MINGW32__) // for MinGWs bug.
+      win32::dll secur32("secur32.dll");
+      typedef SECURITY_STATUS WINAPI (*act)(PCtxtHandle,PSecBufferDesc);
+      act ApplyControlTokenA = act(secur32("ApplyControlToken"));
+#endif
+      DWORD value = SCHANNEL_SHUTDOWN;
+      SecBuffer in = { sizeof(value), SECBUFFER_TOKEN, &value };
+      SecBufferDesc inb = { SECBUFFER_VERSION, 1, &in };
+      _ok(ApplyControlToken(&_ctx, &inb));
+      while (_token() == SEC_I_CONTINUE_NEEDED) continue;
+    } catch (...) {
+      LOG("SSPI: shutdown error." << endl);
+    }
     DeleteSecurityContext(&_ctx);
     _avail = false;
   }
@@ -445,44 +470,40 @@ sslstream::read(char* buf, size_t size)
   size_t done = 0;
   size_t n = 0;
   while (!done) {
-    if (_extra.empty()) {
-      n += tcpstream::read(_buf.data + n, _sizes.cbMaximumMessage - n);
-    } else {
-      memcpy(_buf.data, _extra.data(), n = _extra.size());
-      _extra.clear();
-    }
+    n += !_extra.empty() ? _copyextra(n, _sizes.cbMaximumMessage) :
+      tcpstream::read(_buf.data + n, _sizes.cbMaximumMessage - n);
     SecBuffer dec[4] = { { n, SECBUFFER_DATA, _buf.data } };
     SecBufferDesc decb = { SECBUFFER_VERSION, 4, dec };
     SECURITY_STATUS ss = DecryptMessage(&_ctx, &decb, 0, NULL);
-    switch (ss) {
-    case SEC_E_OK:
-    case SEC_I_RENEGOTIATE:
-      for (int i = 0; i < 4; ++i) {
-	switch(dec[i].BufferType) {
-	case SECBUFFER_DATA:
-	  if (dec[i].cbBuffer) {
-	    size_t n = 0;
-	    if (done < size) {
-	      n = min<size_t>(size - done, dec[i].cbBuffer);
-	      memcpy(buf + done, dec[i].pvBuffer, n);
-	      done += n;
-	    }
-	    _rbuf.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
+    if (ss == SEC_E_INCOMPLETE_MESSAGE &&
+	n < _sizes.cbMaximumMessage) continue;
+    _ok(ss), n = 0;
+    string extra;
+    for (int i = 0; i < 4; ++i) {
+      switch(dec[i].BufferType) {
+      case SECBUFFER_DATA:
+	if (dec[i].cbBuffer) {
+	  size_t n = 0;
+	  if (done < size) {
+	    n = min<size_t>(size - done, dec[i].cbBuffer);
+	    memcpy(buf + done, dec[i].pvBuffer, n);
+	    done += n;
 	  }
-	  break;
-	case SECBUFFER_EXTRA:
-	  _extra.append((char*)dec[i].pvBuffer, dec[i].cbBuffer);
-	  break;
+	  _rbuf.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
+	} else if (ss == SEC_E_OK && _buf.data[0] == 0x15) {
+	  ss = SEC_I_CONTEXT_EXPIRED; // for Win2kPro
 	}
+	break;
+      case SECBUFFER_EXTRA:
+	extra.append((char*)dec[i].pvBuffer, dec[i].cbBuffer);
+	break;
       }
-      if (ss == SEC_I_RENEGOTIATE) _handshake();
-      n = 0;
-      break;
-    case SEC_E_INCOMPLETE_MESSAGE:
-      if (n < _sizes.cbMaximumMessage) break;
-    default:
-      throw winsock::error(ss);
     }
+    _extra = extra + _extra;
+    if (ss == SEC_I_CONTEXT_EXPIRED && !done) {
+      throw winsock::error(SEC_E_CONTEXT_EXPIRED);
+    }
+    if (ss == SEC_I_RENEGOTIATE) _handshake();
   }
   return done;
 }
