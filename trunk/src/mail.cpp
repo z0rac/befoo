@@ -18,44 +18,56 @@
 #define LOG(s)
 #endif
 
-/** libiconv - iconv wrapper
+#if USE_ICONV
+/** iconv - iconv wrapper
  */
 namespace {
   extern "C" {
     typedef void* iconv_t;
     typedef iconv_t (*libiconv_open)(const char*, const char*);
-    typedef size_t(*libiconv)(iconv_t, const char**, size_t*, char**, size_t*);
+    typedef size_t (*libiconv)(iconv_t, const char**, size_t*, char**, size_t*);
     typedef int (*libiconv_close)(iconv_t);
   }
 #define FUNC(name) name(_dll(#name))
 
   class iconv {
-    static win32::dll _dll;
+    win32::module _dll;
     iconv_t _cd;
+    string _charset;
+    libiconv _func;
   public:
-    iconv(const string& charset = string());
+    iconv() : _cd(iconv_t(-1)) {}
     ~iconv() { if (*this) FUNC(libiconv_close)(_cd); }
+    iconv& charset(const string& charset);
     operator bool() const { return _cd != iconv_t(-1); }
     string operator()(const string& text) const;
   };
-  win32::dll iconv::_dll("iconv.dll", false);
 }
 
-iconv::iconv(const string& charset)
-  : _cd(iconv_t(-1))
+iconv&
+iconv::charset(const string& charset)
 {
-  if (_dll && !charset.empty()) {
-    _cd = FUNC(libiconv_open)("UTF-8", charset.c_str());
+  static win32::dll dll("iconv.dll", false);
+  if (!_dll && dll) _dll = dll, _func = FUNC(libiconv);
+  if (_dll) {
+    if (!charset.empty() && charset != _charset) {
+      if (_cd != iconv_t(-1)) {
+	FUNC(libiconv_close)(_cd);
+	_cd = iconv_t(-1);
+      }
+      _charset = charset;
+      _cd = FUNC(libiconv_open)("UTF-8", charset.c_str());
+    } else if (_cd != iconv_t(-1)) {
+      _func(_cd, NULL, NULL, NULL, NULL);
+    }
   }
+  return *this;
 }
 
 string
 iconv::operator()(const string& text) const
 {
-  if (!*this) return text;
-  libiconv call = FUNC(libiconv);
-  call(_cd, NULL, NULL, NULL, NULL);
-
+  if (!*this) throw text;
   string result;
   const char* in = text.c_str();
   size_t inlen = text.size();
@@ -64,7 +76,7 @@ iconv::operator()(const string& text) const
     char buf[128];
     char* out = buf;
     size_t outlen = sizeof(buf);
-    ret = call(_cd, &in, &inlen, &out, &outlen);
+    ret = _func(_cd, &in, &inlen, &out, &outlen);
     if (outlen == sizeof(buf)) break;
     result.append(buf, sizeof(buf) - outlen);
   } while (ret == size_t(-1));
@@ -72,6 +84,53 @@ iconv::operator()(const string& text) const
 }
 
 #undef FUNC
+#endif // USE_ICONV
+
+/** u8conv - convert multibyte text to UTF-8
+ */
+namespace {
+  class u8conv {
+    string _charset;
+    UINT _codepage;
+  public:
+    u8conv() : _codepage(0) {}
+    u8conv& charset(const string& charset);
+    operator bool() const { return _codepage != 0; }
+    string operator()(const string& text) const;
+  };
+}
+
+u8conv&
+u8conv::charset(const string& charset)
+{
+  if (!charset.empty() && charset != _charset) {
+    _charset = charset, _codepage = 0;
+    static const struct { const char* cs; UINT cp; } tab[] = {
+#include "codepage.h"
+    };
+    int lo = 0, hi = sizeof(tab) / sizeof(tab[0]);
+    while (lo < hi) {
+      int i = (lo + hi) >> 1;
+      int diff = strcmp(charset.c_str(), tab[i].cs);
+      if (!diff) {
+	_codepage = tab[i].cp;
+	break;
+      }
+      if (diff < 0) hi = i;
+      else lo = i + 1;
+    }
+  }
+  return *this;
+}
+
+string
+u8conv::operator()(const string& text) const
+{
+  if (!*this) throw text;
+  win32::wstr ws(text, _codepage);
+  if (!ws) throw text;
+  return ws.mbstr(CP_UTF8);
+}
 
 /*
  * Functions of the class mail.
@@ -251,6 +310,11 @@ string
 mail::decoder::eword(const string& text,
 		     string::size_type pos, string::size_type end)
 {
+#if USE_ICONV
+  iconv conv;
+#else
+  u8conv conv;
+#endif
   string result;
   if (end > text.size()) end = text.size();
   for (string::size_type i = pos; i < end;) {
@@ -278,7 +342,7 @@ mail::decoder::eword(const string& text,
 	result.append(text, pos, q[0] - pos - 2), pos = q[0] - 2;
       }
       string charset = uppercase(text.substr(q[0], q[1] - q[0] - 1));
-      result += charset == "UTF-8" ? s : iconv(charset)(s);
+      result += charset == "UTF-8" ? s : conv.charset(charset)(s);
       pos = i;
     } catch (...) {}
   }

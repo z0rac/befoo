@@ -281,9 +281,29 @@ win32::dll::~dll()
 /*
  * Functions of the class win32::wstr
  */
+extern "C" {
+  typedef HRESULT WINAPI (*ConvertINetMultiByteToUnicode)
+  (LPDWORD, DWORD, LPCSTR, LPINT, LPWSTR, LPINT);
+}
+
 win32::wstr::wstr(const string& s, UINT cp)
   : _data(NULL)
 {
+  static win32::dll mlang("mlang.dll", false);
+  if (mlang) {
+    static ConvertINetMultiByteToUnicode mb2u =
+      ConvertINetMultiByteToUnicode(mlang("ConvertINetMultiByteToUnicode", NULL));
+    if (mb2u) {
+      DWORD mode = 0;
+      int size = 0;
+      if (mb2u(&mode, cp, s.c_str(), NULL, NULL, &size) == S_OK) {
+	_data = new WCHAR[size + 1];
+	_data[size] = 0;
+	mb2u(&mode, cp, s.c_str(), NULL, _data, &size);
+      }
+      return;
+    }
+  }
   int size = MultiByteToWideChar(cp, 0, s.c_str(), -1, NULL, 0);
   if (size) {
     _data = new WCHAR[size];

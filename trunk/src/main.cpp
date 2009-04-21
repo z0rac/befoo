@@ -147,8 +147,8 @@ model::fetch(window& source, bool force)
     list<mailbox*>::iterator end = _fetched.end();
     if (find(_fetched.begin(), end, fetch) == end) {
       CloseHandle(win32::thread(_thread, (void*)fetch));
-      _fetched.push_front(fetch);
       if (_fetching++ == 0) window::broadcast(WM_APP, 0, 0);
+      _fetched.push_front(fetch);
     }
   }
   return *this;
