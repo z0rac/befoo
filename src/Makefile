@@ -12,6 +12,7 @@ LDFLAGS = $(OPTS) -mwindows
 
 CFLAGS += -DUSE_OPENSSL=0 # use SSPI SChannel
 CFLAGS += -DUSE_SSL2=0 # use TLSv1 (or SSLv3)
+CFLAGS += -DUSE_ICONV=0 # not use iconv
 
 ifdef debug
 CFLAGS += -D_DEBUG=$(debug) -g -Wall
@@ -42,6 +43,9 @@ all: $(PROG)
 
 $(PROG): $(OBJS) $(NAME).res
 	gcc $(LDFLAGS) -o $@ $(OBJS) $(NAME).res $(LIBS)
+
+codepage.h: codepage.txt
+	sort $< | sed -e 's/\([^\t]*\)\t*\(.*\)/{ "\1", \2 },/' > $@
 
 $(OBJS): win32.h Makefile
 main.o mascot.o summary.o: define.h mailbox.h window.h setting.h
