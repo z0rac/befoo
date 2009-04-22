@@ -282,8 +282,8 @@ win32::dll::~dll()
  * Functions of the class win32::wstr
  */
 extern "C" {
-  typedef HRESULT WINAPI (*ConvertINetMultiByteToUnicode)
-  (LPDWORD, DWORD, LPCSTR, LPINT, LPWSTR, LPINT);
+  typedef HRESULT (WINAPI* ConvertINetMultiByteToUnicode)
+    (LPDWORD, DWORD, LPCSTR, LPINT, LPWSTR, LPINT);
 }
 
 win32::wstr::wstr(const string& s, UINT cp)
