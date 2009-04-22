@@ -45,11 +45,15 @@ $(PROG): $(OBJS) $(NAME).res
 	gcc $(LDFLAGS) -o $@ $(OBJS) $(NAME).res $(LIBS)
 
 codepage.h: codepage.txt
-	sort $< | sed -e 's/\([^\t]*\)\t*\(.*\)/{ "\1", \2 },/' > $@
+	sort -b -f -u -k2,2 $< | tr '[a-z]' '[A-Z]' | \
+	sed -e 's/;.*//' -e 's/[ \t][ \t]*/ /g' -e 's/^ //' \
+	-e '/^[1-9][0-9]* [^ ]/!d' \
+	-e 's/^\([1-9][0-9]*\) \([^ ][^ ]*\).*/{ "\2", \1 },/' > $@
 
 $(OBJS): win32.h Makefile
 main.o mascot.o summary.o: define.h mailbox.h window.h setting.h
 mail.o mailbox.o imap4.o pop3.o: mailbox.h
+mail.o: codepage.h
 window.o: window.h
 setting.o: setting.h
 $(NAME).res: $(L10N) $(RSRC) define.h Makefile

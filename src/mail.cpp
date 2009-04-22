@@ -19,7 +19,7 @@
 #endif
 
 #if USE_ICONV
-/** iconv - iconv wrapper
+/** u8conv - iconv wrapper
  */
 namespace {
   extern "C" {
@@ -30,22 +30,22 @@ namespace {
   }
 #define FUNC(name) name(_dll(#name))
 
-  class iconv {
+  class u8conv {
     win32::module _dll;
     iconv_t _cd;
     string _charset;
     libiconv _func;
   public:
-    iconv() : _cd(iconv_t(-1)) {}
-    ~iconv() { if (*this) FUNC(libiconv_close)(_cd); }
-    iconv& charset(const string& charset);
+    u8conv() : _cd(iconv_t(-1)) {}
+    ~u8conv() { if (*this) FUNC(libiconv_close)(_cd); }
+    u8conv& charset(const string& charset);
     operator bool() const { return _cd != iconv_t(-1); }
     string operator()(const string& text) const;
   };
 }
 
-iconv&
-iconv::charset(const string& charset)
+u8conv&
+u8conv::charset(const string& charset)
 {
   static win32::dll dll("iconv.dll", false);
   if (!_dll && dll) _dll = dll, _func = FUNC(libiconv);
@@ -65,7 +65,7 @@ iconv::charset(const string& charset)
 }
 
 string
-iconv::operator()(const string& text) const
+u8conv::operator()(const string& text) const
 {
   if (!*this) throw text;
   string result;
@@ -84,8 +84,7 @@ iconv::operator()(const string& text) const
 }
 
 #undef FUNC
-#endif // USE_ICONV
-
+#else // !USE_ICONV
 /** u8conv - convert multibyte text to UTF-8
  */
 namespace {
@@ -119,6 +118,16 @@ u8conv::charset(const string& charset)
       if (diff < 0) hi = i;
       else lo = i + 1;
     }
+    if (!_codepage) {
+      string::size_type i = charset.find_last_not_of("0123456789");
+      if (i < charset.size() - 1) {
+	string prefix(charset, 0, i + 1);
+	if (prefix == "WINDOWS-" || prefix == "CP" ||  prefix == "X-CP") {
+	  char* e;
+	  _codepage = strtoul(charset.c_str() + i + 1, &e, 10);
+	}
+      }
+    }
   }
   return *this;
 }
@@ -131,6 +140,7 @@ u8conv::operator()(const string& text) const
   if (!ws) throw text;
   return ws.mbstr(CP_UTF8);
 }
+#endif // !USE_ICONV
 
 /*
  * Functions of the class mail.
@@ -310,11 +320,7 @@ string
 mail::decoder::eword(const string& text,
 		     string::size_type pos, string::size_type end)
 {
-#if USE_ICONV
-  iconv conv;
-#else
   u8conv conv;
-#endif
   string result;
   if (end > text.size()) end = text.size();
   for (string::size_type i = pos; i < end;) {
