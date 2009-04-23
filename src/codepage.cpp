@@ -8,28 +8,32 @@
 
 using namespace std;
 
-static unsigned
-crc32(const string& s)
-{
-  struct table {
-    unsigned code[256];
-    table()
+/** crc32 - CRC32 calculator
+ */
+namespace {
+  class crc32 {
+    unsigned _tab[256];
+  public:
+    crc32()
     {
       for (unsigned i = 0; i < 256; ++i) {
 	unsigned v = i;
 	for (int c = 8; c--;) {
 	  v = ((int(!(v & 1)) - 1) & 0xedb88320) ^ (v >> 1);
 	}
-	code[i] = v;
+	_tab[i] = v;
       }
     }
+
+    unsigned operator()(const string& s) const
+    {
+      unsigned v = ~0U;
+      for (const char* p = s.c_str(); *p; ++p) {
+	v = _tab[(v ^ *p) & 255] ^ (v >> 8);
+      }
+      return ~v;
+    }
   };
-  static const table tab;
-  unsigned v = ~0;
-  for (const char* p = s.c_str(); *p; ++p) {
-    v = tab.code[(v ^ *p) & 255] ^ (v >> 8);
-  }
-  return ~v;
 }
 
 #if MAIN
@@ -40,12 +44,12 @@ crc32(const string& s)
 
 namespace {
   struct elem {
-    unsigned crc;
+    unsigned hash;
     unsigned cp;
     string cs;
     elem() {}
-    elem(unsigned crc, unsigned cp, const string& cs)
-      : crc(crc), cp(cp), cs(cs) {}
+    elem(unsigned hash, unsigned cp, const string& cs)
+      : hash(hash), cp(cp), cs(cs) {}
   };
 }
 
@@ -53,6 +57,7 @@ int
 main()
 {
   static const char ws[] = " \t";
+  static const crc32 crc;
   list<elem> ls;
   while (cin) {
     string s;
@@ -71,12 +76,12 @@ main()
     for (string::iterator p = cs.begin(); p != cs.end(); ++p) {
       *p = static_cast<char>(toupper(*p));
     }
-    unsigned crc = crc32(cs);
+    unsigned hash = crc(cs);
     list<elem>::iterator p = ls.begin();
-    while (p != ls.end() && crc > p->crc) ++p;
-    if (p == ls.end() || p->crc != crc) {
+    while (p != ls.end() && hash > p->hash) ++p;
+    if (p == ls.end() || p->hash != hash) {
       char* e;
-      ls.insert(p, elem(crc, strtoul(cp.c_str(), &e, 10), cs));
+      ls.insert(p, elem(hash, strtoul(cp.c_str(), &e, 10), cs));
     } else {
       cerr << "conflict: " << cs << "(" << cp << ") and "
 	   << p->cs << "(" << p->cp << ")" << endl;
@@ -92,10 +97,10 @@ main()
     i -= (cp >= 1000) + (cp >= 10000);
     while (i--) {
       string cs = string(prefix[i]) + no;
-      unsigned crc = crc32(cs);
+      unsigned hash = crc(cs);
       list<elem>::const_iterator p = ls.begin();
-      while (p != ls.end() && crc > p->crc) ++p;
-      if (p != ls.end() && p->crc == crc && p->cs != cs) {
+      while (p != ls.end() && hash > p->hash) ++p;
+      if (p != ls.end() && p->hash == hash && p->cs != cs) {
 	cerr << "conflict: " << cs << "(" << cp << ") and "
 	     << p->cs << "(" << p->cp << ")" << endl;
       }
@@ -106,11 +111,11 @@ main()
        << "static const unsigned hash[] = {" << endl
        << hex << setfill('0');
   for (list<elem>::iterator p = ls.begin(); p != ls.end(); ++p) {
-    cout << "  0x" << setw(8) << p->crc << ",\t// " << p->cs << endl;
+    cout << "  0x" << setw(8) << p->hash << ",\t// " << p->cs << endl;
   }
   cout << "};" << endl
        << endl
-       << "static const unsigned short value[] = {" << endl
+       << "static const unsigned short codepage[] = {" << endl
        << dec << setfill(' ');
   for (list<elem>::iterator p = ls.begin(); p != ls.end(); ++p) {
     cout << "    " << setw(8) << p->cp << ",\t// " << p->cs << endl;
@@ -125,12 +130,13 @@ unsigned
 codepage(const string& charset)
 {
 #include "codepage.h"
-  unsigned key = crc32(charset);
+  static const crc32 crc;
+  const unsigned k = crc(charset);
   int lo = 0, hi = sizeof(hash) / sizeof(hash[0]);
   while (lo < hi) {
     int i = (lo + hi) >> 1;
-    int diff = int(key - hash[i]);
-    if (!diff) return value[i];
+    int diff = int(k - hash[i]);
+    if (!diff) return codepage[i];
     if (diff < 0) hi = i;
     else lo = i + 1;
   }
