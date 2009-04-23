@@ -10,8 +10,50 @@ befooはWindows2000以降用のシンプルなIMAP4/POP3クライアントで、複数の
 
 インストール:
 -------------
-"befoo.exe"と"extend.dll"をアプリケーションフォルダにコピーし、必要なら
-スタートアップフォルダにショートカットを作成してください。
+"befoo.exe"(と必要なら"extend.dll")をアプリケーションフォルダにコピー
+してください。自動起動したい場合には、スタートアップフォルダにショート
+カットを作成してください。
+"extend.dll"は設定ダイアログを使えるようにします。これが無い場合は設定
+ファイルをノートパッドで手書きすることになります。
+
+
+設定:
+-----
+befooは"befoo.ini"ファイルから設定を読み込みます。このファイルはユーザ
+毎のローカル「Application Data」フォルダ、または、アプリケーションと同
+じフォルダに置いてください。なお、初期起動時には、「Application Data」
+フォルダに自動作成されます。以下は"befoo.ini"の設定例です。
+
+[メールボックス名]
+uri=imap://username@mail.example.com/
+passwd=パスワード	; 後で暗号化されます。
+sound=MailBeep		; サウンド名かWAVEファイルのパス。
+			; (デフォルト:着信音なし)
+period=10		; 分単位のメール確認間隔。(デフォルト:15分)
+
+[SSLを使用]
+uri=imap+ssl://username@mail.example.com/
+passwd=...
+sound=%windir%\\Media\\chimes.wav
+
+[POP3]
+uri=pop://username@pop.example.com/
+passwd=...
+
+[POP3新着]		; 新着のみ一覧表示。
+uri=pop://username@pop.example.com/#recent
+passwd=...
+
+[POP3でSSL使用]
+uri=pop+ssl://username@pop.example.com/
+passwd=...
+
+[(preferences)]		; 動作設定。
+icon=32			; アイコンのサイズ。(デフォルト: 64)
+balloon=5		; バルーン表示秒数。(デフォルト: 10)
+summary=5,1		; 一覧表示秒数とメール確認後の表示/非表示。
+			; (デフォルト: 3,0)
+delay=30		; 1回目のメール確認までの秒数。(デフォルト: 0)
 
 
 ライセンス:
