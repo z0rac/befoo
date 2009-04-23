@@ -24,7 +24,7 @@ endif
 CPPFLAGS = $(CFLAGS)
 
 PROG = $(NAME).exe
-OBJS = main.o imap4.o pop3.o mail.o mailbox.o
+OBJS = main.o imap4.o pop3.o mail.o codepage.o mailbox.o
 OBJS += mascot.o summary.o setting.o window.o win32.o mingw/mthr.o
 L10N = ja.rc
 LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcomctl32 -lwinmm
@@ -44,19 +44,19 @@ all: $(PROG)
 $(PROG): $(OBJS) $(NAME).res
 	gcc $(LDFLAGS) -o $@ $(OBJS) $(NAME).res $(LIBS)
 
-codepage.h: codepage.txt
-	sort -b -f -u -k2,2 $< | tr '[a-z]' '[A-Z]' | \
-	sed -e 's/;.*//' -e 's/[ \t][ \t]*/ /g' -e 's/^ //' \
-	-e '/^[1-9][0-9]* [^ ]/!d' \
-	-e 's/^\([1-9][0-9]*\) \([^ ][^ ]*\).*/{ "\2", \1 },/' > $@
+codepage.h: codepage.txt codepage.exe
+	./codepage < codepage.txt > $@
+
+codepage.exe: codepage.cpp
+	g++ $(OPTS) -DMAIN=1 -o $@ $<
 
 $(OBJS): win32.h Makefile
 main.o mascot.o summary.o: define.h mailbox.h window.h setting.h
 mail.o mailbox.o imap4.o pop3.o: mailbox.h
-mail.o: codepage.h
 window.o: window.h
 setting.o: setting.h
+codepage.o: codepage.h
 $(NAME).res: $(L10N) $(RSRC) define.h Makefile
 
 clean:
-	@rm -f *.o *.res *~ mingw/*.o
+	@rm -f *.o *.res *~ codepage.exe mingw/*.o
