@@ -354,7 +354,7 @@ static const unsigned hash[] = {
   0xff088cb4,	// X-MAC-CE
 };
 
-static const unsigned short value[] = {
+static const unsigned short codepage[] = {
        28597,	// GREEK8
        28594,	// ISO-8859-4
        54936,	// GB18030
