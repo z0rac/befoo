@@ -1,0 +1,148 @@
+/*
+ * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ *
+ * This software comes with ABSOLUTELY NO WARRANTY; for details of
+ * the license terms, see the LICENSE.txt file included with the program.
+ */
+#include <string>
+
+using namespace std;
+
+static unsigned
+crc32(const string& s)
+{
+  struct table {
+    unsigned code[256];
+    table()
+    {
+      for (unsigned i = 0; i < 256; ++i) {
+	unsigned v = i;
+	for (int c = 8; c--;) {
+	  v = ((int(!(v & 1)) - 1) & 0xedb88320) ^ (v >> 1);
+	}
+	code[i] = v;
+      }
+    }
+  };
+  static const table tab;
+  unsigned v = ~0;
+  for (const char* p = s.c_str(); *p; ++p) {
+    v = tab.code[(v ^ *p) & 255] ^ (v >> 8);
+  }
+  return ~v;
+}
+
+#if MAIN
+
+#include <iostream>
+#include <iomanip>
+#include <list>
+
+namespace {
+  struct elem {
+    unsigned crc;
+    unsigned cp;
+    string cs;
+    elem() {}
+    elem(unsigned crc, unsigned cp, const string& cs)
+      : crc(crc), cp(cp), cs(cs) {}
+  };
+}
+
+int
+main()
+{
+  static const char ws[] = " \t";
+  list<elem> ls;
+  while (cin) {
+    string s;
+    getline(cin, s);
+    string::size_type i = s.find_first_of(';');
+    if (i != string::npos) s.erase(i);
+    i = s.find_first_not_of(ws);
+    if (i == string::npos) continue;
+    string::size_type n = s.find_first_not_of("0123456789", i);
+    if (n == string::npos || n == i) continue;
+    string cp(s, i, n - i);
+    i = s.find_first_not_of(ws, n);
+    if (i == string::npos || i == n) continue;
+    n = s.find_first_of(ws, i);
+    string cs(s, i, n - i);
+    for (string::iterator p = cs.begin(); p != cs.end(); ++p) {
+      *p = static_cast<char>(toupper(*p));
+    }
+    unsigned crc = crc32(cs);
+    list<elem>::iterator p = ls.begin();
+    while (p != ls.end() && crc > p->crc) ++p;
+    if (p == ls.end() || p->crc != crc) {
+      char* e;
+      ls.insert(p, elem(crc, strtoul(cp.c_str(), &e, 10), cs));
+    } else {
+      cerr << "conflict: " << cs << "(" << cp << ") and "
+	   << p->cs << "(" << p->cp << ")" << endl;
+    }
+  }
+  for (int cp = 1; cp < 65536; ++cp) {
+    char no[10];
+    sprintf(no, "%ld", cp);
+    static const char* prefix[] = {
+      "WINDOWS-", "X-CP", "CP", "CP0", "CP00"
+    };
+    int i = sizeof(prefix) / sizeof(prefix[0]);
+    i -= (cp >= 1000) + (cp >= 10000);
+    while (i--) {
+      string cs = string(prefix[i]) + no;
+      unsigned crc = crc32(cs);
+      list<elem>::const_iterator p = ls.begin();
+      while (p != ls.end() && crc > p->crc) ++p;
+      if (p != ls.end() && p->crc == crc && p->cs != cs) {
+	cerr << "conflict: " << cs << "(" << cp << ") and "
+	     << p->cs << "(" << p->cp << ")" << endl;
+      }
+    }
+  }
+  cout << "// This file was created by codepage.exe." << endl
+       << endl
+       << "static const unsigned hash[] = {" << endl
+       << hex << setfill('0');
+  for (list<elem>::iterator p = ls.begin(); p != ls.end(); ++p) {
+    cout << "  0x" << setw(8) << p->crc << ",\t// " << p->cs << endl;
+  }
+  cout << "};" << endl
+       << endl
+       << "static const unsigned short value[] = {" << endl
+       << dec << setfill(' ');
+  for (list<elem>::iterator p = ls.begin(); p != ls.end(); ++p) {
+    cout << "    " << setw(8) << p->cp << ",\t// " << p->cs << endl;
+  }
+  cout << "};" << endl;
+  return 0;
+}
+
+#else
+
+unsigned
+codepage(const string& charset)
+{
+#include "codepage.h"
+  unsigned key = crc32(charset);
+  int lo = 0, hi = sizeof(hash) / sizeof(hash[0]);
+  while (lo < hi) {
+    int i = (lo + hi) >> 1;
+    int diff = int(key - hash[i]);
+    if (!diff) return value[i];
+    if (diff < 0) hi = i;
+    else lo = i + 1;
+  }
+  string::size_type i = charset.find_last_not_of("0123456789");
+  if (i < charset.size() - 1) {
+    string prefix(charset, 0, i + 1);
+    if (prefix == "WINDOWS-" || prefix == "CP" ||  prefix == "X-CP") {
+      char* e;
+      return strtoul(charset.c_str() + i + 1, &e, 10);
+    }
+  }
+  return 0;
+}
+
+#endif

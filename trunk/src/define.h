@@ -27,6 +27,5 @@
 #define ID_TEXT_BALLOON_ERROR  5
 #define ID_TEXT_SUMMARY_TITLE  6
 #define ID_TEXT_SUMMARY_COLUMN 7
-#define ID_TEXT_SETTINGS       8
-#define ID_TEXT_ABOUT          9
-#define ID_TEXT_VERSION        10
+#define ID_TEXT_ABOUT          8
+#define ID_TEXT_VERSION        9

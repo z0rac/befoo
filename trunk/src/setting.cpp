@@ -64,16 +64,9 @@ profile::_prepare()
 	MakeSureDirectoryPathExists(path)) {
       LOG("Using the setting file: " << path << endl);
       _path = path;
-
-      // write the example for settings.
-      string example = win32::exe.text(ID_TEXT_SETTINGS);
       HANDLE h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, 0,
 			    NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-      if (h != INVALID_HANDLE_VALUE) {
-	DWORD n;
-	WriteFile(h, example.data(), example.size(), &n, NULL);
-	CloseHandle(h);
-      }
+      if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
     } else {
       _path = "*";
     }

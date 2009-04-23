@@ -58,42 +58,6 @@ BEGIN
     ID_TEXT_BALLOON_ERROR	"Mail fetch failed."
     ID_TEXT_SUMMARY_TITLE	"Summary - " APP_NAME
     ID_TEXT_SUMMARY_COLUMN	"Subject/Sender/Date/Mailbox/"
-    ID_TEXT_SETTINGS		"\
-;Enter your mailbox information and preferences like below\
- - except semi-colon at start of line:\r\n\
-\r\n\
-;[mailboxname]\r\n\
-;uri=imap://username@imap.example.com/\r\n\
-;passwd=your password\t; It will be coded later.\r\n\
-;sound=MailBeep\t\t; A sound alias or path to a wave file.\
- (default: No sound)\r\n\
-;period=10\t\t; A fetching period in minutes. (default: 15)\r\n\
-\r\n\
-;[another over SSL]\r\n\
-;uri=imap+ssl://username@imap.example.com/\r\n\
-;passwd=...\r\n\
-;sound=%windir%\\Media\\chimes.wav\r\n\
-\r\n\
-;[POP3]\r\n\
-;uri=pop://username@pop.example.com/\r\n\
-;passwd=...\r\n\
-\r\n\
-;[POP3 recents]\t; Summary of recents only.\r\n\
-;uri=pop://username@pop.example.com/#recent\r\n\
-;passwd=...\r\n\
-\r\n\
-;[POP3 over SSL]\r\n\
-;uri=pop+ssl://username@pop.example.com/\r\n\
-;passwd=...\r\n\
-\r\n\
-;[(preferences)]\r\n\
-;icon=32\t\t; Size of the mascot icon.(default: 64)\r\n\
-;balloon=5\t\t; Period to show the balloon.(default: 10)\r\n\
-;summary=5,1\t\t; Period to show the summary, and switch to show\
- the summary when mail is fetched.(default: 3,0)\r\n\
-;delay=30\t\t; Delay seconds to the first fetching.(default: 0)\r\n\
-\r\n\
-"
     ID_TEXT_ABOUT		"\
 (C) 2009 TSUBAKIMOTO Hiroya\n\
 Befoo comes with ABSOLUTELY NO WARRANTY. This is free software, \

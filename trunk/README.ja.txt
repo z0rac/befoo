@@ -4,8 +4,7 @@ befoo - IMAP4メールチェッカー <http://sourceforge.jp/projects/befoo/>
 -----
 befooはWindows2000以降用のシンプルなIMAP4/POP3クライアントで、複数の
 メールボックスのメールをチェックして件名、送信者、日付の一覧を表示しま
-す。iconv.dllをインストールしていれば、日本語を含む非ASCIIの件名も表示
-されます。
+す。
 
 
 インストール:

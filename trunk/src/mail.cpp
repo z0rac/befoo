@@ -103,31 +103,9 @@ u8conv&
 u8conv::charset(const string& charset)
 {
   if (!charset.empty() && charset != _charset) {
-    _charset = charset, _codepage = 0;
-    static const struct { const char* cs; UINT cp; } tab[] = {
-#include "codepage.h"
-    };
-    int lo = 0, hi = sizeof(tab) / sizeof(tab[0]);
-    while (lo < hi) {
-      int i = (lo + hi) >> 1;
-      int diff = strcmp(charset.c_str(), tab[i].cs);
-      if (!diff) {
-	_codepage = tab[i].cp;
-	break;
-      }
-      if (diff < 0) hi = i;
-      else lo = i + 1;
-    }
-    if (!_codepage) {
-      string::size_type i = charset.find_last_not_of("0123456789");
-      if (i < charset.size() - 1) {
-	string prefix(charset, 0, i + 1);
-	if (prefix == "WINDOWS-" || prefix == "CP" ||  prefix == "X-CP") {
-	  char* e;
-	  _codepage = strtoul(charset.c_str() + i + 1, &e, 10);
-	}
-      }
-    }
+    extern unsigned codepage(const string&);
+    _charset = charset;
+    _codepage = codepage(charset);
   }
   return *this;
 }

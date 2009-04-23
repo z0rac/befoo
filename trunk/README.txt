@@ -4,7 +4,6 @@ Introduction:
 -------------
 Befoo is a simple IMAP4/POP3 client for Windows 2000 or later. It fetches
 mail from plural mailbox, and shows summary with subject, sender and date.
-You can read non-ascii subjects if the iconv.dll was installed.
 
 
 Installation:

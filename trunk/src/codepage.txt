@@ -98,11 +98,10 @@
 874	TIS-620		[Tantsetthi]
 
 932	Shift_JIS	(preferred MIME name)
-932	MS_Kanji 
+932	MS_Kanji
 932	csShiftJIS
 932	Windows-31J
 932	csWindows31J
-932	SHIFT-JIS
 
 936	GB2312		(preferred MIME name)
 936	csGB2312
