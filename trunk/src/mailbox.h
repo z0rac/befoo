@@ -80,9 +80,12 @@ public:
 };
 
 class uri {
+  string _uri;
+  static string _encode(const string& s, bool path = false);
+  static string _decode(const string& s);
 public:
+  operator const string&() const { return _uri; }
   const string& operator[](int i) const { return _part[i]; }
-  operator string() const;
   void parse(const string& uri);
   enum { scheme, user, host, port, path, fragment };
 private:

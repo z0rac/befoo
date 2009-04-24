@@ -613,15 +613,45 @@ mailbox::backend::write(const string& data)
 /*
  * Functions of the class uri
  */
-uri::operator string() const
+string
+uri::_encode(const string& s, bool path)
 {
-  string s = _part[scheme] + "://";
-  if (!_part[user].empty()) s += _part[user] + '@';
-  s += _part[host];
-  if (!_part[port].empty()) s += ':' + _part[port];
-  s += '/' + _part[path];
-  if (!_part[fragment].empty()) s += '#' + _part[fragment];
-  return s;
+  string result;
+  int ps = path ? 0 : '/';
+  string::size_type i = 0;
+  while (i < s.size()) {
+    const char* const t = s.c_str();
+    const char* p = t + i;
+    while (*p > 32 && *p < 127 && *p != ps && !strchr(":?#[]@;%", *p)) ++p;
+    if (!*p) break;
+    string::size_type n = p - t;
+    result.append(s, i, n - i);
+    char hex[4] = { '%' };
+    _ltoa(s[n] & 255, hex + 1, 16);
+    result.append(hex);
+    i = n + 1;
+  }
+  if (i < s.size()) result.append(s.c_str() + i);
+  return result;
+}
+
+string
+uri::_decode(const string& s)
+{
+  string result;
+  string::size_type i = 0;
+  while (i < s.size()) {
+    string::size_type n = s.find_first_of('%', i);
+    if (n == string::npos || s.size() - n < 3) break;
+    result.append(s, i, n - i);
+    char hex[3] = { s[n + 1], s[n + 2] };
+    char* e;
+    char c = char(strtoul(hex, &e, 16));
+    i = n + (*e ? (c = '%', 1) : 3);
+    result.push_back(c);
+  }
+  if (i < s.size()) result.append(s.c_str() + i);
+  return result;
 }
 
 void
@@ -630,22 +660,22 @@ uri::parse(const string& uri)
   for (int ui = scheme; ui <= fragment; ++ui) _part[ui].clear();
 
   string::size_type i = uri.find_first_of('#');
-  if (i != string::npos) _part[fragment] = uri.substr(i + 1);
+  if (i != string::npos) _part[fragment] = _decode(uri.substr(i + 1));
 
   string t(uri, 0, min(uri.find_first_of('?'), i));
   i = t.find("://");
   if (i != string::npos) {
-    _part[scheme].assign(t, 0, i);
+    _part[scheme] = _decode(t.substr(0, i));
     t.erase(0, i + 3);
   }
   i = t.find_first_of('/');
   if (i != string::npos) {
-    _part[path] = t.substr(i + 1);
+    _part[path] = _decode(t.substr(i + 1));
     t.erase(i);
   }
   i = t.find_first_of('@');
   if (i != string::npos) {
-    _part[user].assign(t, 0, min(t.find_first_of(';'), i));
+    _part[user] = _decode(t.substr(0, min(t.find_first_of(';'), i)));
     t.erase(0, i + 1);
   }
   i = t.find_last_not_of("0123456789");
@@ -653,7 +683,14 @@ uri::parse(const string& uri)
     _part[port] = t.substr(i + 1);
     t.erase(i);
   }
-  _part[host] = t;
+  _part[host] = _decode(t);
+
+  _uri = _encode(_part[scheme]) + "://";
+  if (!_part[user].empty()) _uri += _encode(_part[user]) + '@';
+  _uri += _encode(_part[host]);
+  if (!_part[port].empty()) _uri += ':' + _encode(_part[port]);
+  _uri += '/' + _encode(_part[path], true);
+  if (!_part[fragment].empty()) _uri += '#' + _encode(_part[fragment]);
 }
 
 /*
