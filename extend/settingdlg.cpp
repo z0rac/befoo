@@ -243,6 +243,8 @@ namespace {
     void done(bool ok);
     bool action(int id, int cmd);
     void _changeproto(unsigned i);
+    static string _encode(const string& s, bool path = false);
+    static string _decode(const string& s);
   public:
     uridlg(const string& uri) : _uri(uri) {}
     const string& uri() const { return _uri; }
@@ -265,12 +267,12 @@ uridlg::initialize()
   bool recent = false;
   string::size_type n = _uri.find_first_of('#');
   if (n != string::npos) {
-    recent = _uri.substr(n + 1) == "recent";
+    recent = _decode(_uri.substr(n + 1)) == "recent";
   }
   string t(_uri, 0, min(_uri.find_first_of('?'), n));
   n = t.find("://");
   if (n != string::npos) {
-    string sc = t.substr(0, n);
+    string sc = _decode(t.substr(0, n));
     for (int i = 0; i < sizeof(_proto) / sizeof(_proto[0]); ++i) {
       if (sc == _proto[i].scheme) {
 	ComboBox_SetCurSel(item(IDC_COMBO_SCHEME), i);
@@ -282,12 +284,12 @@ uridlg::initialize()
   }
   n = t.find_first_of('/');
   if (n != string::npos) {
-    settext(IDC_EDIT_PATH, t.substr(n + 1));
+    settext(IDC_EDIT_PATH, _decode(t.substr(n + 1)));
     t.erase(n);
   }
   n = t.find_first_of('@');
   if (n != string::npos) {
-    settext(IDC_EDIT_USER, t.substr(0, min(t.find_first_of(';'), n)));
+    settext(IDC_EDIT_USER, _decode(t.substr(0, min(t.find_first_of(';'), n))));
     t.erase(0, n + 1);
   }
   n = t.find_last_not_of("0123456789");
@@ -295,7 +297,7 @@ uridlg::initialize()
     settext(IDC_EDIT_PORT, t.substr(n + 1));
     t.erase(n);
   }
-  settext(IDC_EDIT_ADDRESS, t);
+  settext(IDC_EDIT_ADDRESS, _decode(t));
 }
 
 void
@@ -312,19 +314,19 @@ uridlg::done(bool ok)
       }
     }
     string s = gettext(IDC_EDIT_USER);
-    if (!s.empty()) uri += s + '@';
+    if (!s.empty()) uri += _encode(s) + '@';
     s = gettext(IDC_EDIT_ADDRESS);
     if (s.empty()) {
       error(IDC_EDIT_ADDRESS, win32::instance.text(IDS_MSG_ITEM_REQUIRED));
     }
-    uri += s;
+    uri += _encode(s);
     if (i >= sizeof(_proto) / sizeof(_proto[0]) ||
 	getint(IDC_EDIT_PORT) != _proto[i].port) {
       uri += ':' + gettext(IDC_EDIT_PORT);
     }
     s = gettext(IDC_EDIT_PATH);
     if (s.empty() || s[0] != '/') uri += '/';
-    uri += s;
+    uri += _encode(s, true);
     if (recent) uri += "#recent";
     _uri = uri;
   }
@@ -353,6 +355,47 @@ uridlg::_changeproto(unsigned i)
     recent = i > 1;
   }
   enable(IDC_CHECKBOX_RECENT, recent);
+}
+
+string
+uridlg::_encode(const string& s, bool path)
+{
+  string result;
+  int ps = path ? 0 : '/';
+  string::size_type i = 0;
+  while (i < s.size()) {
+    const char* const t = s.c_str();
+    const char* p = t + i;
+    while (*p > 32 && *p < 127 && *p != ps && !strchr(":?#[]@;%", *p)) ++p;
+    if (!*p) break;
+    string::size_type n = p - t;
+    result.append(s, i, n - i);
+    char hex[4] = { '%' };
+    _ltoa(s[n] & 255, hex + 1, 16);
+    result.append(hex);
+    i = n + 1;
+  }
+  if (i < s.size()) result.append(s.c_str() + i);
+  return result;
+}
+
+string
+uridlg::_decode(const string& s)
+{
+  string result;
+  string::size_type i = 0;
+  while (i < s.size()) {
+    string::size_type n = s.find_first_of('%', i);
+    if (n == string::npos || s.size() - n < 3) break;
+    result.append(s, i, n - i);
+    char hex[3] = { s[n + 1], s[n + 2] };
+    char* e;
+    char c = char(strtoul(hex, &e, 16));
+    i = n + (*e ? (c = '%', 1) : 3);
+    result.push_back(c);
+  }
+  if (i < s.size()) result.append(s.c_str() + i);
+  return result;
 }
 
 /** mailboxdlg - dialog that manipulate mailbox 

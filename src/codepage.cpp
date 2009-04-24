@@ -34,6 +34,7 @@ namespace {
       return ~v;
     }
   };
+  const crc32 crc;
 }
 
 #if MAIN
@@ -57,7 +58,6 @@ int
 main()
 {
   static const char ws[] = " \t";
-  static const crc32 crc;
   list<elem> ls;
   while (cin) {
     string s;
@@ -130,7 +130,6 @@ unsigned
 codepage(const string& charset)
 {
 #include "codepage.h"
-  static const crc32 crc;
   const unsigned k = crc(charset);
   int lo = 0, hi = sizeof(hash) / sizeof(hash[0]);
   while (lo < hi) {

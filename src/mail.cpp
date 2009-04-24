@@ -31,34 +31,40 @@ namespace {
 #define FUNC(name) name(_dll(#name))
 
   class u8conv {
-    win32::module _dll;
+    static win32::dll _dll;
     iconv_t _cd;
     string _charset;
-    libiconv _func;
+    libiconv_open _open;
+    libiconv_close _close;
+    libiconv _iconv;
   public:
-    u8conv() : _cd(iconv_t(-1)) {}
+    u8conv() : _cd(iconv_t(-1)), _open(NULL) {}
     ~u8conv() { if (*this) FUNC(libiconv_close)(_cd); }
     u8conv& charset(const string& charset);
     operator bool() const { return _cd != iconv_t(-1); }
     string operator()(const string& text) const;
   };
+  win32::dll u8conv::_dll("iconv.dll", false);
 }
 
 u8conv&
 u8conv::charset(const string& charset)
 {
-  static win32::dll dll("iconv.dll", false);
-  if (!_dll && dll) _dll = dll, _func = FUNC(libiconv);
   if (_dll) {
+    if (!_open) {
+      _iconv = FUNC(libiconv);
+      _close = FUNC(libiconv_close);
+      _open = FUNC(libiconv_open);
+    }
     if (!charset.empty() && charset != _charset) {
       if (_cd != iconv_t(-1)) {
-	FUNC(libiconv_close)(_cd);
+	_close(_cd);
 	_cd = iconv_t(-1);
       }
       _charset = charset;
-      _cd = FUNC(libiconv_open)("UTF-8", charset.c_str());
+      _cd = _open("UTF-8", charset.c_str());
     } else if (_cd != iconv_t(-1)) {
-      _func(_cd, NULL, NULL, NULL, NULL);
+      _iconv(_cd, NULL, NULL, NULL, NULL);
     }
   }
   return *this;
@@ -76,7 +82,7 @@ u8conv::operator()(const string& text) const
     char buf[128];
     char* out = buf;
     size_t outlen = sizeof(buf);
-    ret = _func(_cd, &in, &inlen, &out, &outlen);
+    ret = _iconv(_cd, &in, &inlen, &out, &outlen);
     if (outlen == sizeof(buf)) break;
     result.append(buf, sizeof(buf) - outlen);
   } while (ret == size_t(-1));
