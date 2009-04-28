@@ -295,7 +295,7 @@ summary::item::operator()(LPCWSTR s)
 namespace {
   class summarywindow : public appwindow {
     summary _summary;
-    int _resized;
+    bool _changed;
     struct _autoclose : public window::timer {
       int sec;
       void reset(window& source)
@@ -315,7 +315,7 @@ namespace {
 }
 
 summarywindow::summarywindow(const mailbox* mboxes)
-  : _summary(self()), _resized(-1)
+  : _summary(self())
 {
   style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
 	WS_THICKFRAME | WS_CLIPCHILDREN,
@@ -341,13 +341,16 @@ summarywindow::summarywindow(const mailbox* mboxes)
   _autoclose.reset(*this);
   show(true, false);
   foreground(true);
-  _resized = 0;
+  _changed = false;
 }
 
 LRESULT
 summarywindow::dispatch(UINT m, WPARAM w, LPARAM l)
 {
   switch (m) {
+  case WM_MOVE:
+    _changed = true;
+    break;
   case WM_ENDSESSION:
     if (w) release();
     break;
@@ -363,7 +366,7 @@ summarywindow::dispatch(UINT m, WPARAM w, LPARAM l)
 void
 summarywindow::release()
 {
-  if (_resized > 0) {
+  if (_changed) {
     try {
       RECT r = bounds();
       setting::preferences("summary")
@@ -382,10 +385,8 @@ summarywindow::limit(LPMINMAXINFO info)
 void
 summarywindow::resize(int w, int h)
 {
-  if (!_resized) {
-    RECT r = _summary.bounds();
-    _resized = int(r.right - r.left != w || r.bottom - r.top != h) ;
-  }
+  RECT r = _summary.bounds();
+  _changed = r.right - r.left != w || r.bottom - r.top != h;
   _summary.move(0, 0, w, h);
 }
 
