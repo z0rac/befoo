@@ -31,7 +31,6 @@ protected:
   virtual void release() {}
   virtual void resize(int, int) {}
   virtual LRESULT notify(WPARAM w, LPARAM l);
-  virtual void execute(int id);
 
   struct commctrl {
     commctrl(DWORD icc);
@@ -82,6 +81,7 @@ public:
     { super::operator=(const_cast<cmdp&>(cmd)); return *this; }
   };
   void addcmd(int id, cmdp cmd);
+  virtual void execute(int id);
 private:
   typedef list< pair<int, cmdp> > cmdmap;
   cmdmap _cmdmap;

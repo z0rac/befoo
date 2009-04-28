@@ -243,50 +243,6 @@ namespace cmd {
   };
 }
 
-namespace {
-  void
-  patch()
-  {
-    list<string> mbs = setting::mailboxes();
-    for (list<string>::iterator p = mbs.begin(); p != mbs.end(); ++p) {
-      setting s = setting::mailbox(*p);
-      string uri = s["uri"];
-      if (uri.empty()) continue;
-      string::size_type i;
-      i = uri.find("imaps://");
-      if (i != string::npos) uri.replace(i, 5, "imap+ssl");
-      i = uri.find("pops://");
-      if (i != string::npos) uri.replace(i, 4, "pop+ssl");
-      s("uri", uri);
-    }
-    setting prefs = setting::preferences();
-    string s;
-    s = prefs["columns"];
-    if (!s.empty()) {
-      string w = prefs["summary"];
-      setting::preferences("summary")
-	("window", w)("columns", s);
-      prefs.erase("summary").erase("columns");
-    }
-    s = prefs["mascot"];
-    if (!s.empty()) {
-      int x, y, tray;
-      static_cast<setting::manip>(s)(x = 0)(y = 0)(tray = 0);
-      setting::preferences("mascot")
-	("position", setting::tuple(x)(y))("tray", tray);
-      prefs.erase("mascot");
-    }
-    s = prefs["notice"];
-    if (!s.empty()) {
-      int balloon, summary, ac;
-      static_cast<setting::manip>(s)(balloon = 10)(summary = 0);
-      prefs["autoclose"](ac = 3);
-      prefs("balloon", balloon)("summary", setting::tuple(ac)(summary));
-      prefs.erase("notice").erase("autoclose");
-    }
-  }
-}
-
 /*
  * WinMain - main function
  */
@@ -299,7 +255,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
   try {
     static win32 befoo("befoo:79585F30-DD15-446C-B414-152D31324970");
     static winsock winsock;
-    patch();
     int delay;
     setting::preferences()["delay"](delay = 0);
     for (int qc = 1; qc > 0; delay = 0) {

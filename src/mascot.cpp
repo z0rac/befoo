@@ -393,9 +393,13 @@ void
 mascotwindow::_release()
 {
   try {
+    RECT dt;
+    GetWindowRect(GetDesktopWindow(), &dt);
+    dt.right -= dt.left, dt.bottom - dt.top;
     RECT r = bounds();
     setting::preferences("mascot")
-      ("position", setting::tuple(r.left)(r.top))
+      ("position", setting::tuple
+       (r.left - dt.left)(r.top - dt.top)(dt.right)(dt.bottom))
       ("tray", intray());
   } catch (...) {}
 }
@@ -493,10 +497,15 @@ mascotwindow::mascotwindow()
   prefs["balloon"](_balloon = 10);
 
   prefs = setting::preferences("mascot");
-  RECT r;
+  RECT dt;
+  GetWindowRect(GetDesktopWindow(), &dt);
+  dt.right -= dt.left, dt.bottom - dt.top;
+  RECT r = { dt.right - _size, dt.top, dt.right, dt.bottom };
   int tray;
-  prefs["position"](r.left = 0)(r.top = 0);
+  prefs["position"](r.left)(r.top)(r.right)(r.bottom);
   prefs["tray"](tray = 0);
+  r.left = dt.left + MulDiv(r.left, dt.right, r.right);
+  r.top = dt.top + MulDiv(r.top, dt.bottom, r.bottom);
   r.right = r.left + _size;
   r.bottom = r.top + _size;
   move(adjust(r, _size / 4));
@@ -526,5 +535,8 @@ mascot()
   auto_ptr<mascotwindow> w(new mascotwindow);
   w->addcmd(ID_MENU_TRAYICON, new cmd::trayicon);
   w->addcmd(ID_MENU_ABOUT, new cmd::about);
+  if (string(setting::preferences("mascot")["tray"]).empty()) {
+    w->execute(ID_MENU_ABOUT);
+  }
   return w.release();
 }
