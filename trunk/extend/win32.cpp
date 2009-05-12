@@ -16,6 +16,7 @@ namespace {
   struct textbuf {
     char* data;
     textbuf() : data(NULL) {}
+    textbuf(size_t n) : data(new char[n]) {}
     ~textbuf() { delete [] data; }
     char* operator()(size_t n)
     {
@@ -43,9 +44,9 @@ win32::profile(LPCSTR section, LPCSTR key, LPCSTR file, LPCSTR def)
 string
 win32::xenv(const string& s)
 {
-  textbuf buf;
   size_t n = s.size() + 1;
-  n = ExpandEnvironmentStrings(s.c_str(), buf(n), n);
+  textbuf buf(n);
+  n = ExpandEnvironmentStrings(s.c_str(), buf.data, n);
   if (n > s.size() + 1) ExpandEnvironmentStrings(s.c_str(), buf(n), n);
   return buf.data;
 }
@@ -55,8 +56,8 @@ win32::shell(const string& cmd, unsigned flags)
 {
   assert(!(flags & ~(SEE_MASK_CONNECTNETDRV | SEE_MASK_FLAG_DDEWAIT |
 		     SEE_MASK_FLAG_NO_UI | SEE_MASK_NOCLOSEPROCESS)));
-  textbuf tmp;
-  lstrcpyA(tmp(cmd.size() + 1), cmd.c_str());
+  textbuf tmp(cmd.size() + 1);
+  lstrcpyA(tmp.data, cmd.c_str());
   PathRemoveArgs(tmp.data);
   string::size_type i = lstrlen(tmp.data);
   if (i < cmd.size()) i = cmd.find_first_not_of(" \t", i + 1);
@@ -183,8 +184,8 @@ win32::wstr::mbstr(UINT cp) const
   if (_data) {
     int size = WideCharToMultiByte(cp, 0, _data, -1, NULL, 0, NULL, NULL);
     if (size) {
-      textbuf buf;
-      WideCharToMultiByte(cp, 0, _data, -1, buf(size), size, NULL, NULL);
+      textbuf buf(size);
+      WideCharToMultiByte(cp, 0, _data, -1, buf.data, size, NULL, NULL);
       return string(buf.data, size - 1);
     }
   }

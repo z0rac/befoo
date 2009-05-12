@@ -41,8 +41,9 @@ namespace {
     u8conv() : _cd(iconv_t(-1)), _open(NULL) {}
     ~u8conv() { if (*this) FUNC(libiconv_close)(_cd); }
     u8conv& charset(const string& charset);
+    u8conv& reset();
     operator bool() const { return _cd != iconv_t(-1); }
-    string operator()(const string& text) const;
+    string operator()(const string& text);
   };
   win32::dll u8conv::_dll("iconv.dll", false);
 }
@@ -57,21 +58,23 @@ u8conv::charset(const string& charset)
       _open = FUNC(libiconv_open);
     }
     if (!charset.empty() && charset != _charset) {
-      if (_cd != iconv_t(-1)) {
-	_close(_cd);
-	_cd = iconv_t(-1);
-      }
+      if (_cd != iconv_t(-1)) _close(_cd), _cd = iconv_t(-1);
       _charset = charset;
       _cd = _open("UTF-8", charset.c_str());
-    } else if (_cd != iconv_t(-1)) {
-      _iconv(_cd, NULL, NULL, NULL, NULL);
     }
   }
   return *this;
 }
 
+u8conv&
+u8conv::reset()
+{
+  if (_cd != iconv_t(-1)) _iconv(_cd, NULL, NULL, NULL, NULL);
+  return *this;
+}
+
 string
-u8conv::operator()(const string& text) const
+u8conv::operator()(const string& text)
 {
   if (!*this) throw text;
   string result;
@@ -94,15 +97,34 @@ u8conv::operator()(const string& text) const
 /** u8conv - convert multibyte text to UTF-8
  */
 namespace {
+  extern "C" {
+    typedef HRESULT (WINAPI* ConvertINetMultiByteToUnicode)
+      (LPDWORD, DWORD, LPCSTR, LPINT, LPWSTR, LPINT);
+  }
+#define FUNC(name) name(_dll(#name, NULL))
+
   class u8conv {
+    static win32::dll _dll;
+    static ConvertINetMultiByteToUnicode _mb2u;
     string _charset;
     UINT _codepage;
+    DWORD _mode;
+    template<typename _Ty> struct tmp {
+      _Ty* data;
+      tmp(int size) : data(new _Ty[size]) {}
+      ~tmp() { delete [] data; }
+    };
   public:
     u8conv() : _codepage(0) {}
     u8conv& charset(const string& charset);
+    u8conv& reset() { _mode = 0; return *this; }
     operator bool() const { return _codepage != 0; }
-    string operator()(const string& text) const;
+    string operator()(const string& text);
   };
+  win32::dll u8conv::_dll("mlang.dll", false);
+  ConvertINetMultiByteToUnicode
+  u8conv::_mb2u = FUNC(ConvertINetMultiByteToUnicode);
+#undef FUNC
 }
 
 u8conv&
@@ -112,17 +134,32 @@ u8conv::charset(const string& charset)
     extern unsigned codepage(const string&);
     _charset = charset;
     _codepage = codepage(charset);
+    _mode = 0;
   }
   return *this;
 }
 
 string
-u8conv::operator()(const string& text) const
+u8conv::operator()(const string& text)
 {
   if (!*this) throw text;
-  win32::wstr ws(text, _codepage);
-  if (!ws) throw text;
-  return ws.mbstr(CP_UTF8);
+  if (!_mb2u) {
+    win32::wstr ws(text, _codepage);
+    if (!ws) throw text;
+    return ws.mbstr(CP_UTF8);
+  }
+  string result;
+  int n = 0;
+  if (_mb2u(&_mode, _codepage, text.c_str(), NULL, NULL, &n) != S_OK) throw text;
+  tmp<WCHAR> ws(n);
+  _mb2u(&_mode, _codepage, text.c_str(), NULL, ws.data, &n);
+  int m = WideCharToMultiByte(CP_UTF8, 0, ws.data, n, NULL, 0, NULL, NULL);
+  if (m) {
+    tmp<char> mbs(m);
+    WideCharToMultiByte(CP_UTF8, 0, ws.data, n, mbs.data, m, NULL, NULL);
+    result.assign(mbs.data, m);
+  }
+  return result;
 }
 #endif // !USE_ICONV
 
@@ -325,14 +362,15 @@ mail::decoder::eword(const string& text,
     }
     int c = toupper(text[q[1]]);
     if (q[2] - q[1] != 2 || c != 'B' && c != 'Q') continue;
+    if (text.find_first_not_of(" \t", pos) < q[0] - 2) {
+      result.append(text, pos, q[0] - pos - 2), pos = q[0] - 2;
+      conv.reset();
+    }
     try {
       string s(text, q[2], i - q[2] - 2);
       s = (c == 'B' ? decodeB : decodeQ)(s);
-      if (text.find_first_not_of(" \t", pos) < q[0] - 2) {
-	result.append(text, pos, q[0] - pos - 2), pos = q[0] - 2;
-      }
-      string charset = uppercase(text.substr(q[0], q[1] - q[0] - 1));
-      result += charset == "UTF-8" ? s : conv.charset(charset)(s);
+      string cs = uppercase(text.substr(q[0], q[1] - q[0] - 1));
+      result += cs == "UTF-8" ? (conv.reset(), s) : conv.charset(cs)(s);
       pos = i;
     } catch (...) {}
   }
