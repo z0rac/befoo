@@ -227,6 +227,10 @@
 				RelativePath="..\src\window.cpp"
 				>
 			</File>
+			<File
+				RelativePath="..\src\winsock.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="ヘッダー ファイル"
@@ -255,6 +259,10 @@
 			</File>
 			<File
 				RelativePath="..\src\window.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\winsock.h"
 				>
 			</File>
 		</Filter>

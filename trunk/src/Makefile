@@ -25,7 +25,7 @@ CPPFLAGS = $(CFLAGS)
 
 PROG = $(NAME).exe
 OBJS = main.o imap4.o pop3.o mail.o codepage.o mailbox.o
-OBJS += mascot.o summary.o setting.o window.o win32.o mingw/mthr.o
+OBJS += mascot.o summary.o setting.o window.o win32.o winsock.o mingw/mthr.o
 L10N = ja.rc
 LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcomctl32 -lwinmm
 
@@ -53,6 +53,7 @@ codepage.exe: codepage.cpp
 $(OBJS): win32.h Makefile
 main.o mascot.o summary.o: define.h mailbox.h window.h setting.h
 mail.o mailbox.o imap4.o pop3.o: mailbox.h
+winsock.o main.o mailbox.o: winsock.h
 window.o: window.h
 setting.o: setting.h
 codepage.o: codepage.h

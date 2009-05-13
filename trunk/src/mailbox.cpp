@@ -5,7 +5,7 @@
  * the license terms, see the LICENSE.txt file included with the program.
  */
 #include "mailbox.h"
-#include "win32.h"
+#include "winsock.h"
 #include <cassert>
 
 #ifdef _DEBUG
@@ -58,7 +58,8 @@ tcpstream::_wait(int op) const
   }
   timeval tv = { TCP_TIMEOUT, 0 };
   int n = select(_fd + 1, fdsp[0], fdsp[1], NULL, &tv);
-  if (n <= 0) throw winsock::error(n ? h_errno : WSAETIMEDOUT);
+  if (n < 0) throw winsock::error();
+  if (n == 0) throw mailbox::error("timed out!");
 }
 
 int
@@ -124,6 +125,7 @@ tcpstream::write(const char* data, size_t size)
  * This instance should be created by the function mailbox::backend::ssl().
  */
 #if USE_OPENSSL
+#include "win32.h"
 namespace {
   extern "C" {
     typedef struct { int ssl; } SSL;
@@ -283,260 +285,74 @@ sslstream::write(const char* data, size_t size)
   return size;
 }
 
+int
+tcpstream::tls() const
+{
+  return sslstream::avail() ? 0 : -1;
+}
+
 #undef LIB
 #undef XSSL
 #undef SSL
 #else // !USE_OPENSSL
-
-#define SECURITY_WIN32
-#include <security.h>
-#include <sspi.h>
-#include <schannel.h>
-
-#ifndef SEC_E_CONTEXT_EXPIRED
-#define SEC_E_CONTEXT_EXPIRED (-2146893033)
-#define SEC_I_CONTEXT_EXPIRED 590615
-#endif
-
 namespace {
-  class sslstream : public tcpstream {
-    CredHandle _cred;
-    CtxtHandle _ctx;
-    SecPkgContext_StreamSizes _sizes;
-    bool _avail;
-    struct buf {
-      char* data;
-      buf() : data(NULL) {}
-      ~buf() { delete [] data; }
-      char* operator()(size_t n)
-      { delete [] data, data = NULL; return data = new char[n]; }
-    } _buf;
-    string _rbuf;
-    string::size_type _rest;
-    string _extra;
-    size_t _copyextra(size_t i, size_t size)
-    {
-      size_t n = min<size_t>(_extra.size(), size - i);
-      memcpy(_buf.data + i, _extra.data(), n);
-      _extra.erase(0, n);
-      return n;
-    }
-    SECURITY_STATUS _ok(SECURITY_STATUS ss) const
-    { if (FAILED(ss)) throw winsock::error(ss); return ss; }
-    SECURITY_STATUS _token(SecBufferDesc* inb = NULL);
-    void _handshake();
+  class sslstream : public tcpstream, winsock::tls {
+    size_t _recv(char* buf, size_t size)
+    { return tcpstream::read(buf, size); }
+    size_t _send(const char* data, size_t size)
+    { return tcpstream::write(data, size); }
   public:
     sslstream(int fd = -1);
-    ~sslstream();
+    ~sslstream() { close(); }
     int open(const string& host, const string& port);
     void close();
-    size_t read(char* buf, size_t size);
-    size_t write(const char* data, size_t size);
+    size_t read(char* buf, size_t size)
+    { return winsock::tls::read(buf, size); }
+    size_t write(const char* data, size_t size)
+    { return winsock::tls::write(data, size); }
     int tls() const { return 1; }
     mailbox::backend::stream* starttls() { return NULL; }
-    static bool avail() { return true; }
   };
 }
 
-sslstream::sslstream(int fd)
-  : tcpstream(fd), _avail(false)
-{
-  SCHANNEL_CRED auth = { SCHANNEL_CRED_VERSION };
 #if USE_SSL2
-  auth.grbitEnabledProtocols = (SP_PROT_SSL2 | SP_PROT_SSL3);
+#define SSL_PROT (SP_PROT_SSL2 | SP_PROT_SSL3)
 #else
-  auth.grbitEnabledProtocols = (SP_PROT_SSL3 | SP_PROT_TLS1);
+#define SSL_PROT (SP_PROT_SSL3 | SP_PROT_TLS1)
 #endif
-  auth.dwFlags = (SCH_CRED_NO_DEFAULT_CREDS | SCH_CRED_MANUAL_CRED_VALIDATION);
-  _ok(AcquireCredentialsHandle(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND,
-			       NULL, &auth, NULL, NULL, &_cred, NULL));
-  if (fd != -1) _handshake();
-}
 
-sslstream::~sslstream()
+sslstream::sslstream(int fd)
+  : tcpstream(fd), winsock::tls(SSL_PROT)
 {
-  close();
-  FreeCredentialsHandle(&_cred);
-}
-
-SECURITY_STATUS
-sslstream::_token(SecBufferDesc* inb)
-{
-  const ULONG req = (ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT |
-		     ISC_REQ_CONFIDENTIALITY | ISC_REQ_EXTENDED_ERROR |
-		     ISC_REQ_STREAM | ISC_REQ_ALLOCATE_MEMORY |
-		     ISC_REQ_USE_SUPPLIED_CREDS); // for Win2kPro
-  ULONG attr;
-  struct obuf : public SecBuffer {
-    obuf() { cbBuffer = 0, BufferType = SECBUFFER_TOKEN, pvBuffer = 0; }
-    ~obuf() { if (pvBuffer) FreeContextBuffer(pvBuffer); }
-  } out;
-  SecBufferDesc outb = { SECBUFFER_VERSION, 1, &out };
-  SECURITY_STATUS ss =
-    InitializeSecurityContext(&_cred, _avail ? &_ctx : NULL,
-			      NULL, req, 0, SECURITY_NATIVE_DREP,
-			      inb, 0, &_ctx, &outb, &attr, NULL);
-  _avail = true;
-  switch (ss) {
-  case SEC_I_COMPLETE_AND_CONTINUE: ss = SEC_I_CONTINUE_NEEDED;
-  case SEC_I_COMPLETE_NEEDED: _ok(CompleteAuthToken(&_ctx, &outb));
-  }
-  tcpstream::write((const char*)out.pvBuffer, out.cbBuffer);
-  return ss;
-}
-
-void
-sslstream::_handshake()
-{
-  try {
-    SECURITY_STATUS ss = _extra.empty() ? _token() : SEC_I_CONTINUE_NEEDED;
-    const size_t buflen = 16 * 1024;
-    _buf(buflen);
-    size_t n = 0;
-    while (ss == SEC_I_CONTINUE_NEEDED) {
-      n += _copyextra(n, buflen);
-      if (n == 0) n = tcpstream::read(_buf.data, buflen);
-      SecBuffer in[2] = { { n, SECBUFFER_TOKEN, _buf.data } };
-      SecBufferDesc inb = { SECBUFFER_VERSION, 2, in };
-      ss = _token(&inb);
-      if (ss == SEC_E_INCOMPLETE_MESSAGE) {
-	if (n < buflen) {
-	  n += tcpstream::read(_buf.data + n, buflen - n);
-	  ss = SEC_I_CONTINUE_NEEDED;
-	}
-      } else {
-	n = 0;
-	if (in[1].BufferType == SECBUFFER_EXTRA) {
-	  n = in[1].cbBuffer;
-	  memmove(_buf.data, _buf.data + in[0].cbBuffer - n, n);
-	}
-      }
-      _ok(ss);
-    }
-    _extra.assign(_buf.data, n);
-    _ok(QueryContextAttributes(&_ctx, SECPKG_ATTR_STREAM_SIZES, &_sizes));
-    _buf(_sizes.cbHeader + _sizes.cbMaximumMessage + _sizes.cbTrailer);
-  } catch (...) {
-    close();
-    throw;
-  }
+  if (fd != -1) winsock::tls::connect();
 }
 
 int
 sslstream::open(const string& host, const string& port)
 {
   int fd = tcpstream::open(host, port);
-  _handshake();
-  return fd;
+  try {
+    winsock::tls::connect();
+    return fd;
+  } catch (...) {
+    tcpstream::close();
+    throw;
+  }
 }
 
 void
 sslstream::close()
 {
-  if (_avail) {
-    _rbuf.clear(), _extra.clear();
-    try {
-#if defined(__MINGW32__) // for MinGWs bug.
-      win32::dll secur32("secur32.dll");
-      typedef SECURITY_STATUS WINAPI (*act)(PCtxtHandle,PSecBufferDesc);
-      act ApplyControlTokenA = act(secur32("ApplyControlToken"));
-#endif
-      DWORD value = SCHANNEL_SHUTDOWN;
-      SecBuffer in = { sizeof(value), SECBUFFER_TOKEN, &value };
-      SecBufferDesc inb = { SECBUFFER_VERSION, 1, &in };
-      _ok(ApplyControlToken(&_ctx, &inb));
-      while (_token() == SEC_I_CONTINUE_NEEDED) continue;
-    } catch (...) {
-      LOG("SSPI: shutdown error." << endl);
-    }
-    DeleteSecurityContext(&_ctx);
-    _avail = false;
-  }
+  winsock::tls::shutdown();
   tcpstream::close();
 }
-
-size_t
-sslstream::read(char* buf, size_t size)
-{
-  assert(_avail);
-  if (!_rbuf.empty()) {
-    size_t n = min<size_t>(size, _rbuf.size() - _rest);
-    memcpy(buf, _rbuf.data() + _rest, n);
-    _rest += n;
-    if (_rest == _rbuf.size()) _rbuf.clear();
-    return n;
-  }
-  _rest = 0;
-  size_t done = 0;
-  size_t n = 0;
-  while (!done) {
-    n += !_extra.empty() ? _copyextra(n, _sizes.cbMaximumMessage) :
-      tcpstream::read(_buf.data + n, _sizes.cbMaximumMessage - n);
-    SecBuffer dec[4] = { { n, SECBUFFER_DATA, _buf.data } };
-    SecBufferDesc decb = { SECBUFFER_VERSION, 4, dec };
-    SECURITY_STATUS ss = DecryptMessage(&_ctx, &decb, 0, NULL);
-    if (ss == SEC_E_INCOMPLETE_MESSAGE &&
-	n < _sizes.cbMaximumMessage) continue;
-    _ok(ss), n = 0;
-    string extra;
-    for (int i = 0; i < 4; ++i) {
-      switch(dec[i].BufferType) {
-      case SECBUFFER_DATA:
-	if (dec[i].cbBuffer) {
-	  size_t n = 0;
-	  if (done < size) {
-	    n = min<size_t>(size - done, dec[i].cbBuffer);
-	    memcpy(buf + done, dec[i].pvBuffer, n);
-	    done += n;
-	  }
-	  _rbuf.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
-	} else if (ss == SEC_E_OK && _buf.data[0] == 0x15) {
-	  ss = SEC_I_CONTEXT_EXPIRED; // for Win2kPro
-	}
-	break;
-      case SECBUFFER_EXTRA:
-	extra.append((char*)dec[i].pvBuffer, dec[i].cbBuffer);
-	break;
-      }
-    }
-    _extra = extra + _extra;
-    if (ss == SEC_I_CONTEXT_EXPIRED && !done) {
-      throw winsock::error(SEC_E_CONTEXT_EXPIRED);
-    }
-    if (ss == SEC_I_RENEGOTIATE) _handshake();
-  }
-  return done;
-}
-
-size_t
-sslstream::write(const char* data, size_t size)
-{
-  assert(_avail);
-  size_t done = 0;
-  while (done < size) {
-    size_t n = min<size_t>(size - done, _sizes.cbMaximumMessage);
-    SecBuffer enc[4] = {
-      { _sizes.cbHeader, SECBUFFER_STREAM_HEADER, _buf.data },
-      { n, SECBUFFER_DATA, _buf.data + _sizes.cbHeader },
-      { _sizes.cbTrailer, SECBUFFER_STREAM_TRAILER,
-	_buf.data + _sizes.cbHeader + n }
-    };
-    SecBufferDesc encb = { SECBUFFER_VERSION, 4, enc };
-    memcpy(_buf.data + _sizes.cbHeader, data + done, n);
-    _ok(EncryptMessage(&_ctx, 0, &encb, 0));
-    tcpstream::write(_buf.data,
-		     enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
-    done += n;
-  }
-  return done;
-}
-#endif // !USE_OPENSSL
 
 int
 tcpstream::tls() const
 {
-  return sslstream::avail() ? 0 : -1;
+  return 0;
 }
+#endif // !USE_OPENSSL
 
 mailbox::backend::stream*
 tcpstream::starttls()
