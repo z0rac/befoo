@@ -7,6 +7,7 @@
 #include "define.h"
 #include "mailbox.h"
 #include "setting.h"
+#include "winsock.h"
 #include "win32.h"
 #include "window.h"
 #include <algorithm>

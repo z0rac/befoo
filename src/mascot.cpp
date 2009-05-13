@@ -395,7 +395,7 @@ mascotwindow::_release()
   try {
     RECT dt;
     GetWindowRect(GetDesktopWindow(), &dt);
-    dt.right -= dt.left, dt.bottom - dt.top;
+    dt.right -= dt.left, dt.bottom -= dt.top;
     RECT r = bounds();
     setting::preferences("mascot")
       ("position", setting::tuple
@@ -499,7 +499,7 @@ mascotwindow::mascotwindow()
   prefs = setting::preferences("mascot");
   RECT dt;
   GetWindowRect(GetDesktopWindow(), &dt);
-  dt.right -= dt.left, dt.bottom - dt.top;
+  dt.right -= dt.left, dt.bottom -= dt.top;
   RECT r = { dt.right - _size, dt.top, dt.right, dt.bottom };
   int tray;
   prefs["position"](r.left)(r.top)(r.right)(r.bottom);
