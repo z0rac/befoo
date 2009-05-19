@@ -124,7 +124,7 @@ public:
     class _stream {
     public:
       virtual ~_stream() {}
-      virtual int open(const string& host, const string& port) = 0;
+      virtual void open(const string& host, const string& port) = 0;
       virtual void close() = 0;
       virtual size_t read(char* buf, size_t size) = 0;
       virtual size_t write(const char* data, size_t size) = 0;

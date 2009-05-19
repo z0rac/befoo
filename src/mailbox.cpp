@@ -24,13 +24,15 @@
  */
 namespace {
   class tcpstream : public mailbox::backend::stream {
-    SOCKET _fd;
+    winsock::tcpclient _socket;
   protected:
-    void _wait(int op = -1) const;
+    SOCKET socket() const { return _socket; }
+    SOCKET socket(SOCKET s)
+    { assert(_socket == INVALID_SOCKET); return _socket(s); }
+    void wait(int op);
   public:
-    tcpstream(SOCKET fd = INVALID_SOCKET) : _fd(fd) {}
-    ~tcpstream();
-    int open(const string& host, const string& port);
+    ~tcpstream() { _socket.shutdown(); }
+    void open(const string& host, const string& port);
     void close();
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
@@ -39,84 +41,45 @@ namespace {
   };
 }
 
-tcpstream::~tcpstream()
+void
+tcpstream::wait(int op)
 {
-  close();
+  if (!_socket.wait(op, TCP_TIMEOUT)) throw mailbox::error("timed out!");
 }
 
 void
-tcpstream::_wait(int op) const
-{
-  fd_set fds[2];
-  fd_set* fdsp[2] = { NULL, NULL };
-  for (int i = 0; i < 2; ++i) {
-    if (op >> 1 || op == i) {
-      fdsp[i] = fds + i;
-      FD_ZERO(fdsp[i]);
-      FD_SET(_fd, fdsp[i]);
-    }
-  }
-  timeval tv = { TCP_TIMEOUT, 0 };
-  int n = select(_fd + 1, fdsp[0], fdsp[1], NULL, &tv);
-  if (n < 0) throw winsock::error();
-  if (n == 0) throw mailbox::error("timed out!");
-}
-
-int
 tcpstream::open(const string& host, const string& port)
 {
-  assert(_fd == INVALID_SOCKET);
+  assert(_socket == INVALID_SOCKET);
   LOG("Connect: " << host << ":" << port << endl);
-  struct addrinfo* ai = winsock::getaddrinfo(host, port);
-  for (struct addrinfo* p = ai; p; p = p->ai_next) {
-    SOCKET fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-    if (fd == INVALID_SOCKET) continue;
-    u_long nb = 1;
-    if (connect(fd, p->ai_addr, p->ai_addrlen) == 0 &&
-	ioctlsocket(fd, FIONBIO, &nb) == 0) {
-      _fd = fd;
-      break;
-    }
-    closesocket(fd);
-  }
-  winsock::freeaddrinfo(ai);
-  if (_fd == INVALID_SOCKET) throw winsock::error();
-  return _fd;
+  _socket.connect(host, port, false);
 }
 
 void
 tcpstream::close()
 {
-  if (_fd != INVALID_SOCKET) {
-    shutdown(_fd, SD_BOTH);
-    char buf[32];
-    while (recv(_fd, buf, sizeof(buf), 0) > 0) continue;
-    closesocket(_fd);
-    _fd = INVALID_SOCKET;
-  }
+  _socket.shutdown();
 }
 
 size_t
 tcpstream::read(char* buf, size_t size)
 {
-  assert(_fd != INVALID_SOCKET);
+  assert(_socket != INVALID_SOCKET);
   for (;;) {
-    int n = recv(_fd, buf, size, 0);
-    if (n > 0) return size_t(n);
-    else if (n == 0 || h_errno != WSAEWOULDBLOCK) throw winsock::error();
-    _wait(0);
+    size_t n = _socket.recv(buf, size);
+    if (n) return n;
+    wait(0);
   }
 }
 
 size_t
 tcpstream::write(const char* data, size_t size)
 {
-  assert(_fd != INVALID_SOCKET);
+  assert(_socket != INVALID_SOCKET);
   for (size_t done = 0; done < size;) {
-    int n = send(_fd, data + done, size - done, 0);
-    if (n > 0) done += n;
-    else if (n == 0 || h_errno != WSAEWOULDBLOCK) throw winsock::error();
-    else _wait(1);
+    size_t n = _socket.send(data + done, size - done);
+    done += n;
+    if (!n) wait(1);
   }
   return size;
 }
@@ -168,11 +131,13 @@ namespace {
     SSL_read _read;
     SSL_write _write;
     int _want(int rc);
-    int _connect(int fd);
+    void _connect();
+    void _shutdown();
   public:
-    sslstream(int fd = -1);
+    sslstream();
     ~sslstream();
-    int open(const string& host, const string& port);
+    void open(SOCKET socket);
+    void open(const string& host, const string& port);
     void close();
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
@@ -201,9 +166,8 @@ sslstream::error::emsg()
   return LIB(ERR_error_string)(LIB(ERR_get_error)(), buf);
 }
 
-sslstream::sslstream(int fd)
-  : tcpstream(fd), _ssl(NULL),
-    _read(SSL(SSL_read)), _write(SSL(SSL_write))
+sslstream::sslstream()
+  : _ssl(NULL), _read(SSL(SSL_read)), _write(SSL(SSL_write))
 {
 #if USE_SSL2
   _ctx = SSL(SSL_CTX_new)(SSL(SSLv23_client_method)());
@@ -211,12 +175,11 @@ sslstream::sslstream(int fd)
   _ctx = SSL(SSL_CTX_new)(SSL(TLSv1_client_method)());
 #endif
   if (!_ctx) throw error();
-  if (fd != -1) _connect(fd);
 }
 
 sslstream::~sslstream()
 {
-  close();
+  _shutdown();
   XSSL(SSL_CTX_free)(_ctx);
 }
 
@@ -225,43 +188,60 @@ sslstream::_want(int rc)
 {
   if (rc > 0) return rc;
   switch (SSL(SSL_get_error)(_ssl, rc)) {
-  case 2: /* SSL_ERROR_WANT_READ */ _wait(0); return rc;
-  case 3: /* SSL_ERROR_WANT_WRITE */ _wait(1); return rc;
+  case 2: /* SSL_ERROR_WANT_READ */ wait(0); return rc;
+  case 3: /* SSL_ERROR_WANT_WRITE */ wait(1); return rc;
   }
   throw error();
 }
 
-int
-sslstream::_connect(int fd)
+void
+sslstream::_connect()
 {
-  assert(fd != -1 && !_ssl);
+  assert(socket() != INVALID_SOCKET && !_ssl);
   try {
     _ssl = SSL(SSL_new)(_ctx);
-    if (!_ssl || !SSL(SSL_set_fd)(_ssl, fd)) throw error();
+    if (!_ssl || !SSL(SSL_set_fd)(_ssl, socket())) throw error();
     while (_want(SSL(SSL_connect)(_ssl)) < 0) continue;
   } catch (...) {
-    tcpstream::close();
     if (_ssl) XSSL(SSL_free)(_ssl), _ssl = NULL;
     throw;
   }
-  return fd;
 }
 
-int
+void
+sslstream::_shutdown()
+{
+  if (_ssl) {
+    try {
+      int rc;
+      do {
+	rc = SSL(SSL_shutdown)(_ssl);
+      } while (rc < 0 && _want(rc));
+    } catch (...) {}
+    XSSL(SSL_free)(_ssl);
+    _ssl = NULL;
+  }
+}
+
+void
+sslstream::open(SOCKET socket)
+{
+  tcpstream::socket(socket);
+  _connect();
+}
+
+void
 sslstream::open(const string& host, const string& port)
 {
-  return _connect(tcpstream::open(host, port));
+  tcpstream::open(host, port);
+  _connect();
 }
 
 void
 sslstream::close()
 {
-  if (_ssl) {
-    XSSL(SSL_shutdown)(_ssl);
-    XSSL(SSL_free)(_ssl);
-    _ssl = NULL;
-    tcpstream::close();
-  }
+  _shutdown();
+  tcpstream::close();
 }
 
 size_t
@@ -296,54 +276,44 @@ tcpstream::tls() const
 #undef SSL
 #else // !USE_OPENSSL
 namespace {
-  class sslstream : public tcpstream, winsock::tls {
+  class sslstream : public tcpstream, winsock::tlsclient {
     size_t _recv(char* buf, size_t size)
     { return tcpstream::read(buf, size); }
     size_t _send(const char* data, size_t size)
     { return tcpstream::write(data, size); }
   public:
-    sslstream(int fd = -1);
-    ~sslstream() { close(); }
-    int open(const string& host, const string& port);
+#if USE_SSL2
+    sslstream() : winsock::tlsclient(SP_PROT_SSL2 | SP_PROT_SSL3) {}
+#endif
+    ~sslstream() { winsock::tlsclient::shutdown(); }
+    void open(SOCKET socket);
+    void open(const string& host, const string& port);
     void close();
-    size_t read(char* buf, size_t size)
-    { return winsock::tls::read(buf, size); }
-    size_t write(const char* data, size_t size)
-    { return winsock::tls::write(data, size); }
+    size_t read(char* buf, size_t size) { return recv(buf, size); }
+    size_t write(const char* data, size_t size) { return send(data, size); }
     int tls() const { return 1; }
     mailbox::backend::stream* starttls() { return NULL; }
   };
 }
 
-#if USE_SSL2
-#define SSL_PROT (SP_PROT_SSL2 | SP_PROT_SSL3)
-#else
-#define SSL_PROT (SP_PROT_SSL3 | SP_PROT_TLS1)
-#endif
-
-sslstream::sslstream(int fd)
-  : tcpstream(fd), winsock::tls(SSL_PROT)
+void
+sslstream::open(SOCKET socket)
 {
-  if (fd != -1) winsock::tls::connect();
+  tcpstream::socket(socket);
+  winsock::tlsclient::connect();
 }
 
-int
+void
 sslstream::open(const string& host, const string& port)
 {
-  int fd = tcpstream::open(host, port);
-  try {
-    winsock::tls::connect();
-    return fd;
-  } catch (...) {
-    tcpstream::close();
-    throw;
-  }
+  tcpstream::open(host, port);
+  winsock::tlsclient::connect();
 }
 
 void
 sslstream::close()
 {
-  winsock::tls::shutdown();
+  winsock::tlsclient::shutdown();
   tcpstream::close();
 }
 
@@ -357,13 +327,10 @@ tcpstream::tls() const
 mailbox::backend::stream*
 tcpstream::starttls()
 {
-  assert(_fd != INVALID_SOCKET);
-  SOCKET fd = _fd;
-  _fd = INVALID_SOCKET;
-  sslstream* st = new(nothrow) sslstream(fd);
-  if (st) return st;
-  _fd = fd;
-  throw bad_alloc();
+  assert(_socket != INVALID_SOCKET);
+  auto_ptr<sslstream> st(new sslstream);
+  st->open(_socket.release());
+  return st.release();
 }
 
 /*

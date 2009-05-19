@@ -30,13 +30,30 @@ public:
   static struct addrinfo* getaddrinfo(const string& host, const string& port);
   static void freeaddrinfo(struct addrinfo* info) { _free(info); }
 public:
-  // tls - transport layer security
-  class tls {
+  // tcp - TCP client socket
+  class tcpclient {
+    SOCKET _socket;
+    tcpclient(const tcpclient&); void operator=(const tcpclient&); // disable to copy
+  public:
+    tcpclient(SOCKET socket = INVALID_SOCKET) : _socket(socket) {}
+    ~tcpclient() { shutdown(); }
+    tcpclient& operator()(SOCKET s) { _socket = s; return *this; }
+    SOCKET release() { SOCKET s = _socket; _socket = INVALID_SOCKET; return s; }
+    operator SOCKET() const { return _socket; }
+    void connect(const string& host, const string& port, bool blocking = true);
+    void shutdown();
+    size_t recv(char* buf, size_t size);
+    size_t send(const char* data, size_t size);
+    bool wait(int op, int sec = -1);
+  };
+
+  // tlsclient - transport layer security
+  class tlsclient {
     CredHandle _cred;
     CtxtHandle _ctx;
     SecPkgContext_StreamSizes _sizes;
     bool _avail;
-    string _readq;
+    string _recvq;
     string::size_type _rest;
     string _extra;
     struct buf {
@@ -51,12 +68,12 @@ public:
     SECURITY_STATUS _token(SecBufferDesc* inb = NULL);
     size_t _copyextra(size_t i, size_t size);
   public:
-    tls(DWORD proto = SP_PROT_SSL3 | SP_PROT_TLS1);
-    virtual ~tls();
+    tlsclient(DWORD proto = SP_PROT_SSL3 | SP_PROT_TLS1);
+    virtual ~tlsclient();
     void connect();
     void shutdown();
-    size_t read(char* buf, size_t size);
-    size_t write(const char* data, size_t size);
+    size_t recv(char* buf, size_t size);
+    size_t send(const char* data, size_t size);
   protected:
     virtual size_t _recv(char* buf, size_t size) = 0;
     virtual size_t _send(const char* data, size_t size) = 0;
