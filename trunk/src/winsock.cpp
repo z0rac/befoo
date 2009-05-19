@@ -127,9 +127,77 @@ winsock::error::emsg()
 }
 
 /*
- * Functions of the class winsock::tls
+ * Functions of the class winsock::tcpclient
  */
-winsock::tls::tls(DWORD proto)
+void
+winsock::tcpclient::connect(const string& host, const string& port, bool blocking)
+{
+  shutdown();
+  struct addrinfo* ai = getaddrinfo(host, port);
+  for (struct addrinfo* p = ai; p; p = p->ai_next) {
+    SOCKET s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+    if (s == INVALID_SOCKET) continue;
+    u_long nb = 1;
+    if (::connect(s, p->ai_addr, p->ai_addrlen) == 0 &&
+	(blocking || ioctlsocket(s, FIONBIO, &nb) == 0)) {
+      _socket = s;
+      break;
+    }
+    closesocket(s);
+  }
+  winsock::freeaddrinfo(ai);
+  if (_socket == INVALID_SOCKET) throw winsock::error();
+}
+
+void
+winsock::tcpclient::shutdown()
+{
+  if (_socket != INVALID_SOCKET) {
+    ::shutdown(_socket, SD_BOTH);
+    char buf[32];
+    while (::recv(_socket, buf, sizeof(buf), 0) > 0) continue;
+    closesocket(_socket);
+    _socket = INVALID_SOCKET;
+  }
+}
+
+size_t
+winsock::tcpclient::recv(char* buf, size_t size)
+{
+  int n = ::recv(_socket, buf, size, 0);
+  if (n > 0) return size_t(n);
+  if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) throw winsock::error();
+  return 0;
+}
+
+size_t
+winsock::tcpclient::send(const char* data, size_t size)
+{
+  int n = ::send(_socket, data, size, 0);
+  if (n > 0) return size_t(n);
+  if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) throw winsock::error();
+  return 0;
+}
+
+bool
+winsock::tcpclient::wait(int op, int sec)
+{
+  assert(_socket != INVALID_SOCKET);
+  fd_set fds;
+  FD_ZERO(&fds);
+  FD_SET(_socket, &fds);
+  fd_set* fdsp[2] = { NULL, NULL };
+  fdsp[op != 0] = &fds;
+  timeval tv = { sec, 0 };
+  int n = select(_socket + 1, fdsp[0], fdsp[1], NULL, sec < 0 ? NULL : &tv);
+  if (n < 0) throw winsock::error();
+  return n > 0;
+}
+
+/*
+ * Functions of the class winsock::tlsclient
+ */
+winsock::tlsclient::tlsclient(DWORD proto)
   : _avail(false)
 {
   SCHANNEL_CRED auth = { SCHANNEL_CRED_VERSION };
@@ -139,27 +207,28 @@ winsock::tls::tls(DWORD proto)
 			       NULL, &auth, NULL, NULL, &_cred, NULL));
 }
 
-winsock::tls::~tls()
+winsock::tlsclient::~tlsclient()
 {
+  assert(!_avail);
   FreeCredentialsHandle(&_cred);
 }
 
 string
-winsock::tls::_emsg(SECURITY_STATUS ss)
+winsock::tlsclient::_emsg(SECURITY_STATUS ss)
 {
   char s[9];
   return string("SSPI error #0x") + _ultoa(ss, s, 16);
 }
 
 SECURITY_STATUS
-winsock::tls::_ok(SECURITY_STATUS ss) const
+winsock::tlsclient::_ok(SECURITY_STATUS ss) const
 {
   if (FAILED(ss)) throw error(_emsg(ss));
   return ss;
 }
 
 SECURITY_STATUS
-winsock::tls::_token(SecBufferDesc* inb)
+winsock::tlsclient::_token(SecBufferDesc* inb)
 {
   const ULONG req = (ISC_REQ_REPLAY_DETECT | ISC_REQ_SEQUENCE_DETECT |
 		     ISC_REQ_CONFIDENTIALITY | ISC_REQ_EXTENDED_ERROR |
@@ -185,7 +254,7 @@ winsock::tls::_token(SecBufferDesc* inb)
 }
 
 size_t
-winsock::tls::_copyextra(size_t i, size_t size)
+winsock::tlsclient::_copyextra(size_t i, size_t size)
 {
   size_t n = min<size_t>(_extra.size(), size - i);
   memcpy(_buf.data + i, _extra.data(), n);
@@ -194,7 +263,7 @@ winsock::tls::_copyextra(size_t i, size_t size)
 }
 
 void
-winsock::tls::connect()
+winsock::tlsclient::connect()
 {
   try {
     SECURITY_STATUS ss = _extra.empty() ? _token() : SEC_I_CONTINUE_NEEDED;
@@ -231,10 +300,10 @@ winsock::tls::connect()
 }
 
 void
-winsock::tls::shutdown()
+winsock::tlsclient::shutdown()
 {
   if (_avail) {
-    _readq.clear(), _extra.clear();
+    _recvq.clear(), _extra.clear();
     try {
 #if defined(__MINGW32__) // for MinGWs bug.
       win32::dll secur32("secur32.dll");
@@ -255,14 +324,14 @@ winsock::tls::shutdown()
 }
 
 size_t
-winsock::tls::read(char* buf, size_t size)
+winsock::tlsclient::recv(char* buf, size_t size)
 {
   assert(_avail);
-  if (!_readq.empty()) {
-    size_t n = min<size_t>(size, _readq.size() - _rest);
-    memcpy(buf, _readq.data() + _rest, n);
+  if (!_recvq.empty()) {
+    size_t n = min<size_t>(size, _recvq.size() - _rest);
+    memcpy(buf, _recvq.data() + _rest, n);
     _rest += n;
-    if (_rest == _readq.size()) _readq.clear();
+    if (_rest == _recvq.size()) _recvq.clear();
     return n;
   }
   _rest = 0;
@@ -288,7 +357,7 @@ winsock::tls::read(char* buf, size_t size)
 	    memcpy(buf + done, dec[i].pvBuffer, n);
 	    done += n;
 	  }
-	  _readq.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
+	  _recvq.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
 	} else if (ss == SEC_E_OK && _buf.data[0] == 0x15) {
 	  ss = SEC_I_CONTEXT_EXPIRED; // for Win2kPro
 	}
@@ -308,7 +377,7 @@ winsock::tls::read(char* buf, size_t size)
 }
 
 size_t
-winsock::tls::write(const char* data, size_t size)
+winsock::tlsclient::send(const char* data, size_t size)
 {
   assert(_avail);
   size_t done = 0;
