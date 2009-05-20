@@ -25,11 +25,6 @@
 namespace {
   class tcpstream : public mailbox::backend::stream {
     winsock::tcpclient _socket;
-  protected:
-    SOCKET socket() const { return _socket; }
-    SOCKET socket(SOCKET s)
-    { assert(_socket == INVALID_SOCKET); return _socket(s); }
-    void wait(int op);
   public:
     ~tcpstream() { _socket.shutdown(); }
     void open(const string& host, const string& port);
@@ -42,17 +37,10 @@ namespace {
 }
 
 void
-tcpstream::wait(int op)
-{
-  if (!_socket.wait(op, TCP_TIMEOUT)) throw mailbox::error("timed out!");
-}
-
-void
 tcpstream::open(const string& host, const string& port)
 {
   assert(_socket == INVALID_SOCKET);
-  LOG("Connect: " << host << ":" << port << endl);
-  _socket.connect(host, port, false);
+  _socket.connect(host, port).timeout(TCP_TIMEOUT);
 }
 
 void
@@ -65,23 +53,14 @@ size_t
 tcpstream::read(char* buf, size_t size)
 {
   assert(_socket != INVALID_SOCKET);
-  for (;;) {
-    size_t n = _socket.recv(buf, size);
-    if (n) return n;
-    wait(0);
-  }
+  return _socket.recv(buf, size);
 }
 
 size_t
 tcpstream::write(const char* data, size_t size)
 {
   assert(_socket != INVALID_SOCKET);
-  for (size_t done = 0; done < size;) {
-    size_t n = _socket.send(data + done, size - done);
-    done += n;
-    if (!n) wait(1);
-  }
-  return size;
+  return _socket.send(data, size);
 }
 
 /** sslstream - stream of SSL session.
@@ -125,11 +104,12 @@ namespace {
 #define XSSL(name) name(_openssl.ssleay(#name, FARPROC(openssl::np)))
 #define LIB(name) name(_openssl.libeay(#name))
 
-  class sslstream : public tcpstream {
+  class sslstream : public mailbox::backend::stream {
     SSL_CTX* _ctx;
     SSL* _ssl;
     SSL_read _read;
     SSL_write _write;
+    winsock::tcpclient _socket;
     int _want(int rc);
     void _connect();
     void _shutdown();
@@ -188,8 +168,8 @@ sslstream::_want(int rc)
 {
   if (rc > 0) return rc;
   switch (SSL(SSL_get_error)(_ssl, rc)) {
-  case 2: /* SSL_ERROR_WANT_READ */ wait(0); return rc;
-  case 3: /* SSL_ERROR_WANT_WRITE */ wait(1); return rc;
+  case 2: /* SSL_ERROR_WANT_READ */ return rc;
+  case 3: /* SSL_ERROR_WANT_WRITE */ return rc;
   }
   throw error();
 }
@@ -197,11 +177,12 @@ sslstream::_want(int rc)
 void
 sslstream::_connect()
 {
-  assert(socket() != INVALID_SOCKET && !_ssl);
+  assert(_socket != INVALID_SOCKET && !_ssl);
   try {
     _ssl = SSL(SSL_new)(_ctx);
-    if (!_ssl || !SSL(SSL_set_fd)(_ssl, socket())) throw error();
-    while (_want(SSL(SSL_connect)(_ssl)) < 0) continue;
+    if (!_ssl ||
+	SSL(SSL_set_fd)(_ssl, _socket) != 1 ||
+	SSL(SSL_connect)(_ssl) != 1) throw error();
   } catch (...) {
     if (_ssl) XSSL(SSL_free)(_ssl), _ssl = NULL;
     throw;
@@ -212,12 +193,7 @@ void
 sslstream::_shutdown()
 {
   if (_ssl) {
-    try {
-      int rc;
-      do {
-	rc = SSL(SSL_shutdown)(_ssl);
-      } while (rc < 0 && _want(rc));
-    } catch (...) {}
+    XSSL(SSL_shutdown)(_ssl);
     XSSL(SSL_free)(_ssl);
     _ssl = NULL;
   }
@@ -226,14 +202,16 @@ sslstream::_shutdown()
 void
 sslstream::open(SOCKET socket)
 {
-  tcpstream::socket(socket);
+  assert(_socket == INVALID_SOCKET);
+  _socket(socket).timeout(TCP_TIMEOUT);
   _connect();
 }
 
 void
 sslstream::open(const string& host, const string& port)
 {
-  tcpstream::open(host, port);
+  assert(_socket == INVALID_SOCKET);
+  _socket.connect(host, port).timeout(TCP_TIMEOUT);
   _connect();
 }
 
@@ -241,7 +219,7 @@ void
 sslstream::close()
 {
   _shutdown();
-  tcpstream::close();
+  _socket.shutdown();
 }
 
 size_t
@@ -258,11 +236,10 @@ size_t
 sslstream::write(const char* data, size_t size)
 {
   assert(_ssl);
-  for (size_t done = 0; done < size;) {
-    int n = _want(_write(_ssl, data + done, size - done));
-    if (n > 0) done += n;
+  for (;;) {
+    int n = _want(_write(_ssl, data, size));
+    if (n > 0) return size_t(n);
   }
-  return size;
 }
 
 int
@@ -276,11 +253,10 @@ tcpstream::tls() const
 #undef SSL
 #else // !USE_OPENSSL
 namespace {
-  class sslstream : public tcpstream, winsock::tlsclient {
-    size_t _recv(char* buf, size_t size)
-    { return tcpstream::read(buf, size); }
-    size_t _send(const char* data, size_t size)
-    { return tcpstream::write(data, size); }
+  class sslstream : public mailbox::backend::stream, winsock::tlsclient {
+    winsock::tcpclient _socket;
+    size_t _recv(char* buf, size_t size);
+    size_t _send(const char* data, size_t size);
   public:
 #if USE_SSL2
     sslstream() : winsock::tlsclient(SP_PROT_SSL2 | SP_PROT_SSL3) {}
@@ -296,17 +272,42 @@ namespace {
   };
 }
 
+size_t
+sslstream::_recv(char* buf, size_t size)
+{
+  assert(_socket != INVALID_SOCKET);
+  for (;;) {
+    size_t n = _socket.recv(buf, size);
+    if (n) return n;
+    _socket.wait(0, TCP_TIMEOUT);
+  }
+}
+
+size_t
+sslstream::_send(const char* data, size_t size)
+{
+  assert(_socket != INVALID_SOCKET);
+  for (size_t done = 0; done < size;) {
+    size_t n = _socket.send(data + done, size - done);
+    done += n;
+    if (!n) _socket.wait(1, TCP_TIMEOUT);
+  }
+  return size;
+}
+
 void
 sslstream::open(SOCKET socket)
 {
-  tcpstream::socket(socket);
+  assert(_socket == INVALID_SOCKET);
+  _socket(socket).timeout(-1); // non-blocking
   winsock::tlsclient::connect();
 }
 
 void
 sslstream::open(const string& host, const string& port)
 {
-  tcpstream::open(host, port);
+  assert(_socket == INVALID_SOCKET);
+  _socket.connect(host, port).timeout(-1); // non-blocking
   winsock::tlsclient::connect();
 }
 
@@ -314,7 +315,7 @@ void
 sslstream::close()
 {
   winsock::tlsclient::shutdown();
-  tcpstream::close();
+  _socket.shutdown();
 }
 
 int
@@ -383,6 +384,15 @@ mailbox::backend::read()
     } while (c != '\012');
   } while (result[result.size() - 2] != '\015');
   return result.erase(result.size() - 2); // remove CRLF
+}
+
+void
+mailbox::backend::write(const char* data, size_t size)
+{
+  while (size) {
+    size_t n = _st->write(data, size);
+    data += n, size -= n;
+  }
 }
 
 void
