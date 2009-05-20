@@ -129,27 +129,27 @@ winsock::error::emsg()
 /*
  * Functions of the class winsock::tcpclient
  */
-void
-winsock::tcpclient::connect(const string& host, const string& port, bool blocking)
+winsock::tcpclient&
+winsock::tcpclient::connect(const string& host, const string& port)
 {
   shutdown();
+  LOG("Connect: " << host << ":" << port << endl);
   struct addrinfo* ai = getaddrinfo(host, port);
   for (struct addrinfo* p = ai; p; p = p->ai_next) {
     SOCKET s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (s == INVALID_SOCKET) continue;
-    u_long nb = 1;
-    if (::connect(s, p->ai_addr, p->ai_addrlen) == 0 &&
-	(blocking || ioctlsocket(s, FIONBIO, &nb) == 0)) {
+    if (::connect(s, p->ai_addr, p->ai_addrlen) == 0) {
       _socket = s;
       break;
     }
     closesocket(s);
   }
   winsock::freeaddrinfo(ai);
-  if (_socket == INVALID_SOCKET) throw winsock::error();
+  if (_socket == INVALID_SOCKET) throw error();
+  return *this;
 }
 
-void
+winsock::tcpclient&
 winsock::tcpclient::shutdown()
 {
   if (_socket != INVALID_SOCKET) {
@@ -159,6 +159,7 @@ winsock::tcpclient::shutdown()
     closesocket(_socket);
     _socket = INVALID_SOCKET;
   }
+  return *this;
 }
 
 size_t
@@ -166,7 +167,7 @@ winsock::tcpclient::recv(char* buf, size_t size)
 {
   int n = ::recv(_socket, buf, size, 0);
   if (n > 0) return size_t(n);
-  if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) throw winsock::error();
+  if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) throw error();
   return 0;
 }
 
@@ -175,8 +176,24 @@ winsock::tcpclient::send(const char* data, size_t size)
 {
   int n = ::send(_socket, data, size, 0);
   if (n > 0) return size_t(n);
-  if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) throw winsock::error();
+  if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) throw error();
   return 0;
+}
+
+winsock::tcpclient&
+winsock::tcpclient::timeout(int sec)
+{
+  assert(_socket != INVALID_SOCKET);
+  u_long nb = u_long(sec < 0);
+  if (ioctlsocket(_socket, FIONBIO, &nb) != 0) throw error();
+  if (sec >= 0) {
+    int ms = sec * 1000;
+    if (setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&ms, sizeof(ms)) != 0 ||
+	setsockopt(_socket, SOL_SOCKET, SO_SNDTIMEO, (char*)&ms, sizeof(ms)) != 0) {
+      throw error();
+    }
+  }
+  return *this;
 }
 
 bool
@@ -190,7 +207,11 @@ winsock::tcpclient::wait(int op, int sec)
   fdsp[op != 0] = &fds;
   timeval tv = { sec, 0 };
   int n = select(_socket + 1, fdsp[0], fdsp[1], NULL, sec < 0 ? NULL : &tv);
-  if (n < 0) throw winsock::error();
+  if (n == 0 && sec) {
+    WSASetLastError(WSAETIMEDOUT);
+    n = -1;
+  }
+  if (n < 0) throw error();
   return n > 0;
 }
 
@@ -337,7 +358,7 @@ winsock::tlsclient::recv(char* buf, size_t size)
   _rest = 0;
   size_t done = 0;
   size_t n = 0;
-  while (!done) {
+  while (size && !done) {
     n += !_extra.empty() ? _copyextra(n, _sizes.cbMaximumMessage) :
       _recv(_buf.data + n, _sizes.cbMaximumMessage - n);
     SecBuffer dec[4] = { { n, SECBUFFER_DATA, _buf.data } };
@@ -380,20 +401,18 @@ size_t
 winsock::tlsclient::send(const char* data, size_t size)
 {
   assert(_avail);
-  size_t done = 0;
-  while (done < size) {
-    size_t n = min<size_t>(size - done, _sizes.cbMaximumMessage);
+  if (size) {
+    size = min<size_t>(size, _sizes.cbMaximumMessage);
     SecBuffer enc[4] = {
       { _sizes.cbHeader, SECBUFFER_STREAM_HEADER, _buf.data },
-      { n, SECBUFFER_DATA, _buf.data + _sizes.cbHeader },
+      { size, SECBUFFER_DATA, _buf.data + _sizes.cbHeader },
       { _sizes.cbTrailer, SECBUFFER_STREAM_TRAILER,
-	_buf.data + _sizes.cbHeader + n }
+	_buf.data + _sizes.cbHeader + size }
     };
     SecBufferDesc encb = { SECBUFFER_VERSION, 4, enc };
-    memcpy(_buf.data + _sizes.cbHeader, data + done, n);
+    memcpy(_buf.data + _sizes.cbHeader, data, size);
     _ok(EncryptMessage(&_ctx, 0, &encb, 0));
     _send(_buf.data, enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
-    done += n;
   }
-  return done;
+  return size;
 }

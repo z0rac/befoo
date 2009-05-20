@@ -40,10 +40,11 @@ public:
     tcpclient& operator()(SOCKET s) { _socket = s; return *this; }
     SOCKET release() { SOCKET s = _socket; _socket = INVALID_SOCKET; return s; }
     operator SOCKET() const { return _socket; }
-    void connect(const string& host, const string& port, bool blocking = true);
-    void shutdown();
+    tcpclient& connect(const string& host, const string& port);
+    tcpclient& shutdown();
     size_t recv(char* buf, size_t size);
     size_t send(const char* data, size_t size);
+    tcpclient& timeout(int sec);
     bool wait(int op, int sec = -1);
   };
 
