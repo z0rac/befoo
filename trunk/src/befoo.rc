@@ -60,9 +60,10 @@ BEGIN
     ID_TEXT_SUMMARY_COLUMN	"Subject/Sender/Date/Mailbox/"
     ID_TEXT_ABOUT		"\
 (C) 2009 TSUBAKIMOTO Hiroya\n\
-Befoo comes with ABSOLUTELY NO WARRANTY. This is free software, \
-and you are welcome to redistribute it under certain conditions; \
-for details see <http://www.gnu.org/licenses/>.\
+License GPLv3+: GNU GPL version 3 or later\
+ <http://gnu.org/licenses/gpl.html>\n\
+This is free software; you are free to change and redistribute it.\
+There is NO WARRANTY, to the extent permitted by law.\
 "
     ID_TEXT_VERSION             APP_NAME " version " APP_VERSION
 END

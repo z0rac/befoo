@@ -22,22 +22,22 @@
 class imap4 : public mailbox::backend {
   unsigned _seq; // sequencial number for the tag.
 
-  // parse_t - imap4 response parser.
-  struct parse_t : public tokenizer {
-    parse_t() {}
-    parse_t(const string& s) : tokenizer(s) {}
+  // parser - imap4 response parser.
+  struct parser : public tokenizer {
+    parser() {}
+    parser(const string& s) : tokenizer(s) {}
     string token(bool open = false);
   };
 
-  // resp_t - response type.
-  struct resp_t { string tag, type, data; };
+  // response - imap4 response type.
+  struct response { string tag, type, data; };
 
   string _tag();
   static string _arg(const string& arg);
   string _command(const char* cmd, const char* res = NULL);
   string _command(const string& cmd, const char* res = NULL)
   { return _command(cmd.c_str(), res); }
-  resp_t _response();
+  response _response();
   string _read();
   unsigned _seqinit() const { return unsigned(this) + unsigned(time(NULL)); }
 #ifdef _DEBUG
@@ -60,7 +60,7 @@ void
 imap4::login(const string& user, const string& passwd)
 {
   static const char notimap[] = "server not IMAP4 compliant";
-  resp_t resp = _response();
+  response resp = _response();
   bool preauth = resp.type == "PREAUTH";
   if (resp.tag != "*" || !preauth && resp.type != "OK") {
     throw mailbox::error(notimap);
@@ -70,7 +70,7 @@ imap4::login(const string& user, const string& passwd)
   static const char CAPABILITY[] = "CAPABILITY";
   static const char STARTTLS[] = "STARTTLS";
   string cap = _command(CAPABILITY, CAPABILITY);
-  for (parse_t caps(cap); caps;) {
+  for (parser caps(cap); caps;) {
     string s = caps.token();
     if (s == "IMAP4" || s == "IMAP4REV1") imap = true;
     else if (s == STARTTLS) stls = true;
@@ -82,7 +82,7 @@ imap4::login(const string& user, const string& passwd)
       starttls();
       cap = _command(CAPABILITY, CAPABILITY);
     }
-    for (parse_t caps(cap); caps;) {
+    for (parser caps(cap); caps;) {
       if (caps.token() == "LOGINDISABLED") {
 	throw mailbox::error("login disabled");
       }
@@ -104,7 +104,7 @@ imap4::fetch(mailbox& mbox, const uri& uri)
   _command("EXAMINE" + _arg(path.empty() ? "INBOX" : path));
   list<mail> fetched;
   size_t copies = 0;
-  for (parse_t ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
+  for (parser ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
     string uid = ids.token();
     const mail* p = mbox.find(uid);
     if (p) {
@@ -113,7 +113,7 @@ imap4::fetch(mailbox& mbox, const uri& uri)
       continue;
     }
     LOG("Fetch mail: " << uid << endl);
-    parse_t parse(_command("UID FETCH " + uid +
+    parser parse(_command("UID FETCH " + uid +
 			   " BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]",
 			   "FETCH"));
     parse.token(); // drop sequence#
@@ -172,13 +172,13 @@ imap4::_command(const char* cmd, const char* res)
   write(tag + ' ' + cmd);
   LOG("S: " << tag << " " << cmd << endl);
 
-  resp_t resp;
+  response resp;
   string untagged;
   bool bye = false;
   for (;;) {
     resp = _response();
     if (res && resp.type == "OK") {
-      parse_t parse(resp.data);
+      parser parse(resp.data);
       if (parse.peek() == '[') {
 	parse = parse.token(true);
 	if (parse.token() == res) untagged = parse.remain();
@@ -198,11 +198,11 @@ imap4::_command(const char* cmd, const char* res)
   return untagged;
 }
 
-imap4::resp_t
+imap4::response
 imap4::_response()
 {
-  parse_t parse(_read());
-  resp_t resp;
+  parser parse(_read());
+  response resp;
   resp.tag = parse.token();
   if (resp.tag == "+") { // continuation
     resp.data = parse.remain();
@@ -212,7 +212,7 @@ imap4::_response()
   if (resp.tag.empty() || resp.type.empty()) {
     throw mailbox::error("unexpected response: " + parse.data());
   }
-  if (parse && parse_t::digit(resp.type)) {
+  if (parse && parser::digit(resp.type)) {
     resp.data = resp.type, resp.type = parse.token();
   }
   if (parse) {
@@ -246,10 +246,10 @@ imap4::_read()
 }
 
 /*
- * Functions of the class imap4::parse_t
+ * Functions of the class imap4::parser
  */
 string
-imap4::parse_t::token(bool open)
+imap4::parser::token(bool open)
 {
   string result;
   if (*this) {

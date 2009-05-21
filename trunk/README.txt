@@ -16,10 +16,10 @@ need to edit your settings manually by Notepad.
 
 Settings:
 ---------
-Befoo will read your settings from the file "befoo.ini". It will be located
-in the user's local application data folder, or the same folder with the
-application. At initial startup, it will be created in the local application
-data folder. See below an example for "befoo.ini":
+Befoo will read your settings from the file "befoo.ini". This file will be
+located in the user's local application data folder, or the same folder
+with the application. At initial startup, it will be created in the local
+application data folder. See below an example for "befoo.ini":
 
 [mailboxname]
 uri=imap://username@imap.example.com/
