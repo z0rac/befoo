@@ -270,8 +270,17 @@ winsock::tlsclient::_token(SecBufferDesc* inb)
   case SEC_I_COMPLETE_AND_CONTINUE: ss = SEC_I_CONTINUE_NEEDED;
   case SEC_I_COMPLETE_NEEDED: _ok(CompleteAuthToken(&_ctx, &outb));
   }
-  _send((const char*)out.pvBuffer, out.cbBuffer);
+  _sendtoken((const char*)out.pvBuffer, out.cbBuffer);
   return ss;
+}
+
+void
+winsock::tlsclient::_sendtoken(const char* data, size_t size)
+{
+  while (size) {
+    size_t n = _send(data, size);
+    data += n, size -= n;
+  }
 }
 
 size_t
@@ -412,7 +421,7 @@ winsock::tlsclient::send(const char* data, size_t size)
     SecBufferDesc encb = { SECBUFFER_VERSION, 4, enc };
     memcpy(_buf.data + _sizes.cbHeader, data, size);
     _ok(EncryptMessage(&_ctx, 0, &encb, 0));
-    _send(_buf.data, enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
+    _sendtoken(_buf.data, enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
   }
   return size;
 }

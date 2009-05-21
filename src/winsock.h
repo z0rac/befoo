@@ -67,10 +67,12 @@ public:
     static string _emsg(SECURITY_STATUS ss);
     SECURITY_STATUS _ok(SECURITY_STATUS ss) const;
     SECURITY_STATUS _token(SecBufferDesc* inb = NULL);
+    void _sendtoken(const char* data, size_t size);
     size_t _copyextra(size_t i, size_t size);
   public:
     tlsclient(DWORD proto = SP_PROT_SSL3 | SP_PROT_TLS1);
     virtual ~tlsclient();
+    bool avail() const { return _avail; }
     void connect();
     void shutdown();
     size_t recv(char* buf, size_t size);
