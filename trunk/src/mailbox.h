@@ -81,7 +81,7 @@ public:
 
 class uri {
   string _uri;
-  static string _encode(const string& s, bool path = false);
+  static string _encode(const string& s, const char* ex = "");
   static string _decode(const string& s);
 public:
   operator const string&() const { return _uri; }

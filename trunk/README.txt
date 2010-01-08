@@ -33,6 +33,10 @@ uri=imap+ssl://username@imap.example.com/
 passwd=...
 sound=%windir%\\Media\\chimes.wav
 
+[Google Apps email]
+uri=imap+ssl://username%40your_domain.com@imap.gmail.com/
+passwd=...
+
 [POP3]
 uri=pop://username@pop.example.com/
 passwd=...

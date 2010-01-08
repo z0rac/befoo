@@ -33,13 +33,15 @@ namespace {
 	       const struct addrinfo* hints, struct addrinfo** res)
   {
     assert(node && service && hints);
-    assert(hints->ai_flags == 0 && hints->ai_family == AF_UNSPEC &&
-	   hints->ai_socktype == SOCK_STREAM && hints->ai_protocol == 0);
+    assert(hints->ai_flags == 0 && hints->ai_socktype == SOCK_STREAM && hints->ai_protocol == 0);
 
     LOG("Call _getaddrinfo()" << endl);
 
     struct sockaddr_in sa = { AF_INET };
-    struct addrinfo ai = { 0, AF_INET, SOCK_STREAM, IPPROTO_TCP, sizeof(sa) };
+    struct addrinfo ai = {
+      0, hints->ai_family != AF_UNSPEC ? hints->ai_family : AF_INET, SOCK_STREAM, IPPROTO_TCP
+    };
+    if (ai.ai_family != AF_INET) return EAI_FAMILY;
 
     { // service to port number
       char* end;
@@ -109,9 +111,9 @@ winsock::winsock()
 }
 
 struct addrinfo*
-winsock::getaddrinfo(const string& host, const string& port)
+winsock::getaddrinfo(const string& host, const string& port, int family)
 {
-  struct addrinfo hints = { 0, AF_UNSPEC, SOCK_STREAM };
+  struct addrinfo hints = { 0, family, SOCK_STREAM };
   struct addrinfo* res;
   int err = _get(host.c_str(), port.c_str(), &hints, &res);
   if (err == 0) return res;
@@ -130,11 +132,11 @@ winsock::error::emsg()
  * Functions of the class winsock::tcpclient
  */
 winsock::tcpclient&
-winsock::tcpclient::connect(const string& host, const string& port)
+winsock::tcpclient::connect(const string& host, const string& port, int family)
 {
   shutdown();
   LOG("Connect: " << host << ":" << port << endl);
-  struct addrinfo* ai = getaddrinfo(host, port);
+  struct addrinfo* ai = getaddrinfo(host, port, family);
   for (struct addrinfo* p = ai; p; p = p->ai_next) {
     SOCKET s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (s == INVALID_SOCKET) continue;
