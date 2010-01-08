@@ -27,7 +27,8 @@ class winsock {
 public:
   winsock();
   ~winsock() { WSACleanup(); }
-  static struct addrinfo* getaddrinfo(const string& host, const string& port);
+  static struct addrinfo* getaddrinfo(const string& host, const string& port,
+				      int family = AF_UNSPEC);
   static void freeaddrinfo(struct addrinfo* info) { _free(info); }
 public:
   // tcp - TCP client socket
@@ -40,7 +41,7 @@ public:
     tcpclient& operator()(SOCKET s) { _socket = s; return *this; }
     SOCKET release() { SOCKET s = _socket; _socket = INVALID_SOCKET; return s; }
     operator SOCKET() const { return _socket; }
-    tcpclient& connect(const string& host, const string& port);
+    tcpclient& connect(const string& host, const string& port, int family = AF_UNSPEC);
     tcpclient& shutdown();
     size_t recv(char* buf, size_t size);
     size_t send(const char* data, size_t size);

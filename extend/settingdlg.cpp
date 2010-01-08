@@ -243,7 +243,7 @@ namespace {
     void done(bool ok);
     bool action(int id, int cmd);
     void _changeproto(unsigned i);
-    static string _encode(const string& s, bool path = false);
+    static string _encode(const string& s, const char* ex = "");
     static string _decode(const string& s);
   public:
     uridlg(const string& uri) : _uri(uri) {}
@@ -272,7 +272,7 @@ uridlg::initialize()
   string t(_uri, 0, min(_uri.find_first_of('?'), n));
   n = t.find("://");
   if (n != string::npos) {
-    string sc = _decode(t.substr(0, n));
+    string sc = t.substr(0, n);
     for (int i = 0; i < sizeof(_proto) / sizeof(_proto[0]); ++i) {
       if (sc == _proto[i].scheme) {
 	ComboBox_SetCurSel(item(IDC_COMBO_SCHEME), i);
@@ -314,19 +314,20 @@ uridlg::done(bool ok)
       }
     }
     string s = gettext(IDC_EDIT_USER);
-    if (!s.empty()) uri += _encode(s) + '@';
+    if (!s.empty()) uri += _encode(s, ":") + '@';
     s = gettext(IDC_EDIT_ADDRESS);
     if (s.empty()) {
       error(IDC_EDIT_ADDRESS, win32::instance.text(IDS_MSG_ITEM_REQUIRED));
     }
-    uri += _encode(s);
+    uri += *s.begin() == '[' && *s.rbegin() == ']' ?
+      '[' + _encode(s.substr(1, s.size() - 2), ":") + ']' : _encode(s);
     if (i >= sizeof(_proto) / sizeof(_proto[0]) ||
 	getint(IDC_EDIT_PORT) != _proto[i].port) {
       uri += ':' + gettext(IDC_EDIT_PORT);
     }
     s = gettext(IDC_EDIT_PATH);
     if (s.empty() || s[0] != '/') uri += '/';
-    uri += _encode(s, true);
+    uri += _encode(s, ":@/");
     if (recent) uri += "#recent";
     _uri = uri;
   }
@@ -358,15 +359,14 @@ uridlg::_changeproto(unsigned i)
 }
 
 string
-uridlg::_encode(const string& s, bool path)
+uridlg::_encode(const string& s, const char* ex)
 {
   string result;
-  int ps = path ? 0 : '/';
   string::size_type i = 0;
   while (i < s.size()) {
     const char* const t = s.c_str();
     const char* p = t + i;
-    while (*p > 32 && *p < 127 && *p != ps && !strchr(":?#[]@;%", *p)) ++p;
+    while (*p > 32 && *p < 127 && (!strchr(":/?#[]@%", *p) || strchr(ex, *p))) ++p;
     if (!*p) break;
     string::size_type n = p - t;
     result.append(s, i, n - i);
@@ -432,7 +432,7 @@ mailboxdlg::initialize()
     settext(IDC_COMBO_MUA, mua);
   }
   static const char* const uri[] = {
-    "imap+ssl://username@imap.gmail.com/",
+    "imap+ssl://username%40domain@imap.gmail.com/",
     "pop+ssl://username@pop3.live.com/"
   };
   for (int i = 0; i < sizeof(uri) / sizeof(uri[0]); ++i) {

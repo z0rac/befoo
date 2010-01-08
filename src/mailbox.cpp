@@ -419,15 +419,14 @@ mailbox::backend::write(const string& data)
  * Functions of the class uri
  */
 string
-uri::_encode(const string& s, bool path)
+uri::_encode(const string& s, const char* ex)
 {
   string result;
-  int ps = path ? 0 : '/';
   string::size_type i = 0;
   while (i < s.size()) {
     const char* const t = s.c_str();
     const char* p = t + i;
-    while (*p > 32 && *p < 127 && *p != ps && !strchr(":?#[]@;%", *p)) ++p;
+    while (*p > 32 && *p < 127 && (!strchr(":/?#[]@%", *p) || strchr(ex, *p))) ++p;
     if (!*p) break;
     string::size_type n = p - t;
     result.append(s, i, n - i);
@@ -490,12 +489,16 @@ uri::parse(const string& uri)
   }
   _part[host] = _decode(t);
 
-  _uri = _encode(_part[scheme]) + "://";
-  if (!_part[user].empty()) _uri += _encode(_part[user]) + '@';
-  _uri += _encode(_part[host]);
-  if (!_part[port].empty()) _uri += ':' + _encode(_part[port]);
-  _uri += '/' + _encode(_part[path], true);
-  if (!_part[fragment].empty()) _uri += '#' + _encode(_part[fragment]);
+  _uri = _part[scheme] + "://";
+  if (!_part[user].empty()) _uri += _encode(_part[user], ":") + '@';
+  if (!_part[host].empty()) {
+    const string& s = _part[host];
+    _uri += *s.begin() == '[' && *s.rbegin() == ']' ?
+      '[' + _encode(s.substr(1, s.size() - 2), ":") + ']' : _encode(s);
+  }
+  if (!_part[port].empty()) _uri += ':' + _part[port];
+  _uri += '/' + _encode(_part[path], ":@/");
+  if (!_part[fragment].empty()) _uri += '#' + _encode(_part[fragment], ":@/?");
 }
 
 /*
