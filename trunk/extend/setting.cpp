@@ -154,11 +154,11 @@ setting::cipher(_str key, const string& value)
   seed.r = short(unsigned(value.data()) + time(NULL));
   string e = string(seed.s, 2) + value;
   for (string::size_type i = e.size(); i-- > 2;) e[i] ^= e[i & 1];
-  string s(1, '\x7f');
+  string s(e.size() * 2 + 1, '\x7f');
   unsigned d = 0;
-  for (const char* p = e.c_str(); *p; ++p) {
-    s += code64[(((*p >> 4) & 15) + d) & 63];
-    s += code64[((*p & 15) + d + 5) & 63];
+  for (string::size_type i = 0; i < e.size(); ++i) {
+    s[i * 2 + 1] = code64[(((e[i] >> 4) & 15) + d) & 63];
+    s[i * 2 + 2] = code64[((e[i] & 15) + d + 5) & 63];
     d += 11;
   }
   _rep->put(key, s.c_str());
