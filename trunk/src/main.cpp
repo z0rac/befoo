@@ -97,8 +97,11 @@ model::_load()
     setting s = setting::mailbox(name);
     mbox* mb = new mbox(name);
     auto_ptr<mbox> hold(mb);
+    int ip;
+    s["ip"](ip = 0);
+    mb->uripasswd(s["uri"], s.cipher("passwd"),
+		  ip == 4 ? AF_INET : ip == 6 ? AF_INET6 : AF_UNSPEC);
     int period;
-    mb->uripasswd(s["uri"], s.cipher("passwd"));
     s["period"](period = 15);
     s["sound"].sep(0)(mb->sound);
     mb->period = period > 0 ? period * 60000U : 0;

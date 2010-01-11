@@ -27,7 +27,7 @@ namespace {
     winsock::tcpclient _socket;
   public:
     ~tcpstream() { _socket.shutdown(); }
-    void open(const string& host, const string& port);
+    void open(const string& host, const string& port, int family);
     void close();
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
@@ -37,10 +37,10 @@ namespace {
 }
 
 void
-tcpstream::open(const string& host, const string& port)
+tcpstream::open(const string& host, const string& port, int family)
 {
   assert(_socket == INVALID_SOCKET);
-  _socket.connect(host, port).timeout(TCP_TIMEOUT);
+  _socket.connect(host, port, family).timeout(TCP_TIMEOUT);
 }
 
 void
@@ -115,7 +115,7 @@ namespace {
     sslstream();
     ~sslstream();
     void open(SOCKET socket);
-    void open(const string& host, const string& port);
+    void open(const string& host, const string& port, int family);
     void close();
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
@@ -206,10 +206,10 @@ sslstream::open(SOCKET socket)
 }
 
 void
-sslstream::open(const string& host, const string& port)
+sslstream::open(const string& host, const string& port, int family)
 {
   assert(_socket == INVALID_SOCKET);
-  _socket.connect(host, port).timeout(TCP_TIMEOUT);
+  _socket.connect(host, port, family).timeout(TCP_TIMEOUT);
   _connect();
 }
 
@@ -264,7 +264,7 @@ namespace {
     tls _tls;
   public:
     void open(SOCKET socket);
-    void open(const string& host, const string& port);
+    void open(const string& host, const string& port, int family);
     void close();
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
@@ -304,10 +304,10 @@ sslstream::open(SOCKET socket)
 }
 
 void
-sslstream::open(const string& host, const string& port)
+sslstream::open(const string& host, const string& port, int family)
 {
   assert(_tls.socket == INVALID_SOCKET);
-  _tls.socket.connect(host, port).timeout(-1); // non-blocking
+  _tls.socket.connect(host, port, family).timeout(-1); // non-blocking
   _tls.connect();
 }
 
@@ -350,17 +350,17 @@ tcpstream::starttls()
  * Functions of the class mailbox::backend
  */
 void
-mailbox::backend::tcp(const string& host, const string& port)
+mailbox::backend::tcp(const string& host, const string& port, int family)
 {
   _st.reset(new tcpstream);
-  _st->open(host, port);
+  _st->open(host, port, family);
 }
 
 void
-mailbox::backend::ssl(const string& host, const string& port)
+mailbox::backend::ssl(const string& host, const string& port, int family)
 {
   _st.reset(new sslstream);
-  _st->open(host, port);
+  _st->open(host, port, family);
 }
 
 void
@@ -505,10 +505,11 @@ uri::parse(const string& uri)
  * Functions of the class mailbox
  */
 void
-mailbox::uripasswd(const string& uri, const string& passwd)
+mailbox::uripasswd(const string& uri, const string& passwd, int af)
 {
   _uri.parse(uri);
   _passwd = passwd;
+  _af = af;
 }
 
 const mail*
@@ -524,14 +525,14 @@ mailbox::find(const string& uid) const
 void
 mailbox::fetchmail()
 {
-  extern backend* imap4tcp(const string&, const string&);
-  extern backend* imap4ssl(const string&, const string&);
-  extern backend* pop3tcp(const string&, const string&);
-  extern backend* pop3ssl(const string&, const string&);
+  extern backend* imap4tcp(const string&, const string&, int);
+  extern backend* imap4ssl(const string&, const string&, int);
+  extern backend* pop3tcp(const string&, const string&, int);
+  extern backend* pop3ssl(const string&, const string&, int);
 
   static const struct {
     const char* scheme;
-    backend* (*make)(const string&, const string&);
+    backend* (*make)(const string&, const string&, int);
   } backends[] = {
     { "imap", imap4tcp },
     { "imap+ssl", imap4ssl },
@@ -543,7 +544,7 @@ mailbox::fetchmail()
   auto_ptr<backend> be;
   for (int i = 0; i < int(sizeof(backends) / sizeof(*backends)); ++i) {
     if (_uri[uri::scheme] == backends[i].scheme) {
-      be.reset(backends[i].make(_uri[uri::host], _uri[uri::port]));
+      be.reset(backends[i].make(_uri[uri::host], _uri[uri::port], _af));
       break;
     }
   }

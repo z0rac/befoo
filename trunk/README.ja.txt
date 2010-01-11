@@ -29,6 +29,7 @@ passwd=パスワード	; 後で暗号化されます。
 sound=MailBeep		; サウンド名かWAVEファイルのパス。
 			; (デフォルト:着信音なし)
 period=10		; 分単位のメール確認間隔。(デフォルト:15分)
+ip=6			; IPバージョン。(デフォルト:0=指定なし)
 
 [SSLを使用]
 uri=imap+ssl://username@mail.example.com/

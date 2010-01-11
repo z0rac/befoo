@@ -418,6 +418,7 @@ namespace {
 void
 mailboxdlg::initialize()
 {
+  int ip = 0;
   int fetch = 15;
   string sound;
   if (!_name.empty()) {
@@ -425,6 +426,7 @@ mailboxdlg::initialize()
     setting s = setting::mailbox(_name);
     settext(IDC_COMBO_SERVER, s["uri"]);
     settext(IDC_EDIT_PASSWD, s.cipher("passwd"));
+    s["ip"](ip);
     s["period"](fetch);
     s["sound"].sep(0)(sound);
     string mua;
@@ -438,6 +440,11 @@ mailboxdlg::initialize()
   for (int i = 0; i < sizeof(uri) / sizeof(uri[0]); ++i) {
     ComboBox_InsertString(item(IDC_COMBO_SERVER), -1, uri[i]);
   }
+  list<string> ipvs(win32::instance.texts(IDS_LIST_IP_VERSION));
+  for (list<string>::iterator p = ipvs.begin(); p != ipvs.end(); ++p) {
+    ComboBox_AddString(item(IDC_COMBO_IP_VERSION), p->c_str());
+  }
+  ComboBox_SetCurSel(item(IDC_COMBO_IP_VERSION), ip == 4 ? 1 : ip == 6 ? 2 : 0);
   setspin(IDC_SPIN_FETCH, fetch);
   settext(IDC_COMBO_SOUND, _sound(sound));
   for (map<string, string>::iterator p = _snd.begin(); p != _snd.end(); ++p) {
@@ -483,6 +490,7 @@ mailboxdlg::done(bool ok)
     }
     s("uri", uri);
     s.cipher("passwd", gettext(IDC_EDIT_PASSWD));
+    s("ip", "\0\4\6"[max(ComboBox_GetCurSel(item(IDC_COMBO_IP_VERSION)), 0)]);
     s("period", setting::tuple(getint(IDC_EDIT_FETCH)));
     string st;
     st = gettext(IDC_COMBO_SOUND);
