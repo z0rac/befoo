@@ -36,6 +36,7 @@
 #define IDC_BUTTON_PLAY                         1008
 #define IDC_COMBO_MUA                           1009
 #define IDC_BUTTON_MUA                          1010
+#define IDC_COMBO_IP_VERSION			1011
 
 #define IDD_URI                                 102
 #define IDC_COMBO_SCHEME                        1000
@@ -52,3 +53,4 @@
 #define IDS_MSG_ITEM_REQUIRED                   40003
 #define IDS_MSG_INVALID_CHAR                    40004
 #define IDS_MSG_NAME_EXISTS                     40005
+#define IDS_LIST_IP_VERSION			40006

@@ -27,6 +27,7 @@ passwd=your password	; It will be coded later.
 sound=MailBeep		; A sound alias or path to a wave file.
 			; (default: No sound)
 period=10		; A fetching period in minutes. (default: 15)
+ip=6			; IP version. (default: 0 meaning "unspecified")
 
 [another over SSL]
 uri=imap+ssl://username@imap.example.com/
