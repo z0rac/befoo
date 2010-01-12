@@ -321,17 +321,17 @@ imap4::parser::token(bool open)
 }
 
 mailbox::backend*
-imap4tcp(const string& host, const string& port, int family)
+imap4tcp(const string& host, const string& port, int domain)
 {
   auto_ptr<mailbox::backend> be(new imap4);
-  be->tcp(host, port.empty() ? "143" : port, family);
+  be->tcp(host, port.empty() ? "143" : port, domain);
   return be.release();
 }
 
 mailbox::backend*
-imap4ssl(const string& host, const string& port, int family)
+imap4ssl(const string& host, const string& port, int domain)
 {
   auto_ptr<mailbox::backend> be(new imap4);
-  be->ssl(host, port.empty() ? "993" : port, family);
+  be->ssl(host, port.empty() ? "993" : port, domain);
   return be.release();
 }
