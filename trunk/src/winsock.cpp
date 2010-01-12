@@ -111,9 +111,9 @@ winsock::winsock()
 }
 
 struct addrinfo*
-winsock::getaddrinfo(const string& host, const string& port, int family)
+winsock::getaddrinfo(const string& host, const string& port, int domain)
 {
-  struct addrinfo hints = { 0, family, SOCK_STREAM };
+  struct addrinfo hints = { 0, domain, SOCK_STREAM };
   struct addrinfo* res;
   int err = _get(host.c_str(), port.c_str(), &hints, &res);
   if (err == 0) return res;
@@ -132,11 +132,11 @@ winsock::error::emsg()
  * Functions of the class winsock::tcpclient
  */
 winsock::tcpclient&
-winsock::tcpclient::connect(const string& host, const string& port, int family)
+winsock::tcpclient::connect(const string& host, const string& port, int domain)
 {
   shutdown();
   LOG("Connect: " << host << ":" << port << endl);
-  struct addrinfo* ai = getaddrinfo(host, port, family);
+  struct addrinfo* ai = getaddrinfo(host, port, domain);
   for (struct addrinfo* p = ai; p; p = p->ai_next) {
     SOCKET s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (s == INVALID_SOCKET) continue;

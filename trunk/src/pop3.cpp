@@ -164,17 +164,17 @@ pop3::_headers()
 }
 
 mailbox::backend*
-pop3tcp(const string& host, const string& port, int family)
+pop3tcp(const string& host, const string& port, int domain)
 {
   auto_ptr<mailbox::backend> be(new pop3);
-  be->tcp(host, port.empty() ? "110" : port, family);
+  be->tcp(host, port.empty() ? "110" : port, domain);
   return be.release();
 }
 
 mailbox::backend*
-pop3ssl(const string& host, const string& port, int family)
+pop3ssl(const string& host, const string& port, int domain)
 {
   auto_ptr<mailbox::backend> be(new pop3);
-  be->ssl(host, port.empty() ? "995" : port, family);
+  be->ssl(host, port.empty() ? "995" : port, domain);
   return be.release();
 }

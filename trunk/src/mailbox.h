@@ -97,20 +97,20 @@ class mailbox {
   string _name;
   uri _uri;
   string _passwd;
-  int _af;
+  int _domain;
   list<mail> _mails;
   int _recent;
   list<string> _ignore;
 public:
   mailbox(const string& name = string())
-    : _next(NULL), _name(name), _af(0), _recent(0) {}
+    : _next(NULL), _name(name), _domain(0), _recent(0) {}
   virtual ~mailbox() {}
   const mailbox* next() const { return _next; }
   mailbox* next() { return _next; }
   mailbox* next(mailbox* next) { return _next = next; }
   const string& name() const { return _name; }
   string uristr() const { return _uri; }
-  void uripasswd(const string& uri, const string& passwd, int af);
+  void uripasswd(const string& uri, const string& passwd, int domain);
   const list<mail>& mails() const { return _mails; }
   const list<mail>& mails(const list<mail>& mails)
   { return _mails = mails; }
@@ -125,7 +125,7 @@ public:
     class _stream {
     public:
       virtual ~_stream() {}
-      virtual void open(const string& host, const string& port, int family) = 0;
+      virtual void open(const string& host, const string& port, int domain) = 0;
       virtual void close() = 0;
       virtual size_t read(char* buf, size_t size) = 0;
       virtual size_t write(const char* data, size_t size) = 0;
@@ -143,8 +143,8 @@ public:
   public:
     typedef _stream stream;
     virtual ~backend() {}
-    void tcp(const string& host, const string& port, int family);
-    void ssl(const string& host, const string& port, int family);
+    void tcp(const string& host, const string& port, int domain);
+    void ssl(const string& host, const string& port, int domain);
     virtual void login(const string& user, const string& passwd) = 0;
     virtual void logout() = 0;
     virtual int fetch(mailbox& mbox, const uri& uri) = 0;
