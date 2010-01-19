@@ -1,6 +1,6 @@
 #ifndef H_MAILBOX /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -80,16 +80,16 @@ public:
 };
 
 class uri {
-  string _uri;
+  string _part[6];
   static string _encode(const string& s, const char* ex = "");
   static string _decode(const string& s);
 public:
-  operator const string&() const { return _uri; }
+  uri() {}
+  uri(const string& uri);
+  operator string() const;
+  string& operator[](int i) { return _part[i]; }
   const string& operator[](int i) const { return _part[i]; }
-  void parse(const string& uri);
   enum { scheme, user, host, port, path, fragment };
-private:
-  string _part[fragment + 1];
 };
 
 class mailbox {
