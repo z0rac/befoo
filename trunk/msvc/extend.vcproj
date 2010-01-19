@@ -41,6 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
+				AdditionalIncludeDirectories="..\src"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;EXTEND_EXPORTS;ISOLATION_AWARE_ENABLED=1;_CRT_SECURE_NO_WARNINGS=1"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -120,6 +121,7 @@
 				Optimization="1"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
+				AdditionalIncludeDirectories="..\src"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;EXTEND_EXPORTS;ISOLATION_AWARE_ENABLED=1;_CRT_SECURE_NO_WARNINGS=1"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="false"
@@ -186,7 +188,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\extend\setting.cpp"
+				RelativePath="..\src\setting.cpp"
 				>
 			</File>
 			<File
@@ -194,7 +196,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\extend\win32.cpp"
+				RelativePath="..\src\uri.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\src\win32.cpp"
 				>
 			</File>
 		</Filter>
@@ -208,15 +214,15 @@
 				>
 			</File>
 			<File
-				RelativePath="..\extend\resource.h"
+				RelativePath="..\src\mailbox.h"
 				>
 			</File>
 			<File
-				RelativePath="..\extend\setting.h"
+				RelativePath="..\src\setting.h"
 				>
 			</File>
 			<File
-				RelativePath="..\extend\win32.h"
+				RelativePath="..\src\win32.h"
 				>
 			</File>
 		</Filter>

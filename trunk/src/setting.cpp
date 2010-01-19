@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -9,9 +9,6 @@
 #include "win32.h"
 #include <cassert>
 #include <ctime>
-#include <imagehlp.h>
-#include <shlobj.h>
-#include <shlwapi.h>
 
 #ifdef _DEBUG
 #include <iostream>
@@ -22,112 +19,14 @@
 #define LOG(s)
 #endif
 
-#define INI_FILE APP_NAME ".ini"
-
-/** profile - implement for setting::repository.
- * This is using Windows API for .INI file.
+/*
+ * Functions of class setting::_repository
  */
-namespace {
-  class profile : public setting::repository {
-    static string _path;
-    string _section;
-    static bool _appendix(const char* file, char* path);
-    static bool _prepare();
-    static string _get(const char* section, const char* key);
-  public:
-    profile(const string& section) : _section(section) {}
-    string get(const char* key) const;
-    void put(const char* key, const char* value);
-    static string sections() { return _get(NULL, NULL); }
-    static bool edit();
-  };
-  string profile::_path;
-}
+static setting::repository* _rep = NULL;
 
-bool
-profile::_appendix(const char* file, char* path)
+setting::_repository::_repository()
 {
-  return GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
-    PathRemoveFileSpec(path) && PathAppend(path, file) &&
-    PathFileExists(path);
-}
-
-bool
-profile::_prepare()
-{
-  if (_path.empty()) {
-    char path[MAX_PATH];
-    if (_appendix(INI_FILE, path) ||
-	SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
-			NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
-	PathAppend(path, APP_NAME "\\" INI_FILE) &&
-	MakeSureDirectoryPathExists(path)) {
-      LOG("Using the setting file: " << path << endl);
-      _path = path;
-      HANDLE h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, 0,
-			    NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-      if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-    } else {
-      _path = "*";
-    }
-  }
-  return _path[0] != '*';
-}
-
-string
-profile::_get(const char* section, const char* key)
-{
-  return _prepare() ?
-    win32::profile(section, key, _path.c_str()) : string();
-}
-
-string
-profile::get(const char* key) const
-{
-  return _get(_section.c_str(), key);
-}
-
-void
-profile::put(const char* key, const char* value)
-{
-  if (_prepare()) {
-    string tmp;
-    if (value && value[0] == '"' && value[strlen(value) - 1] == '"') {
-      tmp = '"' + string(value) + '"';
-      value = tmp.c_str();
-    }
-    WritePrivateProfileString(_section.c_str(), key, value, _path.c_str());
-  }
-}
-
-bool
-profile::edit()
-{
-  if (!_prepare()) return false;
-
-  WritePrivateProfileString(NULL, NULL, NULL, _path.c_str()); // flush entries.
-  HANDLE fh = CreateFile(_path.c_str(), GENERIC_READ,
-			 FILE_SHARE_READ | FILE_SHARE_WRITE,
-			 NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (fh == INVALID_HANDLE_VALUE) throw win32::error();
-
-  FILETIME before = { 0 };
-  GetFileTime(fh, NULL, NULL, &before);
-  FILETIME after = before;
-  char s[MAX_PATH];
-  HANDLE h = win32::shell(_appendix("extend.dll", s) &&
-			  GetShortPathName(s, s, sizeof(s)) < sizeof(s) ?
-			  string("rundll32.exe ") + s + ",settingdlg " + _path :
-			  '"' + _path + '"',
-			  SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
-  if (h) {
-    WaitForSingleObject(h, INFINITE);
-    CloseHandle(h);
-    GetFileTime(fh, NULL, NULL, &after);
-  }
-  CloseHandle(fh);
-
-  return CompareFileTime(&before, &after) != 0;
+  _rep = this;
 }
 
 /*
@@ -137,61 +36,59 @@ setting
 setting::preferences()
 {
   // "(preferences)" is the special section name.
-  return new profile("(preferences)");
+  return _rep->storage("(preferences)");
 }
 
 setting
-setting::preferences(const char* name)
+setting::preferences(_str name)
 {
+  assert(_rep);
   assert(name && name[0]);
-  return new profile(string("(") + name + ")");
+  return _rep->storage('(' + string(name) + ')');
 }
 
 list<string>
 setting::mailboxes()
 {
-  list<string> sect(manip(profile::sections()).sep(0).split());
-  for (list<string>::iterator p = sect.begin(); p != sect.end();) {
+  assert(_rep);
+  list<string> st(_rep->storages());
+  for (list<string>::iterator p = st.begin(); p != st.end();) {
     // skip sections matched with the pattern "(.*)".
-    p =  p->empty() || (*p)[0] == '(' && *p->rbegin() == ')' ? sect.erase(p) : ++p;
+    p =  p->empty() || (*p)[0] == '(' && *p->rbegin() == ')' ? st.erase(p) : ++p;
   }
-  return sect;
+  return st;
 }
 
 setting
 setting::mailbox(const string& id)
 {
-  return new profile(id);
-}
-
-bool
-setting::edit()
-{
-  LOG("Edit setting." << endl);
-  return profile::edit();
+  assert(_rep);
+  return _rep->storage(id);
 }
 
 list<string>
-setting::cache(_str key)
+setting::cache(const string& key)
 {
+  assert(_rep);
   list<string> result;
-  profile cache(string("(cache:") + key.c_str + ")");
-  list<string> keys(manip(cache.get(NULL)).sep(0).split());
+  auto_ptr<storage> cache(_rep->storage("(cache:" + key + ')'));
+  list<string> keys(cache->keys());
   for (list<string>::iterator p = keys.begin(); p != keys.end(); ++p) {
-    result.push_back(cache.get(p->c_str()));
+    result.push_back(cache->get(p->c_str()));
   }
   return result;
 }
 
 void
-setting::cache(_str key, const list<string>& data)
+setting::cache(const string& key, const list<string>& data)
 {
+  assert(_rep);
   if (!data.empty()) {
-    profile cache(string("(cache:") + key.c_str + ")");
+    auto_ptr<storage> cache(_rep->storage("(cache:" + key + ')'));
     long i = 0;
     for (list<string>::const_iterator p = data.begin(); p != data.end(); ++p) {
       char s[35];
-      cache.put(_ltoa(++i, s, 10), p->c_str());
+      cache->put(_ltoa(++i, s, 10), p->c_str());
     }
   }
 }
@@ -199,10 +96,11 @@ setting::cache(_str key, const list<string>& data)
 void
 setting::cacheclear()
 {
-  list<string> sect(manip(profile::sections()).sep(0).split());
-  for (list<string>::iterator p = sect.begin(); p != sect.end(); ++p) {
+  assert(_rep);
+  list<string> rep(_rep->storages());
+  for (list<string>::iterator p = rep.begin(); p != rep.end(); ++p) {
     if (!p->empty() && *p->rbegin() == ')' && p->find("(cache:") == 0) {
-      profile(*p).put(NULL, NULL);
+      _rep->erase(*p);
     }
   }
 }
@@ -213,7 +111,7 @@ static const char code64[] =
 string
 setting::cipher(_str key)
 {
-  string s = _rep->get(key);
+  string s = _st->get(key);
   if (!s.empty()) {
     if (s[0] == '\x7f') {
       if (s.size() < 5 || (s.size() & 1) == 0) return string();
@@ -252,7 +150,7 @@ setting::cipher(_str key, const string& value)
     s[i * 2 + 2] = code64[((e[i] & 15) + d + 5) & 63];
     d += 11;
   }
-  _rep->put(key, s.c_str());
+  _st->put(key, s.c_str());
   return *this;
 }
 
@@ -315,4 +213,79 @@ setting::manip::split()
   list<string> result;
   while (avail()) result.push_back(win32::xenv(next()));
   return result;
+}
+
+/** section - implement for setting::storage.
+ * This is using Windows API for .INI file.
+ */
+namespace {
+  class section : public setting::storage {
+    string _section;
+    const char* _path;
+  public:
+    section(const string& section, const char* path)
+      : _section(section), _path(path) {}
+    string get(const char* key) const;
+    void put(const char* key, const char* value);
+    void erase(const char* key);
+    list<string> keys() const;
+  };
+}
+
+string
+section::get(const char* key) const
+{
+  return _path ? win32::profile(_section.c_str(), key, _path) : string();
+}
+
+void
+section::put(const char* key, const char* value)
+{
+  if (_path) {
+    string tmp;
+    if (value && value[0] == '"' && value[strlen(value) - 1] == '"') {
+      tmp = '"' + string(value) + '"';
+      value = tmp.c_str();
+    }
+    WritePrivateProfileString(_section.c_str(), key, value, _path);
+  }
+}
+
+void
+section::erase(const char* key)
+{
+  if (_path) WritePrivateProfileString(_section.c_str(), key, NULL, _path);
+}
+
+list<string>
+section::keys() const
+{
+  return setting::manip(get(NULL)).sep(0).split();
+}
+
+/*
+ * Functions of class profile
+ */
+profile::~profile()
+{
+  if (_path) WritePrivateProfileString(NULL, NULL, NULL, _path);
+}
+
+setting::storage*
+profile::storage(const string& name) const
+{
+  return new section(name, _path);
+}
+
+list<string>
+profile::storages() const
+{
+  return !_path ? list<string>() :
+    setting::manip(win32::profile(NULL, NULL, _path)).sep(0).split();
+}
+
+void
+profile::erase(const string& name)
+{
+  if (_path) WritePrivateProfileString(name.c_str(), NULL, NULL, _path);
 }

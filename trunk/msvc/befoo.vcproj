@@ -220,6 +220,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\src\uri.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\src\win32.cpp"
 				>
 			</File>

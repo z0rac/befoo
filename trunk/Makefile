@@ -7,17 +7,26 @@
 NAME = befoo
 SRCDIR = src
 EXTDIR = extend
+TARGETS = $(NAME).exe extend.dll
 
-all:	$(NAME).exe extend.dll
+all: $(TARGETS)
 
 $(NAME).exe:
-	$(MAKE) -C $(SRCDIR)
-	mv $(SRCDIR)/$(NAME).exe .
+	@$(MAKE) -C $(SRCDIR)
+	@mv $(SRCDIR)/$@ .
 
 extend.dll:
-	$(MAKE) -C $(EXTDIR)
-	mv $(EXTDIR)/extend.dll .
+	@$(MAKE) -C $(EXTDIR)
+	@mv $(EXTDIR)/$@ .
 
-clean:
-	$(MAKE) -C $(SRCDIR) clean
-	$(MAKE) -C $(EXTDIR) clean
+clean: mostlyclean
+	@$(MAKE) -C $(SRCDIR) $@
+	@$(MAKE) -C $(EXTDIR) $@
+
+distclean: mostlyclean
+	@$(RM) *~
+	@$(MAKE) -C $(SRCDIR) $@
+	@$(MAKE) -C $(EXTDIR) $@
+
+mostlyclean:
+	@$(RM) $(TARGETS)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -7,11 +7,14 @@
 #include "define.h"
 #include "win32.h"
 #include "setting.h"
+#include "mailbox.h"
 #include <cassert>
 #include <map>
 #include <windowsx.h>
 #include <commctrl.h>
 #include <shlwapi.h>
+
+namespace extend { extern win32::module dll; }
 
 /** dialog - base dialog class
  */
@@ -123,7 +126,7 @@ dialog::getfile(int filter, bool quote, const string& dir) const
   char fn[MAX_PATH] = "";
   OPENFILENAME ofn = { sizeof(OPENFILENAME) };
   ofn.hwndOwner = _hwnd;
-  string fs = win32::instance.text(filter);
+  string fs = extend::dll.text(filter);
   if (fs.size() > 1) {
     string::reverse_iterator p = fs.rbegin();
     for (char delim = *p; p != fs.rend(); ++p) {
@@ -188,7 +191,7 @@ dialog::balloon(int id, const string& msg) const
 			 WS_POPUP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE,
 			 CW_USEDEFAULT, CW_USEDEFAULT,
 			 CW_USEDEFAULT, CW_USEDEFAULT,
-			 _hwnd, NULL, win32::instance, NULL);
+			 _hwnd, NULL, extend::dll, NULL);
     if (_tips) SendMessage(_tips, TTM_ADDTOOL, 0, LPARAM(&ti));
   }
   if (_tips) {
@@ -225,7 +228,7 @@ dialog::error(int id, const string& msg, int start, int end) const
 int
 dialog::modal(int id, HWND parent)
 {
-  return DialogBoxParam(win32::instance, MAKEINTRESOURCE(id),
+  return DialogBoxParam(extend::dll, MAKEINTRESOURCE(id),
 			parent, &_dlgproc, LPARAM(this));
 }
 
@@ -238,16 +241,14 @@ namespace {
       int port;
     };
     static const proto _proto[];
-    string _uri;
+    ::uri _uri;
     void initialize();
     void done(bool ok);
     bool action(int id, int cmd);
     void _changeproto(unsigned i);
-    static string _encode(const string& s, const char* ex = "");
-    static string _decode(const string& s);
   public:
     uridlg(const string& uri) : _uri(uri) {}
-    const string& uri() const { return _uri; }
+    string uri() const { return _uri; }
   };
   const uridlg::proto uridlg::_proto[] = {
     { "imap", 143 }, { "imap+ssl", 993 },
@@ -264,72 +265,35 @@ uridlg::initialize()
   ComboBox_SetCurSel(item(IDC_COMBO_SCHEME), 0);
   _changeproto(0);
 
-  bool recent = false;
-  string::size_type n = _uri.find_first_of('#');
-  if (n != string::npos) {
-    recent = _decode(_uri.substr(n + 1)) == "recent";
-  }
-  string t(_uri, 0, min(_uri.find_first_of('?'), n));
-  n = t.find("://");
-  if (n != string::npos) {
-    string sc = t.substr(0, n);
-    for (int i = 0; i < sizeof(_proto) / sizeof(_proto[0]); ++i) {
-      if (sc == _proto[i].scheme) {
-	ComboBox_SetCurSel(item(IDC_COMBO_SCHEME), i);
-	_changeproto(i);
-	break;
-      }
+  for (int i = 0; i < sizeof(_proto) / sizeof(_proto[0]); ++i) {
+    if (_uri[uri::scheme] == _proto[i].scheme) {
+      ComboBox_SetCurSel(item(IDC_COMBO_SCHEME), i);
+      _changeproto(i);
+      break;
     }
-    t.erase(0, n + 3);
   }
-  n = t.find_first_of('/');
-  if (n != string::npos) {
-    settext(IDC_EDIT_PATH, _decode(t.substr(n + 1)));
-    t.erase(n);
-  }
-  n = t.find_first_of('@');
-  if (n != string::npos) {
-    settext(IDC_EDIT_USER, _decode(t.substr(0, min(t.find_first_of(';'), n))));
-    t.erase(0, n + 1);
-  }
-  n = t.find_last_not_of("0123456789");
-  if (n != string::npos && t[n] == ':') {
-    settext(IDC_EDIT_PORT, t.substr(n + 1));
-    t.erase(n);
-  }
-  settext(IDC_EDIT_ADDRESS, _decode(t));
+  settext(IDC_EDIT_USER, _uri[uri::user]);
+  settext(IDC_EDIT_ADDRESS, _uri[uri::host]);
+  if (!_uri[uri::port].empty()) settext(IDC_EDIT_PORT, _uri[uri::port]);
+  settext(IDC_EDIT_PATH, _uri[uri::path]);
+  Button_SetCheck(item(IDC_CHECKBOX_RECENT), _uri[uri::fragment] == "recent");
 }
 
 void
 uridlg::done(bool ok)
 {
   if (ok) {
-    string uri;
-    bool recent = false;
+    _uri[uri::user] = gettext(IDC_EDIT_USER);
+    _uri[uri::host] = gettext(IDC_EDIT_ADDRESS);
+    _uri[uri::port] = gettext(IDC_EDIT_PORT);
+    _uri[uri::path] = gettext(IDC_EDIT_PATH);
     unsigned i = ComboBox_GetCurSel(item(IDC_COMBO_SCHEME));
     if (i < sizeof(_proto) / sizeof(_proto[0])) {
-      uri = string(_proto[i].scheme) + "://";
-      if (i > 1) {
-	recent = Button_GetCheck(item(IDC_CHECKBOX_RECENT)) != 0;
-      }
+      _uri[uri::scheme] = _proto[i].scheme;
+      if (getint(IDC_EDIT_PORT) == _proto[i].port) _uri[uri::port].clear();
+      _uri[uri::fragment] =
+	i > 1 && Button_GetCheck(item(IDC_CHECKBOX_RECENT)) != 0 ? "recent" : "";
     }
-    string s = gettext(IDC_EDIT_USER);
-    if (!s.empty()) uri += _encode(s, ":") + '@';
-    s = gettext(IDC_EDIT_ADDRESS);
-    if (s.empty()) {
-      error(IDC_EDIT_ADDRESS, win32::instance.text(IDS_MSG_ITEM_REQUIRED));
-    }
-    uri += *s.begin() == '[' && *s.rbegin() == ']' ?
-      '[' + _encode(s.substr(1, s.size() - 2), ":") + ']' : _encode(s);
-    if (i >= sizeof(_proto) / sizeof(_proto[0]) ||
-	getint(IDC_EDIT_PORT) != _proto[i].port) {
-      uri += ':' + gettext(IDC_EDIT_PORT);
-    }
-    s = gettext(IDC_EDIT_PATH);
-    if (s.empty() || s[0] != '/') uri += '/';
-    uri += _encode(s, ":@/");
-    if (recent) uri += "#recent";
-    _uri = uri;
   }
   dialog::done(ok);
 }
@@ -356,46 +320,6 @@ uridlg::_changeproto(unsigned i)
     recent = i > 1;
   }
   enable(IDC_CHECKBOX_RECENT, recent);
-}
-
-string
-uridlg::_encode(const string& s, const char* ex)
-{
-  string result;
-  string::size_type i = 0;
-  while (i < s.size()) {
-    const char* const t = s.c_str();
-    const char* p = t + i;
-    while (*p > 32 && *p < 127 && (!strchr(":/?#[]@%", *p) || strchr(ex, *p))) ++p;
-    if (!*p) break;
-    string::size_type n = p - t;
-    result.append(s, i, n - i);
-    char hex[4] = { '%' };
-    _ltoa(s[n] & 255, hex + 1, 16);
-    result.append(hex);
-    i = n + 1;
-  }
-  if (i < s.size()) result.append(s.c_str() + i);
-  return result;
-}
-
-string
-uridlg::_decode(const string& s)
-{
-  string result;
-  string::size_type i = 0;
-  while (i < s.size()) {
-    string::size_type n = s.find_first_of('%', i);
-    if (n == string::npos || s.size() - n < 3) break;
-    result.append(s, i, n - i);
-    char hex[3] = { s[n + 1], s[n + 2] };
-    char* e;
-    char c = char(strtoul(hex, &e, 16));
-    i = n + (*e ? (c = '%', 1) : 3);
-    result.push_back(c);
-  }
-  if (i < s.size()) result.append(s.c_str() + i);
-  return result;
 }
 
 /** mailboxdlg - dialog that manipulate mailbox 
@@ -440,7 +364,7 @@ mailboxdlg::initialize()
   for (int i = 0; i < sizeof(uri) / sizeof(uri[0]); ++i) {
     ComboBox_InsertString(item(IDC_COMBO_SERVER), -1, uri[i]);
   }
-  list<string> ipvs(win32::instance.texts(IDS_LIST_IP_VERSION));
+  list<string> ipvs(extend::dll.texts(IDS_LIST_IP_VERSION));
   for (list<string>::iterator p = ipvs.begin(); p != ipvs.end(); ++p) {
     ComboBox_AddString(item(IDC_COMBO_IP_VERSION), p->c_str());
   }
@@ -467,26 +391,26 @@ mailboxdlg::done(bool ok)
   if (ok) {
     string name = gettext(IDC_EDIT_NAME);
     if (name.empty()) {
-      error(IDC_EDIT_NAME, win32::instance.text(IDS_MSG_ITEM_REQUIRED));
+      error(IDC_EDIT_NAME, extend::dll.text(IDS_MSG_ITEM_REQUIRED));
     }
     if (name[0] == '(' && *name.rbegin() == ')') {
-      error(IDC_EDIT_NAME, win32::instance.text(IDS_MSG_INVALID_CHAR), 0, 1);
+      error(IDC_EDIT_NAME, extend::dll.text(IDS_MSG_INVALID_CHAR), 0, 1);
     }
     {
       const char* np = name.c_str();
       const char* p = StrChr(np, ']');
       if (p) {
 	int n = MultiByteToWideChar(GetACP(), 0, np, p - np, NULL, 0);
-	error(IDC_EDIT_NAME, win32::instance.text(IDS_MSG_INVALID_CHAR), n, n + 1);
+	error(IDC_EDIT_NAME, extend::dll.text(IDS_MSG_INVALID_CHAR), n, n + 1);
       }
     }
     setting s = setting::mailbox(name);
     if (name != _name && !string(s["passwd"]).empty()) {
-      error(IDC_EDIT_NAME, win32::instance.text(IDS_MSG_NAME_EXISTS));
+      error(IDC_EDIT_NAME, extend::dll.text(IDS_MSG_NAME_EXISTS));
     }
     string uri = gettext(IDC_COMBO_SERVER);
     if (uri.empty()) {
-      error(IDC_COMBO_SERVER, win32::instance.text(IDS_MSG_ITEM_REQUIRED));
+      error(IDC_COMBO_SERVER, extend::dll.text(IDS_MSG_ITEM_REQUIRED));
     }
     s("uri", uri);
     s.cipher("passwd", gettext(IDC_EDIT_PASSWD));
@@ -711,7 +635,7 @@ maindlg::_delete()
 {
   string name = listitem(IDC_LIST_MAILBOX);
   if (!name.empty() &&
-      msgbox(win32::instance.textf(IDS_MSGBOX_DELETE, name.c_str()),
+      msgbox(extend::dll.textf(IDS_MSGBOX_DELETE, name.c_str()),
 	     MB_ICONQUESTION | MB_YESNO) == IDYES) {
     setting::mailbox(name).erase(NULL);
     HWND h = item(IDC_LIST_MAILBOX);
@@ -735,8 +659,7 @@ maindlg::_enableicon(bool en)
   enable(IDC_SPIN_ICON, en);
 }
 
-extern "C" __declspec(dllexport)
-void settingdlg(HWND, HINSTANCE, LPSTR, int);
+extern "C" __declspec(dllexport) void settingdlg(HWND, HINSTANCE, LPSTR, int);
 
 void
 settingdlg(HWND hwnd, HINSTANCE, LPSTR cmdln, int)
@@ -746,7 +669,7 @@ settingdlg(HWND hwnd, HINSTANCE, LPSTR cmdln, int)
       sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES
     };
     InitCommonControlsEx(&icce);
-    setting::file(cmdln);
+    profile ini(cmdln);
     maindlg().modal(IDD_SETTING, hwnd);
   } catch (...) {}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -12,6 +12,8 @@
 #include "window.h"
 #include <algorithm>
 #include <cassert>
+#include <imagehlp.h>
+#include <shlobj.h>
 #include <shlwapi.h>
 
 #ifdef _DEBUG
@@ -208,6 +210,79 @@ model::_thread(void* param)
   LOG("End thread [" << mb.name() << "]." << endl);
 }
 
+/** ini - profile added some features.
+ */
+#define INI_FILE APP_NAME ".ini"
+namespace {
+  class ini : public profile {
+    static string _path;
+    static bool _appendix(const char* file, char* path);
+    static const char* _prepare();
+  public:
+    ini() : profile(_prepare()) {}
+    bool edit();
+  };
+  string ini::_path;
+}
+
+bool
+ini::_appendix(const char* file, char* path)
+{
+  return GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
+    PathRemoveFileSpec(path) && PathAppend(path, file) &&
+    PathFileExists(path);
+}
+
+const char*
+ini::_prepare()
+{
+  char path[MAX_PATH];
+  if (_appendix(INI_FILE, path) ||
+      SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
+		      NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
+      PathAppend(path, APP_NAME "\\" INI_FILE) &&
+      MakeSureDirectoryPathExists(path)) {
+    LOG("Using the setting file: " << path << endl);
+    _path = path;
+    HANDLE h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, 0,
+			  NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    return _path.c_str();
+  }
+  return NULL;
+}
+
+bool
+ini::edit()
+{
+  LOG("Edit setting." << endl);
+  if (_path.empty()) return false;
+
+  WritePrivateProfileString(NULL, NULL, NULL, _path.c_str()); // flush entries.
+  HANDLE fh = CreateFile(_path.c_str(), GENERIC_READ,
+			 FILE_SHARE_READ | FILE_SHARE_WRITE,
+			 NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (fh == INVALID_HANDLE_VALUE) throw win32::error();
+
+  FILETIME before = { 0 };
+  GetFileTime(fh, NULL, NULL, &before);
+  FILETIME after = before;
+  char s[MAX_PATH];
+  HANDLE h = win32::shell(_appendix("extend.dll", s) &&
+			  GetShortPathName(s, s, sizeof(s)) < sizeof(s) ?
+			  string("rundll32.exe ") + s + ",settingdlg " + _path :
+			  '"' + _path + '"',
+			  SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
+  if (h) {
+    WaitForSingleObject(h, INFINITE);
+    CloseHandle(h);
+    GetFileTime(fh, NULL, NULL, &after);
+  }
+  CloseHandle(fh);
+
+  return CompareFileTime(&before, &after) != 0;
+}
+
 namespace cmd {
   struct fetch : public window::command {
     model& _model;
@@ -231,8 +306,9 @@ namespace cmd {
 
   struct setting : public window::command {
     model& _model;
-    setting(model& model) : _model(model) {}
-    void execute(window&) { if (::setting::edit()) PostQuitMessage(1); }
+    ini& _ini;
+    setting(model& model, ini& ini) : _model(model), _ini(ini) {}
+    void execute(window&) { if (_ini.edit()) PostQuitMessage(1); }
     UINT state(window&) { return _model.fetching() ? MFS_DISABLED : 0; }
   };
 
@@ -259,6 +335,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
   try {
     static win32 befoo("befoo:79585F30-DD15-446C-B414-152D31324970");
     static winsock winsock;
+    static ini ini;
     int delay;
     setting::preferences()["delay"](delay = 0);
     for (int qc = 1; qc > 0; delay = 0) {
@@ -266,7 +343,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
       auto_ptr<window> w(mascot());
       w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
       w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
-      w->addcmd(ID_MENU_SETTINGS, new cmd::setting(*m));
+      w->addcmd(ID_MENU_SETTINGS, new cmd::setting(*m, ini));
       w->addcmd(ID_MENU_EXIT, new cmd::exit);
       w->addcmd(ID_EVENT_LOGOFF, new cmd::logoff(*m));
       w->settimer(*m, delay > 0 ? delay * 1000 : 1);
