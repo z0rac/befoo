@@ -107,6 +107,7 @@ public:
   static setting preferences(_str name);
   static list<string> mailboxes();
   static setting mailbox(const string& id);
+  static void mailboxclear(const string& id);
   static list<string> cache(const string& key);
   static void cache(const string& key, const list<string>& data);
   static void cacheclear();
@@ -114,6 +115,16 @@ public:
   string cipher(_str key);
   setting& cipher(_str key, const string& value);
   setting& erase(_str key) { _st->erase(key); return *this; }
+};
+
+class registory : public setting::repository {
+  void* _key;
+public:
+  registory(const char* key);
+  ~registory();
+  setting::storage* storage(const string& name) const;
+  list<string> storages() const;
+  void erase(const string& name);
 };
 
 class profile : public setting::repository {
@@ -125,4 +136,5 @@ public:
   list<string> storages() const;
   void erase(const string& name);
 };
+
 #endif

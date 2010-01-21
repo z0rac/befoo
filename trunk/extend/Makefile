@@ -11,6 +11,10 @@ LIBDIR = ../src
 CFLAGS = $(OPTS) -D_USRDLL -DISOLATION_AWARE_ENABLED=1 -I$(LIBDIR)
 LDFLAGS = $(OPTS) -mwindows --target=i386-mingw32
 
+ifdef USE_REG # use registory instead of .INI file.
+CFLAGS += -DUSE_REG=$(USE_REG)
+endif
+
 ifdef debug
 CFLAGS += -D_DEBUG=$(debug) -g -Wall
 else
