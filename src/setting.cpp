@@ -235,6 +235,12 @@ namespace {
     void put(const char* key, const char* value);
     void erase(const char* key);
     list<string> keys() const;
+  public:
+    struct buf {
+      char* data;
+      buf(DWORD size) : data(new char[size]) {}
+      ~buf() { delete [] data; }
+    };
   };
 }
 
@@ -258,11 +264,7 @@ regkey::get(const char* key) const
   if (_key &&
       RegQueryValueEx(_key, key, NULL, &type, NULL, &size) == ERROR_SUCCESS &&
       type == REG_SZ) {
-    struct buf {
-      char* data;
-      buf(DWORD size) : data(new char[size]) {}
-      ~buf() { delete [] data; }
-    } buf(size);
+    regkey::buf buf(size);
     if (RegQueryValueEx(_key, key, NULL, NULL, LPBYTE(buf.data), &size) == ERROR_SUCCESS) {
       return buf.data;
     }
@@ -286,14 +288,14 @@ list<string>
 regkey::keys() const
 {
   list<string> result;
-  if (_key) {
-    DWORD i = 0;
-    char name[256];
-    DWORD size;
-    while ((size = sizeof(name),
-	    RegEnumValue(_key, i++, name, &size,
-			 NULL, NULL, NULL, NULL)) == ERROR_SUCCESS) {
-      result.push_back(name);
+  DWORD size;
+  if (_key && RegQueryInfoKey(_key, NULL, NULL, NULL, NULL, NULL,
+			      NULL, NULL, &size, NULL, NULL, NULL) == ERROR_SUCCESS) {
+    regkey::buf buf(++size);
+    DWORD i = 0, n;
+    while (n = size, RegEnumValue(_key, i++, buf.data, &n,
+				  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+      result.push_back(buf.data);
     }
   }
   return result;
@@ -324,14 +326,14 @@ list<string>
 registory::storages() const
 {
   list<string> result;
-  if (_key) {
-    DWORD i = 0;
-    char name[256];
-    DWORD size;
-    while ((size = sizeof(name),
-	    RegEnumKeyEx(HKEY(_key), i++, name, &size,
-			 NULL, NULL, NULL, NULL)) == ERROR_SUCCESS) {
-      result.push_back(name);
+  DWORD size;
+  if (_key && RegQueryInfoKey(HKEY(_key), NULL, NULL, NULL, NULL, &size,
+			      NULL, NULL, NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+    regkey::buf buf(++size);
+    DWORD i = 0, n;
+    while (n = size, RegEnumKeyEx(HKEY(_key), i++, buf.data, &n,
+				  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+      result.push_back(buf.data);
     }
   }
   return result;
@@ -342,7 +344,7 @@ registory::erase(const string& name)
 {
   _key && RegDeleteKey(HKEY(_key), name.c_str());
 }
-#else
+#else // !USE_REG
 /** section - implement for setting::storage.
  * This is using Windows API for .INI file.
  */
@@ -363,26 +365,24 @@ namespace {
 string
 section::get(const char* key) const
 {
-  return _path ? win32::profile(_section.c_str(), key, _path) : string();
+  return win32::profile(_section.c_str(), key, _path);
 }
 
 void
 section::put(const char* key, const char* value)
 {
-  if (_path) {
-    string tmp;
-    if (value && value[0] == '"' && value[strlen(value) - 1] == '"') {
-      tmp = '"' + string(value) + '"';
-      value = tmp.c_str();
-    }
-    WritePrivateProfileString(_section.c_str(), key, value, _path);
+  string tmp;
+  if (value && value[0] == '"' && value[strlen(value) - 1] == '"') {
+    tmp = '"' + string(value) + '"';
+    value = tmp.c_str();
   }
+  win32::profile(_section.c_str(), key, value, _path);
 }
 
 void
 section::erase(const char* key)
 {
-  if (_path) WritePrivateProfileString(_section.c_str(), key, NULL, _path);
+  win32::profile(_section.c_str(), key, NULL, _path);
 }
 
 list<string>
@@ -396,7 +396,7 @@ section::keys() const
  */
 profile::~profile()
 {
-  if (_path) WritePrivateProfileString(NULL, NULL, NULL, _path);
+  win32::profile(NULL, NULL, NULL, _path);
 }
 
 setting::storage*
@@ -408,13 +408,12 @@ profile::storage(const string& name) const
 list<string>
 profile::storages() const
 {
-  return !_path ? list<string>() :
-    setting::manip(win32::profile(NULL, NULL, _path)).sep(0).split();
+  return setting::manip(win32::profile(NULL, NULL, _path)).sep(0).split();
 }
 
 void
 profile::erase(const string& name)
 {
-  if (_path) WritePrivateProfileString(name.c_str(), NULL, NULL, _path);
+  win32::profile(name.c_str(), NULL, NULL, _path);
 }
-#endif
+#endif // !USE_REG

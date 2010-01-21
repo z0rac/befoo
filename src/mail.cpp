@@ -109,11 +109,6 @@ namespace {
     string _charset;
     UINT _codepage;
     DWORD _mode;
-    template<typename _Ty> struct tmp {
-      _Ty* data;
-      tmp(int size) : data(new _Ty[size]) {}
-      ~tmp() { delete [] data; }
-    };
   public:
     u8conv() : _codepage(0) {}
     u8conv& charset(const string& charset);
@@ -143,23 +138,16 @@ string
 u8conv::operator()(const string& text)
 {
   if (!*this) throw text;
-  if (!_mb2u) {
-    win32::wstr ws(text, _codepage);
-    if (!ws) throw text;
+  if (_mb2u) {
+    int n = 0;
+    if (_mb2u(&_mode, _codepage, text.c_str(), NULL, NULL, &n) != S_OK) throw text;
+    win32::wstr ws(n + 1);
+    _mb2u(&_mode, _codepage, text.c_str(), NULL, ws, &n);
     return ws.mbstr(CP_UTF8);
   }
-  string result;
-  int n = 0;
-  if (_mb2u(&_mode, _codepage, text.c_str(), NULL, NULL, &n) != S_OK) throw text;
-  tmp<WCHAR> ws(n);
-  _mb2u(&_mode, _codepage, text.c_str(), NULL, ws.data, &n);
-  int m = WideCharToMultiByte(CP_UTF8, 0, ws.data, n, NULL, 0, NULL, NULL);
-  if (m) {
-    tmp<char> mbs(m);
-    WideCharToMultiByte(CP_UTF8, 0, ws.data, n, mbs.data, m, NULL, NULL);
-    result.assign(mbs.data, m);
-  }
-  return result;
+  win32::wstr ws(text, _codepage);
+  if (!ws) throw text;
+  return ws.mbstr(CP_UTF8);
 }
 #endif // !USE_ICONV
 

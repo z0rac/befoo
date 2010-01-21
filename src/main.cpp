@@ -228,26 +228,23 @@ repository::edit()
 {
   LOG("Edit setting." << endl);
 
-  class changed {
-    HANDLE _e;
-    HKEY _k;
-  public:
-    changed(const char* key)
-      : _e(win32::valid(CreateEvent(NULL, FALSE, FALSE, NULL)))
-    {
-      if (RegOpenKeyEx(HKEY_CURRENT_USER, key, 0, KEY_NOTIFY, &_k) == ERROR_SUCCESS) {
-	if (RegNotifyChangeKeyValue(_k, TRUE,
-				    REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET,
-				    _e, TRUE) == ERROR_SUCCESS) return;
-	RegCloseKey(_k);
-      }
-      CloseHandle(_e);
-      throw win32::error();
-    }
-    ~changed() { RegCloseKey(_k), CloseHandle(_e); }
-    operator bool() const { return WaitForSingleObject(_e, 0) == WAIT_OBJECT_0; }
-  } changed(REG_KEY);
+  struct event {
+    HANDLE h;
+    event() : h(win32::valid(CreateEvent(NULL, FALSE, FALSE, NULL))) {}
+    ~event() { CloseHandle(h); }
+  } event;
 
+  struct key {
+    HKEY h;
+    key(const char* key)
+    { if (RegOpenKeyEx (HKEY_CURRENT_USER, key,
+			0, KEY_NOTIFY, &h) != ERROR_SUCCESS) throw win32::error(); }
+    ~key() { RegCloseKey(h); }
+  } key(REG_KEY);
+
+  if (RegNotifyChangeKeyValue(key.h, TRUE,
+			      REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET,
+			      event.h, TRUE) != ERROR_SUCCESS) throw win32::error();
   char s[MAX_PATH];
   if (_appendix("extend.dll", s) && GetShortPathName(s, s, sizeof(s)) < sizeof(s)) {
     HANDLE h = win32::shell(string("rundll32.exe ") + s + ",settingdlg " REG_KEY,
@@ -257,9 +254,9 @@ repository::edit()
       CloseHandle(h);
     }
   }
-  return changed;
+  return WaitForSingleObject(event.h, 0) == WAIT_OBJECT_0;
 }
-#else
+#else // !USE_REG
 /** repository - profile added some features.
  */
 #define INI_FILE APP_NAME ".ini"
@@ -324,7 +321,7 @@ repository::edit()
 
   return CompareFileTime(&before, &after) != 0;
 }
-#endif
+#endif // !USE_REG
 
 bool
 repository::_appendix(const char* file, char* path)
