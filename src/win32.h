@@ -93,15 +93,14 @@ public:
     LPWSTR _data;
   public:
     wstr() : _data(NULL) {}
-    wstr(size_t n);
     wstr(const wstr& ws) : _data(NULL) { *this = ws; }
     wstr(const string& s, UINT cp = GetACP());
     ~wstr() { delete [] _data; }
     const wstr& operator=(const wstr& ws);
     operator LPCWSTR() const { return _data; }
-    operator LPWSTR() { return _data; }
     size_t size() const { return _data ? lstrlenW(_data) : 0; }
-    string mbstr(UINT cp = GetACP()) const;
+    string mbstr(UINT cp = GetACP()) const { return mbstr(_data, cp); }
+    static string mbstr(LPCWSTR ws, UINT cp = GetACP());
   };
 
   // error - exception type

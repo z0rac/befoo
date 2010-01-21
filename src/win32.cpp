@@ -287,12 +287,6 @@ win32::dll::~dll()
 /*
  * Functions of the class win32::wstr
  */
-win32::wstr::wstr(size_t n)
-  : _data(new WCHAR[n])
-{
-  ZeroMemory(_data, n * sizeof(WCHAR));
-}
-
 win32::wstr::wstr(const string& s, UINT cp)
   : _data(NULL)
 {
@@ -316,13 +310,13 @@ win32::wstr::operator=(const wstr& ws)
 }
 
 string
-win32::wstr::mbstr(UINT cp) const
+win32::wstr::mbstr(LPCWSTR ws, UINT cp)
 {
-  if (_data) {
-    int size = WideCharToMultiByte(cp, 0, _data, -1, NULL, 0, NULL, NULL);
+  if (ws) {
+    int size = WideCharToMultiByte(cp, 0, ws, -1, NULL, 0, NULL, NULL);
     if (size) {
       textbuf buf(size);
-      WideCharToMultiByte(cp, 0, _data, -1, buf.data, size, NULL, NULL);
+      WideCharToMultiByte(cp, 0, ws, -1, buf.data, size, NULL, NULL);
       return string(buf.data, size - 1);
     }
   }
