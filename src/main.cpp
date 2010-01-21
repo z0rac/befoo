@@ -210,31 +210,73 @@ model::_thread(void* param)
   LOG("End thread [" << mb.name() << "]." << endl);
 }
 
-/** ini - profile added some features.
+#if USE_REG
+/** repository - registory added some features.
+ */
+#define REG_KEY "Software\\GNU\\" APP_NAME
+namespace {
+  class repository : public registory {
+    static bool _appendix(const char* file, char* path);
+  public:
+    repository() : registory(REG_KEY) {}
+    bool edit();
+  };
+}
+
+bool
+repository::edit()
+{
+  LOG("Edit setting." << endl);
+
+  class changed {
+    HANDLE _e;
+    HKEY _k;
+  public:
+    changed(const char* key)
+      : _e(win32::valid(CreateEvent(NULL, FALSE, FALSE, NULL)))
+    {
+      if (RegOpenKeyEx(HKEY_CURRENT_USER, key, 0, KEY_NOTIFY, &_k) == ERROR_SUCCESS) {
+	if (RegNotifyChangeKeyValue(_k, TRUE,
+				    REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET,
+				    _e, TRUE) == ERROR_SUCCESS) return;
+	RegCloseKey(_k);
+      }
+      CloseHandle(_e);
+      throw win32::error();
+    }
+    ~changed() { RegCloseKey(_k), CloseHandle(_e); }
+    operator bool() const { return WaitForSingleObject(_e, 0) == WAIT_OBJECT_0; }
+  } changed(REG_KEY);
+
+  char s[MAX_PATH];
+  if (_appendix("extend.dll", s) && GetShortPathName(s, s, sizeof(s)) < sizeof(s)) {
+    HANDLE h = win32::shell(string("rundll32.exe ") + s + ",settingdlg " REG_KEY,
+			    SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
+    if (h) {
+      WaitForSingleObject(h, INFINITE);
+      CloseHandle(h);
+    }
+  }
+  return changed;
+}
+#else
+/** repository - profile added some features.
  */
 #define INI_FILE APP_NAME ".ini"
 namespace {
-  class ini : public profile {
+  class repository : public profile {
     static string _path;
     static bool _appendix(const char* file, char* path);
     static const char* _prepare();
   public:
-    ini() : profile(_prepare()) {}
+    repository() : profile(_prepare()) {}
     bool edit();
   };
-  string ini::_path;
-}
-
-bool
-ini::_appendix(const char* file, char* path)
-{
-  return GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
-    PathRemoveFileSpec(path) && PathAppend(path, file) &&
-    PathFileExists(path);
+  string repository::_path;
 }
 
 const char*
-ini::_prepare()
+repository::_prepare()
 {
   char path[MAX_PATH];
   if (_appendix(INI_FILE, path) ||
@@ -253,7 +295,7 @@ ini::_prepare()
 }
 
 bool
-ini::edit()
+repository::edit()
 {
   LOG("Edit setting." << endl);
   if (_path.empty()) return false;
@@ -282,6 +324,15 @@ ini::edit()
 
   return CompareFileTime(&before, &after) != 0;
 }
+#endif
+
+bool
+repository::_appendix(const char* file, char* path)
+{
+  return GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
+    PathRemoveFileSpec(path) && PathAppend(path, file) &&
+    PathFileExists(path);
+}
 
 namespace cmd {
   struct fetch : public window::command {
@@ -306,9 +357,9 @@ namespace cmd {
 
   struct setting : public window::command {
     model& _model;
-    ini& _ini;
-    setting(model& model, ini& ini) : _model(model), _ini(ini) {}
-    void execute(window&) { if (_ini.edit()) PostQuitMessage(1); }
+    repository& _rep;
+    setting(model& model, repository& rep) : _model(model), _rep(rep) {}
+    void execute(window&) { if (_rep.edit()) PostQuitMessage(1); }
     UINT state(window&) { return _model.fetching() ? MFS_DISABLED : 0; }
   };
 
@@ -335,7 +386,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
   try {
     static win32 befoo("befoo:79585F30-DD15-446C-B414-152D31324970");
     static winsock winsock;
-    static ini ini;
+    static repository rep;
     int delay;
     setting::preferences()["delay"](delay = 0);
     for (int qc = 1; qc > 0; delay = 0) {
@@ -343,7 +394,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
       auto_ptr<window> w(mascot());
       w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
       w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
-      w->addcmd(ID_MENU_SETTINGS, new cmd::setting(*m, ini));
+      w->addcmd(ID_MENU_SETTINGS, new cmd::setting(*m, rep));
       w->addcmd(ID_MENU_EXIT, new cmd::exit);
       w->addcmd(ID_EVENT_LOGOFF, new cmd::logoff(*m));
       w->settimer(*m, delay > 0 ? delay * 1000 : 1);

@@ -19,6 +19,9 @@ endif
 ifdef USE_ICONV # use iconv instead of internal function.
 CFLAGS += -DUSE_ICONV=$(USE_ICONV)
 endif
+ifdef USE_REG # use registory instead of .INI file.
+CFLAGS += -DUSE_REG=$(USE_REG)
+endif
 
 ifdef debug
 CFLAGS += -D_DEBUG=$(debug) -g -Wall

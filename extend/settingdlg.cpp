@@ -426,7 +426,7 @@ mailboxdlg::done(bool ok)
     if (!st.empty()) s("mua", _env(st));
     else s.erase("mua");
     if (name != _name) {
-      if (!_name.empty()) setting::mailbox(_name).erase(NULL);
+      if (!_name.empty()) setting::mailboxclear(_name);
       _name = name;
     }
   }
@@ -637,7 +637,7 @@ maindlg::_delete()
   if (!name.empty() &&
       msgbox(extend::dll.textf(IDS_MSGBOX_DELETE, name.c_str()),
 	     MB_ICONQUESTION | MB_YESNO) == IDYES) {
-    setting::mailbox(name).erase(NULL);
+    setting::mailboxclear(name);
     HWND h = item(IDC_LIST_MAILBOX);
     ListBox_DeleteString(h, ListBox_GetCurSel(h));
     _enablebuttons();
@@ -669,7 +669,11 @@ settingdlg(HWND hwnd, HINSTANCE, LPSTR cmdln, int)
       sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES
     };
     InitCommonControlsEx(&icce);
-    profile ini(cmdln);
+#if USE_REG
+    registory rep(cmdln);
+#else
+    profile rep(cmdln);
+#endif
     maindlg().modal(IDD_SETTING, hwnd);
   } catch (...) {}
 }

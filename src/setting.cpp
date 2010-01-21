@@ -66,6 +66,13 @@ setting::mailbox(const string& id)
   return _rep->storage(id);
 }
 
+void
+setting::mailboxclear(const string& id)
+{
+  assert(_rep);
+  _rep->erase(id);
+}
+
 list<string>
 setting::cache(const string& key)
 {
@@ -215,6 +222,127 @@ setting::manip::split()
   return result;
 }
 
+#if USE_REG
+/** regkey - implement for setting::storage.
+ */
+namespace {
+  class regkey : public setting::storage {
+    HKEY _key;
+  public:
+    regkey(HKEY key, const string& name);
+    ~regkey();
+    string get(const char* key) const;
+    void put(const char* key, const char* value);
+    void erase(const char* key);
+    list<string> keys() const;
+  };
+}
+
+regkey::regkey(HKEY key, const string& name)
+  : _key(NULL)
+{
+  key && RegCreateKeyEx(key, name.c_str(), 0, NULL,
+			REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &_key, NULL);
+}
+
+regkey::~regkey()
+{
+  _key && RegCloseKey(_key);
+}
+
+string
+regkey::get(const char* key) const
+{
+  DWORD type;
+  DWORD size;
+  if (_key &&
+      RegQueryValueEx(_key, key, NULL, &type, NULL, &size) == ERROR_SUCCESS &&
+      type == REG_SZ) {
+    struct buf {
+      char* data;
+      buf(DWORD size) : data(new char[size]) {}
+      ~buf() { delete [] data; }
+    } buf(size);
+    if (RegQueryValueEx(_key, key, NULL, NULL, LPBYTE(buf.data), &size) == ERROR_SUCCESS) {
+      return buf.data;
+    }
+  }
+  return string();
+}
+
+void
+regkey::put(const char* key, const char* value)
+{
+  _key && RegSetValueEx(_key, key, 0, REG_SZ, (const BYTE*)value, strlen(value) + 1);
+}
+
+void
+regkey::erase(const char* key)
+{
+  _key && RegDeleteValue(_key, key);
+}
+
+list<string>
+regkey::keys() const
+{
+  list<string> result;
+  if (_key) {
+    DWORD i = 0;
+    char name[256];
+    DWORD size;
+    while ((size = sizeof(name),
+	    RegEnumValue(_key, i++, name, &size,
+			 NULL, NULL, NULL, NULL)) == ERROR_SUCCESS) {
+      result.push_back(name);
+    }
+  }
+  return result;
+}
+
+/*
+ * Functions of class registory
+ */
+registory::registory(const char* key)
+  : _key(NULL)
+{
+  RegCreateKeyEx(HKEY_CURRENT_USER, key, 0, NULL,
+		 REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, PHKEY(&_key), NULL);
+}
+
+registory::~registory()
+{
+  _key && RegCloseKey(HKEY(_key));
+}
+
+setting::storage*
+registory::storage(const string& name) const
+{
+  return new regkey(HKEY(_key), name);
+}
+
+list<string>
+registory::storages() const
+{
+  list<string> result;
+  if (_key) {
+    DWORD i = 0;
+    char name[256];
+    DWORD size;
+    while ((size = sizeof(name),
+	    RegEnumKeyEx(HKEY(_key), i++, name, &size,
+			 NULL, NULL, NULL, NULL)) == ERROR_SUCCESS) {
+      result.push_back(name);
+    }
+  }
+  return result;
+}
+
+void
+registory::erase(const string& name)
+{
+  _key && RegDeleteKey(HKEY(_key), name.c_str());
+}
+#else
 /** section - implement for setting::storage.
  * This is using Windows API for .INI file.
  */
@@ -289,3 +417,4 @@ profile::erase(const string& name)
 {
   if (_path) WritePrivateProfileString(name.c_str(), NULL, NULL, _path);
 }
+#endif
