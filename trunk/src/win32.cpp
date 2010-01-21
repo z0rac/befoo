@@ -50,17 +50,23 @@ namespace {
 }
 
 string
-win32::profile(LPCSTR section, LPCSTR key, LPCSTR file, LPCSTR def)
+win32::profile(LPCSTR section, LPCSTR key, LPCSTR file)
 {
-  if (!def) def = "";
+  if (!file) return string();
   textbuf buf;
   DWORD size = 0;
   for (DWORD n = 0; n <= size + 2;) {
     n += 256;
-    size = GetPrivateProfileString(section, key, def, buf(n), n, file);
+    size = GetPrivateProfileString(section, key, "", buf(n), n, file);
   }
   size_t i = size && key ? strspn(buf.data, " \t") : 0;
   return string(buf.data + i, size - i);
+}
+
+void
+win32::profile(LPCSTR section, LPCSTR key, LPCSTR value, LPCSTR file)
+{
+  file && WritePrivateProfileString(section, key, value, file);
 }
 
 string
@@ -281,6 +287,12 @@ win32::dll::~dll()
 /*
  * Functions of the class win32::wstr
  */
+win32::wstr::wstr(size_t n)
+  : _data(new WCHAR[n])
+{
+  ZeroMemory(_data, n * sizeof(WCHAR));
+}
+
 win32::wstr::wstr(const string& s, UINT cp)
   : _data(NULL)
 {

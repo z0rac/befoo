@@ -20,7 +20,8 @@ class win32 {
 public:
   win32(LPCSTR mutex = NULL);
 
-  static string profile(LPCSTR section, LPCSTR key, LPCSTR file, LPCSTR def = NULL);
+  static string profile(LPCSTR section, LPCSTR key, LPCSTR file);
+  static void profile(LPCSTR section, LPCSTR key, LPCSTR value, LPCSTR file);
   static string xenv(const string& s);
   static string date(time_t utc, DWORD flags = 0)
   { return _datetime(utc, flags, GetDateFormat); }
@@ -92,11 +93,13 @@ public:
     LPWSTR _data;
   public:
     wstr() : _data(NULL) {}
+    wstr(size_t n);
     wstr(const wstr& ws) : _data(NULL) { *this = ws; }
     wstr(const string& s, UINT cp = GetACP());
     ~wstr() { delete [] _data; }
     const wstr& operator=(const wstr& ws);
     operator LPCWSTR() const { return _data; }
+    operator LPWSTR() { return _data; }
     size_t size() const { return _data ? lstrlenW(_data) : 0; }
     string mbstr(UINT cp = GetACP()) const;
   };
