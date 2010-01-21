@@ -9,6 +9,7 @@
 #include "win32.h"
 #include <cassert>
 #include <ctime>
+#include <shlwapi.h>
 
 #ifdef _DEBUG
 #include <iostream>
@@ -73,12 +74,28 @@ setting::mailboxclear(const string& id)
   _rep->erase(id);
 }
 
+namespace {
+  string cachekey(const string& key)
+  {
+    string esc;
+    string ch = string("$") + _rep->invalidchars();
+    string::size_type i = 0, n;
+    while (n = StrCSpn(key.c_str() + i, ch.c_str()), i + n < key.size()) {
+      esc += key.substr(i, n), i += n;
+      char e[] = "$0";
+      e[1] += char(ch.find_first_of(key[i++]));
+      esc += e;
+    }
+    return "(cache:" + esc + key.substr(i, n) + ')';
+  }
+}
+
 list<string>
 setting::cache(const string& key)
 {
   assert(_rep);
   list<string> result;
-  auto_ptr<storage> cache(_rep->storage("(cache:" + key + ')'));
+  auto_ptr<storage> cache(_rep->storage(cachekey(key)));
   list<string> keys(cache->keys());
   for (list<string>::iterator p = keys.begin(); p != keys.end(); ++p) {
     result.push_back(cache->get(p->c_str()));
@@ -91,7 +108,7 @@ setting::cache(const string& key, const list<string>& data)
 {
   assert(_rep);
   if (!data.empty()) {
-    auto_ptr<storage> cache(_rep->storage("(cache:" + key + ')'));
+    auto_ptr<storage> cache(_rep->storage(cachekey(key)));
     long i = 0;
     for (list<string>::const_iterator p = data.begin(); p != data.end(); ++p) {
       char s[35];

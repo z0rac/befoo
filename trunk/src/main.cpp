@@ -210,13 +210,38 @@ model::_thread(void* param)
   LOG("End thread [" << mb.name() << "]." << endl);
 }
 
+namespace { // misc. functions
+  bool appendix(const char* file, char* path)
+  {
+    return GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
+      PathRemoveFileSpec(path) && PathAppend(path, file) &&
+      PathFileExists(path);
+  }
+
+  bool shell(const string& cmd)
+  {
+    HANDLE h = win32::shell(cmd, SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
+    if (!h) return false;
+    WaitForSingleObject(h, INFINITE);
+    CloseHandle(h);
+    return true;
+  }
+
+  bool rundll(const char* arg)
+  {
+    char s[MAX_PATH];
+    return appendix("extend.dll", s) &&
+      GetShortPathName(s, s, sizeof(s)) < sizeof(s) &&
+      shell(string("rundll32.exe ") + s + ",settingdlg " + arg);
+  }
+}
+
 #if USE_REG
 /** repository - registory added some features.
  */
 #define REG_KEY "Software\\GNU\\" APP_NAME
 namespace {
   class repository : public registory {
-    static bool _appendix(const char* file, char* path);
   public:
     repository() : registory(REG_KEY) {}
     bool edit();
@@ -245,16 +270,7 @@ repository::edit()
   if (RegNotifyChangeKeyValue(key.h, TRUE,
 			      REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET,
 			      event.h, TRUE) != ERROR_SUCCESS) throw win32::error();
-  char s[MAX_PATH];
-  if (_appendix("extend.dll", s) && GetShortPathName(s, s, sizeof(s)) < sizeof(s)) {
-    HANDLE h = win32::shell(string("rundll32.exe ") + s + ",settingdlg " REG_KEY,
-			    SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
-    if (h) {
-      WaitForSingleObject(h, INFINITE);
-      CloseHandle(h);
-    }
-  }
-  return WaitForSingleObject(event.h, 0) == WAIT_OBJECT_0;
+  return rundll(REG_KEY) && WaitForSingleObject(event.h, 0) == WAIT_OBJECT_0;
 }
 #else // !USE_REG
 /** repository - profile added some features.
@@ -263,7 +279,6 @@ repository::edit()
 namespace {
   class repository : public profile {
     static string _path;
-    static bool _appendix(const char* file, char* path);
     static const char* _prepare();
   public:
     repository() : profile(_prepare()) {}
@@ -276,7 +291,7 @@ const char*
 repository::_prepare()
 {
   char path[MAX_PATH];
-  if (_appendix(INI_FILE, path) ||
+  if (appendix(INI_FILE, path) ||
       SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
 		      NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
       PathAppend(path, APP_NAME "\\" INI_FILE) &&
@@ -306,30 +321,13 @@ repository::edit()
   FILETIME before = { 0 };
   GetFileTime(fh, NULL, NULL, &before);
   FILETIME after = before;
-  char s[MAX_PATH];
-  HANDLE h = win32::shell(_appendix("extend.dll", s) &&
-			  GetShortPathName(s, s, sizeof(s)) < sizeof(s) ?
-			  string("rundll32.exe ") + s + ",settingdlg " + _path :
-			  '"' + _path + '"',
-			  SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
-  if (h) {
-    WaitForSingleObject(h, INFINITE);
-    CloseHandle(h);
+  (rundll(_path.c_str()) || shell('"' + _path + '"')) &&
     GetFileTime(fh, NULL, NULL, &after);
-  }
   CloseHandle(fh);
 
   return CompareFileTime(&before, &after) != 0;
 }
 #endif // !USE_REG
-
-bool
-repository::_appendix(const char* file, char* path)
-{
-  return GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
-    PathRemoveFileSpec(path) && PathAppend(path, file) &&
-    PathFileExists(path);
-}
 
 namespace cmd {
   struct fetch : public window::command {

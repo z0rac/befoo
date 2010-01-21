@@ -15,6 +15,7 @@
 #include <shlwapi.h>
 
 namespace extend { extern win32::module dll; }
+namespace { const char* invalidchars; }
 
 /** dialog - base dialog class
  */
@@ -397,10 +398,8 @@ mailboxdlg::done(bool ok)
       error(IDC_EDIT_NAME, extend::dll.text(IDS_MSG_INVALID_CHAR), 0, 1);
     }
     {
-      const char* np = name.c_str();
-      const char* p = StrChr(np, ']');
-      if (p) {
-	int n = MultiByteToWideChar(GetACP(), 0, np, p - np, NULL, 0);
+      int n = StrCSpn(name.c_str(), invalidchars);
+      if (string::size_type(n) < name.size()) {
 	error(IDC_EDIT_NAME, extend::dll.text(IDS_MSG_INVALID_CHAR), n, n + 1);
       }
     }
@@ -674,6 +673,7 @@ settingdlg(HWND hwnd, HINSTANCE, LPSTR cmdln, int)
 #else
     profile rep(cmdln);
 #endif
+    invalidchars = rep.invalidchars();
     maindlg().modal(IDD_SETTING, hwnd);
   } catch (...) {}
 }

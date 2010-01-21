@@ -30,6 +30,7 @@ class setting {
     virtual _storage* storage(const string& name) const = 0;
     virtual list<string> storages() const = 0;
     virtual void erase(const string& name) = 0;
+    virtual const char* invalidchars() const = 0;
   };
   auto_ptr<_repository::_storage> _st;
   setting(_repository::_storage* st) : _st(st) {}
@@ -125,6 +126,7 @@ public:
   setting::storage* storage(const string& name) const;
   list<string> storages() const;
   void erase(const string& name);
+  const char* invalidchars() const { return "\\"; }
 };
 
 class profile : public setting::repository {
@@ -135,6 +137,7 @@ public:
   setting::storage* storage(const string& name) const;
   list<string> storages() const;
   void erase(const string& name);
+  const char* invalidchars() const { return "]"; }
 };
 
 #endif
