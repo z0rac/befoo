@@ -74,8 +74,9 @@ public:
     tlsclient(DWORD proto = SP_PROT_SSL3 | SP_PROT_TLS1);
     virtual ~tlsclient();
     bool avail() const { return _avail; }
-    void connect();
-    void shutdown();
+    tlsclient& connect();
+    tlsclient& shutdown();
+    bool authenticate(const string& cn);
     size_t recv(char* buf, size_t size);
     size_t send(const char* data, size_t size);
   protected:

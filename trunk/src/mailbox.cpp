@@ -308,7 +308,7 @@ sslstream::open(const string& host, const string& port, int domain)
 {
   assert(_tls.socket == INVALID_SOCKET);
   _tls.socket.connect(host, port, domain).timeout(-1); // non-blocking
-  _tls.connect();
+  _tls.connect().authenticate(host);
 }
 
 void
