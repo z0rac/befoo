@@ -7,6 +7,7 @@
 #include "winsock.h"
 #include "win32.h"
 #include <cassert>
+#include <wininet.h>
 
 #ifdef _DEBUG
 #include <iostream>
@@ -225,7 +226,7 @@ winsock::tlsclient::tlsclient(DWORD proto)
 {
   SCHANNEL_CRED auth = { SCHANNEL_CRED_VERSION };
   auth.grbitEnabledProtocols = proto;
-  auth.dwFlags = (SCH_CRED_NO_DEFAULT_CREDS | SCH_CRED_MANUAL_CRED_VALIDATION);
+  auth.dwFlags = (SCH_CRED_USE_DEFAULT_CREDS | SCH_CRED_MANUAL_CRED_VALIDATION);
   _ok(AcquireCredentialsHandle(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND,
 			       NULL, &auth, NULL, NULL, &_cred, NULL));
 }
@@ -265,8 +266,7 @@ winsock::tlsclient::_token(SecBufferDesc* inb)
   SecBufferDesc outb = { SECBUFFER_VERSION, 1, &out };
   SECURITY_STATUS ss =
     InitializeSecurityContext(&_cred, _avail ? &_ctx : NULL,
-			      NULL, req, 0, SECURITY_NATIVE_DREP,
-			      inb, 0, &_ctx, &outb, &attr, NULL);
+			      NULL, req, 0, 0, inb, 0, &_ctx, &outb, &attr, NULL);
   _avail = true;
   switch (ss) {
   case SEC_I_COMPLETE_AND_CONTINUE: ss = SEC_I_CONTINUE_NEEDED;
@@ -294,7 +294,7 @@ winsock::tlsclient::_copyextra(size_t i, size_t size)
   return n;
 }
 
-void
+winsock::tlsclient&
 winsock::tlsclient::connect()
 {
   try {
@@ -329,9 +329,10 @@ winsock::tlsclient::connect()
     shutdown();
     throw;
   }
+  return *this;
 }
 
-void
+winsock::tlsclient&
 winsock::tlsclient::shutdown()
 {
   if (_avail) {
@@ -353,6 +354,47 @@ winsock::tlsclient::shutdown()
     DeleteSecurityContext(&_ctx);
     _avail = false;
   }
+  return *this;
+}
+
+bool
+winsock::tlsclient::authenticate(const string& cn)
+{
+  LOG("Auth: " << cn << " ... ");
+  win32::wstr name(cn);
+  PCCERT_CHAIN_CONTEXT context;
+  {
+    PCCERT_CONTEXT cert;
+    _ok(QueryContextAttributes(&_ctx, SECPKG_ATTR_REMOTE_CERT_CONTEXT, &cert));
+    LPSTR usages[] = {
+      szOID_PKIX_KP_SERVER_AUTH, szOID_SERVER_GATED_CRYPTO, szOID_SGC_NETSCAPE
+    };
+    CERT_CHAIN_PARA chain = { sizeof(CERT_CHAIN_PARA) };
+    chain.RequestedUsage.dwType = USAGE_MATCH_TYPE_OR;
+    chain.RequestedUsage.Usage.cUsageIdentifier = sizeof(usages) / sizeof(*usages);
+    chain.RequestedUsage.Usage.rgpszUsageIdentifier = usages;
+    BOOL ok = CertGetCertificateChain
+      (NULL, cert, NULL, cert->hCertStore, &chain, 0, NULL, &context);
+    CertFreeCertificateContext(cert);
+    win32::valid(ok);
+  }
+  CERT_CHAIN_POLICY_STATUS status = { sizeof(CERT_CHAIN_POLICY_STATUS) };
+  {
+    CERT_CHAIN_POLICY_PARA policy = { sizeof(CERT_CHAIN_POLICY_PARA) };
+    SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl = { sizeof(SSL_EXTRA_CERT_CHAIN_POLICY_PARA) };
+    ssl.dwAuthType = AUTHTYPE_SERVER;
+    ssl.fdwChecks = (SECURITY_FLAG_IGNORE_UNKNOWN_CA |
+		     SECURITY_FLAG_IGNORE_WRONG_USAGE |
+		     SECURITY_FLAG_IGNORE_CERT_DATE_INVALID);
+    ssl.pwszServerName = const_cast<LPWSTR>(LPCWSTR(name));
+    policy.pvExtraPolicyPara = &ssl;
+    BOOL ok = CertVerifyCertificateChainPolicy
+      (CERT_CHAIN_POLICY_SSL, context, &policy, &status);
+    CertFreeCertificateChain(context);
+    win32::valid(ok);
+  }
+  LOG(status.dwError << endl);
+  return !status.dwError;
 }
 
 size_t

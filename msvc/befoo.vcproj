@@ -62,7 +62,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="shlwapi.lib imagehlp.lib ws2_32.lib secur32.lib comctl32.lib winmm.lib"
+				AdditionalDependencies="shlwapi.lib imagehlp.lib ws2_32.lib secur32.lib crypt32.lib comctl32.lib winmm.lib"
 				LinkIncremental="2"
 				GenerateManifest="false"
 				GenerateDebugInformation="true"
@@ -142,7 +142,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="shlwapi.lib imagehlp.lib ws2_32.lib secur32.lib comctl32.lib winmm.lib"
+				AdditionalDependencies="shlwapi.lib imagehlp.lib ws2_32.lib secur32.lib crypt32.lib comctl32.lib winmm.lib"
 				LinkIncremental="1"
 				GenerateManifest="false"
 				GenerateDebugInformation="true"

@@ -36,7 +36,7 @@ PROG = $(NAME).exe
 OBJS = main.o imap4.o pop3.o mail.o codepage.o mailbox.o uri.o
 OBJS += mascot.o summary.o setting.o window.o win32.o winsock.o mingw/mthr.o
 L10N = ja.rc
-LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcomctl32 -lwinmm
+LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcrypt32 -lcomctl32 -lwinmm
 
 RSRC = $(PROG).manifest ../ico/app.ico
 RSRC += ../ico/jump1.ico ../ico/jump2.ico ../ico/jump3.ico ../ico/jump4.ico
