@@ -27,26 +27,19 @@ namespace {
     winsock::tcpclient _socket;
   public:
     ~tcpstream() { _socket.shutdown(); }
-    void open(const string& host, const string& port, int domain);
-    void close();
+    void connect(const string& host, const string& port, int domain);
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
     int tls() const;
-    mailbox::backend::stream* starttls();
+    mailbox::backend::stream* starttls(const string& host);
   };
 }
 
 void
-tcpstream::open(const string& host, const string& port, int domain)
+tcpstream::connect(const string& host, const string& port, int domain)
 {
   assert(_socket == INVALID_SOCKET);
   _socket.connect(host, port, domain).timeout(TCP_TIMEOUT);
-}
-
-void
-tcpstream::close()
-{
-  _socket.shutdown();
 }
 
 size_t
@@ -71,12 +64,14 @@ namespace {
     typedef struct { int ssl; } SSL;
     typedef struct { int ctx; } SSL_CTX;
     typedef struct { int method; } SSL_METHOD;
+    typedef struct { int x509; } X509;
+    typedef struct { int name; } X509NAME;
 
     typedef int (*SSL_library_init)(void);
     typedef SSL_CTX* (*SSL_CTX_new)(SSL_METHOD*);
     typedef void (*SSL_CTX_free)(SSL_CTX*);
     typedef SSL_METHOD* (*SSLv23_client_method)(void);
-    typedef SSL_METHOD* (*TLSv1_client_method)(void);
+    typedef long (*SSL_CTX_set_options)(SSL_CTX*, long);
     typedef SSL* (*SSL_new)(SSL_CTX*);
     typedef void (*SSL_free)(SSL*);
     typedef int (*SSL_set_fd)(SSL*, int);
@@ -84,10 +79,22 @@ namespace {
     typedef int (*SSL_read)(SSL*, void*, int);
     typedef int (*SSL_write)(SSL*, const void*, int);
     typedef int (*SSL_shutdown)(SSL*);
-    typedef int (*SSL_get_error)(SSL*, int);
+    typedef int (*SSL_get_error)(const SSL*, int);
+    typedef X509* (*SSL_get_peer_certificate)(const SSL*);
 
     typedef unsigned long (*ERR_get_error)(void);
     typedef char* (*ERR_error_string)(unsigned long, char*);
+    typedef void (*X509_free)(X509*);
+    typedef int (*X509_get_ext_by_NID)(X509*, int, int);
+    typedef void* (*X509_get_ext)(X509*, int);
+    typedef void* (*X509V3_EXT_d2i)(void*);
+    typedef int (*sk_num)(const void*);
+    typedef void* (*sk_value)(const void*, int);
+    typedef void (*sk_free)(void*);
+    typedef char* (*ASN1_STRING_data)(void*);
+    typedef int (*ASN1_STRING_length)(void*);
+    typedef X509NAME* (*X509_get_subject_name)(X509*);
+    typedef int (*X509_NAME_get_text_by_NID)(X509NAME*, int, char*, int);
   }
 
   struct openssl {
@@ -111,16 +118,17 @@ namespace {
     int _want(int rc);
     void _connect();
     void _shutdown();
+    bool _verify(const string& host);
+    static bool _match(const char* host, const char* subj, int len);
   public:
     sslstream();
     ~sslstream();
-    void open(SOCKET socket);
-    void open(const string& host, const string& port, int domain);
-    void close();
+    void connect(SOCKET socket, const string& host);
+    void connect(const string& host, const string& port, int domain);
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
     int tls() const { return 1; }
-    mailbox::backend::stream* starttls() { return NULL; }
+    mailbox::backend::stream* starttls(const string&) { return NULL; }
     static bool avail() { return _openssl.ssleay && _openssl.libeay; }
   public:
     struct error : public mailbox::error {
@@ -147,12 +155,11 @@ sslstream::error::emsg()
 sslstream::sslstream()
   : _ssl(NULL), _read(SSL(SSL_read)), _write(SSL(SSL_write))
 {
-#if USE_SSL2
   _ctx = SSL(SSL_CTX_new)(SSL(SSLv23_client_method)());
-#else
-  _ctx = SSL(SSL_CTX_new)(SSL(TLSv1_client_method)());
-#endif
   if (!_ctx) throw error();
+#if !USE_SSL2
+  XSSL(SSL_CTX_set_options)(_ctx, 0x01000000L /* SSL_OP_NO_SSLv2 */);
+#endif
 }
 
 sslstream::~sslstream()
@@ -197,27 +204,87 @@ sslstream::_shutdown()
   }
 }
 
+bool
+sslstream::_verify(const string& host)
+{
+  int hostn = host.size();
+  const char* hostp = host.c_str();
+
+  struct buf {
+    char* data;
+    buf(size_t n) : data(new char[n]) {}
+    ~buf() { delete [] data; }
+  } buf(hostn + 1);
+
+  X509* x509 = SSL(SSL_get_peer_certificate)(_ssl);
+  if (!x509) return false;
+  bool cn = true, ok = false;
+  int id = LIB(X509_get_ext_by_NID)(x509, 85 /*NID_subject_alt_name*/, -1);
+  if (id >= 0) {
+    void* alt = LIB(X509V3_EXT_d2i)(LIB(X509_get_ext)(x509, id));
+    if (alt) {
+      sk_value value = LIB(sk_value);
+      ASN1_STRING_data data = LIB(ASN1_STRING_data);
+      ASN1_STRING_length length = LIB(ASN1_STRING_length);
+      int n = LIB(sk_num)(alt);
+      for (int i = 0; i < n && !ok; ++i) {
+	typedef struct { int type; union { void* ia5; } d; } GENERAL_NAME;
+	GENERAL_NAME* p = (GENERAL_NAME*)value(alt, i);
+	if (p->type == 2 /*GEN_DNS*/) {
+	  ok = _match(hostp, data(p->d.ia5), length(p->d.ia5));
+	  cn = false;
+	}
+      }
+      LIB(sk_free)(alt);
+    }
+  }
+  if (cn) {
+    X509NAME* name = LIB(X509_get_subject_name)(x509);
+    if (name) {
+      X509_NAME_get_text_by_NID get = LIB(X509_NAME_get_text_by_NID);
+      int len = get(name, 13/*NID_commonName*/, NULL, 0);
+      if (len > 0 && len <= hostn &&
+	  get(name, 13/*NID_commonName*/, buf.data, len + 1) > 0) {
+	ok = _match(hostp, buf.data, len);
+      }
+    }
+  }
+  LIB(X509_free)(x509);
+  return ok;
+}
+
+bool
+sslstream::_match(const char* host, const char* subj, int len)
+{
+  LOG(host << " : " << string(subj, len) << endl);
+  for (int i = 0; i < len; ++i) {
+    if (subj[i] == '*' && i + 1 < len && subj[i + 1] == '.') {
+      while (*host && *host != '.') ++host;
+      ++i;
+    } else {
+      if (tolower(*host) != tolower(subj[i])) return false;
+    }
+    if (!*host++) return false;
+  }
+  return !*host;
+}
+
 void
-sslstream::open(SOCKET socket)
+sslstream::connect(SOCKET socket, const string& host)
 {
   assert(_socket == INVALID_SOCKET);
   _socket(socket).timeout(TCP_TIMEOUT);
   _connect();
+  if (!_verify(host)) throw mailbox::error("invalid host");
 }
 
 void
-sslstream::open(const string& host, const string& port, int domain)
+sslstream::connect(const string& host, const string& port, int domain)
 {
   assert(_socket == INVALID_SOCKET);
   _socket.connect(host, port, domain).timeout(TCP_TIMEOUT);
   _connect();
-}
-
-void
-sslstream::close()
-{
-  _shutdown();
-  _socket.shutdown();
+  if (!_verify(host)) throw mailbox::error("invalid host");
 }
 
 size_t
@@ -263,13 +330,12 @@ namespace {
     };
     tls _tls;
   public:
-    void open(SOCKET socket);
-    void open(const string& host, const string& port, int domain);
-    void close();
+    void connect(SOCKET socket, const string& host);
+    void connect(const string& host, const string& port, int domain);
     size_t read(char* buf, size_t size);
     size_t write(const char* data, size_t size);
     int tls() const { return 1; }
-    mailbox::backend::stream* starttls() { return NULL; }
+    mailbox::backend::stream* starttls(const string&) { return NULL; }
   };
 }
 
@@ -296,26 +362,23 @@ sslstream::tls::_send(const char* data, size_t size)
 }
 
 void
-sslstream::open(SOCKET socket)
+sslstream::connect(SOCKET socket, const string& host)
 {
   assert(_tls.socket == INVALID_SOCKET);
   _tls.socket(socket).timeout(-1); // non-blocking
-  _tls.connect();
+  if (!_tls.connect().verify(host, SECURITY_FLAG_IGNORE_UNKNOWN_CA)) {
+    throw mailbox::error("invalid host");
+  }
 }
 
 void
-sslstream::open(const string& host, const string& port, int domain)
+sslstream::connect(const string& host, const string& port, int domain)
 {
   assert(_tls.socket == INVALID_SOCKET);
   _tls.socket.connect(host, port, domain).timeout(-1); // non-blocking
-  _tls.connect().authenticate(host);
-}
-
-void
-sslstream::close()
-{
-  _tls.shutdown();
-  _tls.socket.shutdown();
+  if (!_tls.connect().verify(host, SECURITY_FLAG_IGNORE_UNKNOWN_CA)) {
+    throw mailbox::error("invalid host");
+  }
 }
 
 size_t
@@ -338,11 +401,11 @@ tcpstream::tls() const
 #endif // !USE_OPENSSL
 
 mailbox::backend::stream*
-tcpstream::starttls()
+tcpstream::starttls(const string& host)
 {
   assert(_socket != INVALID_SOCKET);
   auto_ptr<sslstream> st(new sslstream);
-  st->open(_socket.release());
+  st->connect(_socket.release(), host);
   return st.release();
 }
 
@@ -352,21 +415,23 @@ tcpstream::starttls()
 void
 mailbox::backend::tcp(const string& host, const string& port, int domain)
 {
-  _st.reset(new tcpstream);
-  _st->open(host, port, domain);
+  auto_ptr<tcpstream> st(new tcpstream);
+  st->connect(host, port, domain);
+  _st = st;
 }
 
 void
 mailbox::backend::ssl(const string& host, const string& port, int domain)
 {
-  _st.reset(new sslstream);
-  _st->open(host, port, domain);
+  auto_ptr<sslstream> st(new sslstream);
+  st->connect(host, port, domain);
+  _st = st;
 }
 
 void
-mailbox::backend::starttls()
+mailbox::backend::starttls(const string& host)
 {
-  stream* st = _st->starttls();
+  stream* st = _st->starttls(host);
   if (st) _st.reset(st);
 }
 
@@ -421,7 +486,7 @@ mailbox::backend::write(const string& data)
 void
 mailbox::uripasswd(const string& uri, const string& passwd, int domain)
 {
-  _uri = uri;
+  _uri = ::uri(uri);
   _passwd = passwd;
   _domain = domain;
 }
@@ -439,36 +504,36 @@ mailbox::find(const string& uid) const
 void
 mailbox::fetchmail()
 {
-  extern backend* imap4tcp(const string&, const string&, int);
-  extern backend* imap4ssl(const string&, const string&, int);
-  extern backend* pop3tcp(const string&, const string&, int);
-  extern backend* pop3ssl(const string&, const string&, int);
+  extern backend* backendIMAP4();
+  extern backend* backendPOP3();
 
   static const struct {
     const char* scheme;
-    backend* (*make)(const string&, const string&, int);
+    backend* (*make)();
+    void (backend::*stream)(const string&, const string&, int);
+    const char* port;
   } backends[] = {
-    { "imap", imap4tcp },
-    { "imap+ssl", imap4ssl },
-    { "pop", pop3tcp },
-    { "pop+ssl", pop3ssl }
+    { "imap",     backendIMAP4, &backend::tcp, "143" },
+    { "imap+ssl", backendIMAP4, &backend::ssl, "993" },
+    { "pop",      backendPOP3,  &backend::tcp, "110" },
+    { "pop+ssl",  backendPOP3,  &backend::ssl, "995" },
   };
 
   _recent = -1;
-  auto_ptr<backend> be;
-  for (int i = 0; i < int(sizeof(backends) / sizeof(*backends)); ++i) {
-    if (_uri[uri::scheme] == backends[i].scheme) {
-      be.reset(backends[i].make(_uri[uri::host], _uri[uri::port], _domain));
-      break;
-    }
-  }
-  if (!be.get()) throw error("invalid scheme");
-  string u(_uri[uri::user]), pw(_passwd);
-  if (u.empty()) {
-    u = "ANONYMOUS";
+  int i = sizeof(backends) / sizeof(*backends);
+  while (i-- && _uri[uri::scheme] != backends[i].scheme) continue;
+  if (i < 0) throw error("invalid scheme");
+
+  uri u(_uri);
+  string pw(_passwd);
+  if (u[uri::port].empty()) u[uri::port] = backends[i].port;
+  if (u[uri::user].empty()) {
+    u[uri::user] = "ANONYMOUS";
     if (pw.empty()) pw = "befoo@";
   }
+  auto_ptr<backend> be(backends[i].make());
+  ((*be).*backends[i].stream)(u[uri::host], u[uri::port], _domain);
   be->login(u, pw);
-  _recent = be->fetch(*this, _uri);
+  _recent = be->fetch(*this, u);
   be->logout();
 }

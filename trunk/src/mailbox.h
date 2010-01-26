@@ -85,7 +85,7 @@ class uri {
   static string _decode(const string& s);
 public:
   uri() {}
-  uri(const string& uri);
+  explicit uri(const string& uri);
   operator string() const;
   string& operator[](int i) { return _part[i]; }
   const string& operator[](int i) const { return _part[i]; }
@@ -125,17 +125,15 @@ public:
     class _stream {
     public:
       virtual ~_stream() {}
-      virtual void open(const string& host, const string& port, int domain) = 0;
-      virtual void close() = 0;
       virtual size_t read(char* buf, size_t size) = 0;
       virtual size_t write(const char* data, size_t size) = 0;
       virtual int tls() const = 0;
-      virtual _stream* starttls() = 0;
+      virtual _stream* starttls(const string& host) = 0;
     };
     auto_ptr<_stream> _st;
   protected:
     int tls() const { return _st->tls(); }
-    void starttls();
+    void starttls(const string& host);
     string read(size_t size);
     string read();
     void write(const char* data, size_t size);
@@ -145,7 +143,7 @@ public:
     virtual ~backend() {}
     void tcp(const string& host, const string& port, int domain);
     void ssl(const string& host, const string& port, int domain);
-    virtual void login(const string& user, const string& passwd) = 0;
+    virtual void login(const uri& uri, const string& passwd) = 0;
     virtual void logout() = 0;
     virtual int fetch(mailbox& mbox, const uri& uri) = 0;
   };

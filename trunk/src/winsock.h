@@ -10,6 +10,7 @@
 #include <exception>
 #include <string>
 #include <winsock2.h>
+#include <wininet.h>
 #include <ws2tcpip.h>
 #define SECURITY_WIN32
 #include <security.h>
@@ -31,7 +32,7 @@ public:
 				      int domain = AF_UNSPEC);
   static void freeaddrinfo(struct addrinfo* info) { _free(info); }
 public:
-  // tcp - TCP client socket
+  // tcpclient - TCP client socket
   class tcpclient {
     SOCKET _socket;
     tcpclient(const tcpclient&); void operator=(const tcpclient&); // disable to copy
@@ -76,7 +77,7 @@ public:
     bool avail() const { return _avail; }
     tlsclient& connect();
     tlsclient& shutdown();
-    bool authenticate(const string& cn);
+    bool verify(const string& cn, DWORD ignore = 0);
     size_t recv(char* buf, size_t size);
     size_t send(const char* data, size_t size);
   protected:

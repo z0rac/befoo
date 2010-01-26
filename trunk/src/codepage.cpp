@@ -89,7 +89,7 @@ main()
   }
   for (int cp = 1; cp < 65536; ++cp) {
     char no[10];
-    sprintf(no, "%ld", cp);
+    sprintf(no, "%d", cp);
     static const char* prefix[] = {
       "WINDOWS-", "X-CP", "CP", "CP0", "CP00"
     };
