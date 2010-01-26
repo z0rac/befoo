@@ -51,13 +51,13 @@ class imap4 : public mailbox::backend {
 #endif
 public:
   imap4() : _seq(_seqinit()) {}
-  void login(const string& user, const string& passwd);
+  void login(const uri& uri, const string& passwd);
   void logout();
   int fetch(mailbox& mbox, const uri& uri);
 };
 
 void
-imap4::login(const string& user, const string& passwd)
+imap4::login(const uri& uri, const string& passwd)
 {
   static const char notimap[] = "server not IMAP4 compliant";
   response resp = _response();
@@ -79,7 +79,7 @@ imap4::login(const string& user, const string& passwd)
   if (!preauth) {
     if (stls && !tls()) {
       _command(STARTTLS);
-      starttls();
+      starttls(uri[uri::host]);
       cap = _command(CAPABILITY, CAPABILITY);
     }
     for (parser caps(cap); caps;) {
@@ -87,7 +87,7 @@ imap4::login(const string& user, const string& passwd)
 	throw mailbox::error("login disabled");
       }
     }
-    _command("LOGIN" + _arg(user) + _arg(passwd));
+    _command("LOGIN" + _arg(uri[uri::user]) + _arg(passwd));
   }
 }
 
@@ -320,18 +320,4 @@ imap4::parser::token(bool open)
   return result;
 }
 
-mailbox::backend*
-imap4tcp(const string& host, const string& port, int domain)
-{
-  auto_ptr<mailbox::backend> be(new imap4);
-  be->tcp(host, port.empty() ? "143" : port, domain);
-  return be.release();
-}
-
-mailbox::backend*
-imap4ssl(const string& host, const string& port, int domain)
-{
-  auto_ptr<mailbox::backend> be(new imap4);
-  be->ssl(host, port.empty() ? "993" : port, domain);
-  return be.release();
-}
+mailbox::backend* backendIMAP4() { return new imap4; }

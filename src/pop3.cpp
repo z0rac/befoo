@@ -35,13 +35,13 @@ class pop3 : public mailbox::backend {
   }
 #endif
 public:
-  void login(const string& user, const string& passwd);
+  void login(const uri& uri, const string& passwd);
   void logout();
   int fetch(mailbox& mbox, const uri& uri);
 };
 
 void
-pop3::login(const string& user, const string& passwd)
+pop3::login(const uri& uri, const string& passwd)
 {
   _ok();
   if (_command("CAPA", false)) {
@@ -55,7 +55,7 @@ pop3::login(const string& user, const string& passwd)
     if (!uidl) throw mailbox::error("server not support UIDL command");
     if (stls && !tls()) {
       _command("STLS");
-      starttls();
+      starttls(uri[uri::host]);
       _command("CAPA");
       cap = _plist(true);
     }
@@ -64,7 +64,7 @@ pop3::login(const string& user, const string& passwd)
     }
     if (p == cap.end()) throw mailbox::error("login disabled");
   }
-  _command("USER " + user);
+  _command("USER " + uri[uri::user]);
   _command("PASS " + passwd);
 }
 
@@ -163,18 +163,4 @@ pop3::_headers()
   return result;
 }
 
-mailbox::backend*
-pop3tcp(const string& host, const string& port, int domain)
-{
-  auto_ptr<mailbox::backend> be(new pop3);
-  be->tcp(host, port.empty() ? "110" : port, domain);
-  return be.release();
-}
-
-mailbox::backend*
-pop3ssl(const string& host, const string& port, int domain)
-{
-  auto_ptr<mailbox::backend> be(new pop3);
-  be->ssl(host, port.empty() ? "995" : port, domain);
-  return be.release();
-}
+mailbox::backend* backendPOP3() { return new pop3; }
