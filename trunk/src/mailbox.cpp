@@ -80,6 +80,7 @@ namespace {
     typedef int (*SSL_write)(SSL*, const void*, int);
     typedef int (*SSL_shutdown)(SSL*);
     typedef int (*SSL_get_error)(const SSL*, int);
+    typedef int (*SSL_get_verify_result)(const SSL*);
     typedef X509* (*SSL_get_peer_certificate)(const SSL*);
 
     typedef unsigned long (*ERR_get_error)(void);
@@ -207,6 +208,15 @@ sslstream::_shutdown()
 bool
 sslstream::_verify(const string& host)
 {
+  switch(SSL(SSL_get_verify_result)(_ssl)) {
+  case 0: /* X509_V_OK */
+  case 18: /* X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT */
+  case 20: /* X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY */
+    break;
+  default:
+    return false;
+  }
+
   int hostn = host.size();
   const char* hostp = host.c_str();
 
@@ -242,9 +252,9 @@ sslstream::_verify(const string& host)
     X509NAME* name = LIB(X509_get_subject_name)(x509);
     if (name) {
       X509_NAME_get_text_by_NID get = LIB(X509_NAME_get_text_by_NID);
-      int len = get(name, 13/*NID_commonName*/, NULL, 0);
+      int len = get(name, 13 /*NID_commonName*/, NULL, 0);
       if (len > 0 && len <= hostn &&
-	  get(name, 13/*NID_commonName*/, buf.data, len + 1) > 0) {
+	  get(name, 13 /*NID_commonName*/, buf.data, len + 1) > 0) {
 	ok = _match(hostp, buf.data, len);
       }
     }
