@@ -29,12 +29,15 @@ passwd=パスワード	; 後で暗号化されます。
 sound=MailBeep		; サウンド名かWAVEファイルのパス。
 			; (デフォルト:着信音なし)
 period=10		; 分単位のメール確認間隔。(デフォルト:15分)
-ip=6			; IPバージョン。(デフォルト:0=指定なし)
+ip=6			; IPバージョン6。(デフォルト:0=指定なし)
+verify=1		; TLS/SSL証明書の検証レベル(サーバー名のみ)。
+			; (デフォルト:3=完全検証)
 
 [SSLを使用]
 uri=imap+ssl://username@mail.example.com/
 passwd=...
 sound=%windir%\\Media\\chimes.wav
+verify=2		; 自己証明書
 
 [Google Apps email]
 uri=imap+ssl://username%40your_domain.com@imap.gmail.com/
