@@ -361,7 +361,6 @@ winsock::tlsclient::verify(const string& cn, DWORD ignore)
 {
   LOG("Auth: " << cn << " ... ");
   win32::wstr name(cn);
-  if (!name) ignore |= SECURITY_FLAG_IGNORE_CERT_CN_INVALID;
   PCCERT_CHAIN_CONTEXT chain;
   {
     PCCERT_CONTEXT context;

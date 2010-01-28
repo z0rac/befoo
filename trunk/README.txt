@@ -27,12 +27,15 @@ passwd=your password	; It will be coded later.
 sound=MailBeep		; A sound alias or path to a wave file.
 			; (default: No sound)
 period=10		; A fetching period in minutes. (default: 15)
-ip=6			; IP version. (default: 0 meaning "unspecified")
+ip=6			; IP version 6. (default: 0 meaning "unspecified")
+verify=1		; Ability to verify certificate, only server name.
+			; (default: 3 meaning "full")
 
 [another over SSL]
 uri=imap+ssl://username@imap.example.com/
 passwd=...
 sound=%windir%\\Media\\chimes.wav
+verify=2		; Allow self certification.
 
 [Google Apps email]
 uri=imap+ssl://username%40your_domain.com@imap.gmail.com/

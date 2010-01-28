@@ -99,10 +99,12 @@ model::_load()
     setting s = setting::mailbox(name);
     mbox* mb = new mbox(name);
     auto_ptr<mbox> hold(mb);
-    int ip;
+    int ip, verify;
     s["ip"](ip = 0);
-    mb->uripasswd(s["uri"], s.cipher("passwd"),
-		  ip == 4 ? AF_INET : ip == 6 ? AF_INET6 : AF_UNSPEC);
+    s["verify"](verify = 3);
+    mb->uripasswd(s["uri"], s.cipher("passwd"))
+      .domain(ip == 4 ? AF_INET : ip == 6 ? AF_INET6 : AF_UNSPEC)
+      .verify(verify);
     int period;
     s["period"](period = 15);
     s["sound"].sep(0)(mb->sound);

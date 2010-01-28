@@ -260,13 +260,13 @@ namespace {
 void
 uridlg::initialize()
 {
-  for (int i = 0; i < sizeof(_proto) / sizeof(_proto[0]); ++i) {
+  for (int i = 0; i < int(sizeof(_proto) / sizeof(_proto[0])); ++i) {
     ComboBox_AddString(item(IDC_COMBO_SCHEME), _proto[i].scheme);
   }
   ComboBox_SetCurSel(item(IDC_COMBO_SCHEME), 0);
   _changeproto(0);
 
-  for (int i = 0; i < sizeof(_proto) / sizeof(_proto[0]); ++i) {
+  for (int i = 0; i < int(sizeof(_proto) / sizeof(_proto[0])); ++i) {
     if (_uri[uri::scheme] == _proto[i].scheme) {
       ComboBox_SetCurSel(item(IDC_COMBO_SCHEME), i);
       _changeproto(i);
@@ -343,8 +343,7 @@ namespace {
 void
 mailboxdlg::initialize()
 {
-  int ip = 0;
-  int fetch = 15;
+  int ip = 0, verify = 3, fetch = 15;
   string sound;
   if (!_name.empty()) {
     settext(IDC_EDIT_NAME, _name);
@@ -352,6 +351,7 @@ mailboxdlg::initialize()
     settext(IDC_COMBO_SERVER, s["uri"]);
     settext(IDC_EDIT_PASSWD, s.cipher("passwd"));
     s["ip"](ip);
+    s["verify"](verify);
     s["period"](fetch);
     s["sound"].sep(0)(sound);
     string mua;
@@ -362,7 +362,7 @@ mailboxdlg::initialize()
     "imap+ssl://username%40domain@imap.gmail.com/",
     "pop+ssl://username@pop3.live.com/"
   };
-  for (int i = 0; i < sizeof(uri) / sizeof(uri[0]); ++i) {
+  for (int i = 0; i < int(sizeof(uri) / sizeof(uri[0])); ++i) {
     ComboBox_InsertString(item(IDC_COMBO_SERVER), -1, uri[i]);
   }
   list<string> ipvs(extend::dll.texts(IDS_LIST_IP_VERSION));
@@ -370,6 +370,11 @@ mailboxdlg::initialize()
     ComboBox_AddString(item(IDC_COMBO_IP_VERSION), p->c_str());
   }
   ComboBox_SetCurSel(item(IDC_COMBO_IP_VERSION), ip == 4 ? 1 : ip == 6 ? 2 : 0);
+  list<string> vs(extend::dll.texts(IDS_LIST_VERIFY));
+  for (list<string>::iterator p = vs.begin(); p != vs.end(); ++p) {
+    ComboBox_AddString(item(IDC_COMBO_VERIFY), p->c_str());
+  }
+  ComboBox_SetCurSel(item(IDC_COMBO_VERIFY), verify);
   setspin(IDC_SPIN_FETCH, fetch);
   settext(IDC_COMBO_SOUND, _sound(sound));
   for (map<string, string>::iterator p = _snd.begin(); p != _snd.end(); ++p) {
@@ -381,7 +386,7 @@ mailboxdlg::initialize()
     "\"%ProgramFiles%\\Outlook Express\\msimn.exe\" /mail",
     "gnudoitw.exe (wl)(wl-folder-goto-folder-subr \\\"%inbox\\\")"
   };
-  for (int i = 0; i < sizeof(mua) / sizeof(mua[0]); ++i) {
+  for (int i = 0; i < int(sizeof(mua) / sizeof(mua[0])); ++i) {
     ComboBox_InsertString(item(IDC_COMBO_MUA), -1, win32::xenv(mua[i]).c_str());
   }
 }
@@ -413,7 +418,12 @@ mailboxdlg::done(bool ok)
     }
     s("uri", uri);
     s.cipher("passwd", gettext(IDC_EDIT_PASSWD));
-    s("ip", "\0\4\6"[max(ComboBox_GetCurSel(item(IDC_COMBO_IP_VERSION)), 0)]);
+    int ip = max(ComboBox_GetCurSel(item(IDC_COMBO_IP_VERSION)), 0);
+    if (ip) s("ip", "\0\4\6"[ip]);
+    else s.erase("ip");
+    int verify = max(ComboBox_GetCurSel(item(IDC_COMBO_VERIFY)), 0);
+    if (verify < 3) s("verify", verify);
+    else s.erase("verify");
     s("period", setting::tuple(getint(IDC_EDIT_FETCH)));
     string st;
     st = gettext(IDC_COMBO_SOUND);
