@@ -59,7 +59,7 @@ BEGIN
     ID_TEXT_SUMMARY_TITLE	"Summary - " APP_NAME
     ID_TEXT_SUMMARY_COLUMN	"Subject/Sender/Date/Mailbox/"
     ID_TEXT_ABOUT		"\
-(C) 2009 TSUBAKIMOTO Hiroya\n\
+(C) 2009-2010 TSUBAKIMOTO Hiroya\n\
 License GPLv3+: GNU GPL version 3 or later\
  <http://gnu.org/licenses/gpl.html>\n\
 This is free software; you are free to change and redistribute it.\
