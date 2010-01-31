@@ -9,7 +9,7 @@
 #define WINVER _WIN32_WINNT
 
 #define APP_NAME               "befoo"
-#define APP_VERSION            "1.0"
+#define APP_VERSION            "1.1"
 
 #define ID_MENU_FETCH          1
 #define ID_MENU_SUMMARY        2

@@ -65,14 +65,13 @@ namespace {
   extern "C" {
     typedef struct { int ssl; } SSL;
     typedef struct { int ctx; } SSL_CTX;
-    typedef struct { int method; } SSL_METHOD;
     typedef struct { int x509; } X509;
     typedef struct { int name; } X509NAME;
 
     typedef int (*SSL_library_init)(void);
-    typedef SSL_CTX* (*SSL_CTX_new)(SSL_METHOD*);
+    typedef SSL_CTX* (*SSL_CTX_new)(void*);
     typedef void (*SSL_CTX_free)(SSL_CTX*);
-    typedef SSL_METHOD* (*SSLv23_client_method)(void);
+    typedef void* (*SSLv23_client_method)(void);
     typedef long (*SSL_CTX_set_options)(SSL_CTX*, long);
     typedef SSL* (*SSL_new)(SSL_CTX*);
     typedef void (*SSL_free)(SSL*);
@@ -82,6 +81,7 @@ namespace {
     typedef int (*SSL_write)(SSL*, const void*, int);
     typedef int (*SSL_shutdown)(SSL*);
     typedef int (*SSL_get_error)(const SSL*, int);
+    typedef int (*SSL_CTX_load_verify_locations)(SSL_CTX*, const char*, const char*);
     typedef int (*SSL_get_verify_result)(const SSL*);
     typedef X509* (*SSL_get_peer_certificate)(const SSL*);
 
@@ -165,6 +165,9 @@ sslstream::sslstream(int verifylevel)
 #if !USE_SSL2
   XSSL(SSL_CTX_set_options)(_ctx, 0x01000000L /* SSL_OP_NO_SSLv2 */);
 #endif
+  if (_verifylevel > 1) {
+    XSSL(SSL_CTX_load_verify_locations)(_ctx, "./ca-root.crt", NULL);
+  }
 }
 
 sslstream::~sslstream()
@@ -217,13 +220,10 @@ sslstream::_verify(const string& host)
   case 1: break;
   default:
     switch(SSL(SSL_get_verify_result)(_ssl)) {
+    case 0: break; /* X509_V_OK */
     case 18: /* X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT */
-      if (_verifylevel > 2) return false;
-    case 0: /* X509_V_OK */
-    case 20: /* X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY */
-      break;
-    default:
-      return false;
+      if (_verifylevel < 3) break;
+    default: return false;
     }
   }
 
