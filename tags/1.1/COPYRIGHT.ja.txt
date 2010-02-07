@@ -1,0 +1,11 @@
+Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+
+befooはGNU一般公衆利用許諾書(GNU General Public License)
+バージョン3以降の同意に基づいて再頒布できます。このライセンスに
+関する詳細はLICENSE.txtをお読みください。
+
+以下のファイルは他のプロジェクトから取得、改変されています。
+・ico/*.ico
+　gnubiffプロジェクト<http://gnubiff.sourceforge.net/>。GNU GPL。
+・src/mingw/mthr.c
+　MinGWプロジェクト<http://www.mingw.org/>。パブリックドメイン。

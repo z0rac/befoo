@@ -1,0 +1,39 @@
+/*
+ * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ *
+ * This software comes with ABSOLUTELY NO WARRANTY; for details of
+ * the license terms, see the LICENSE.txt file included with the program.
+ */
+1 MENUEX DISCARDABLE
+BEGIN
+    POPUP ""
+    BEGIN
+	MENUITEM "メール確認(&F)", ID_MENU_FETCH
+	MENUITEM "一覧表示(&S)", ID_MENU_SUMMARY, MFT_STRING, MFS_DEFAULT
+	MENUITEM "", 0, MFT_SEPARATOR
+	MENUITEM "トレイアイコン(&T)", ID_MENU_TRAYICON
+	MENUITEM "設定...", ID_MENU_SETTINGS
+	MENUITEM "", 0, MFT_SEPARATOR
+	MENUITEM "befooについて(&A)", ID_MENU_ABOUT
+	MENUITEM "終了(&X)", ID_MENU_EXIT
+    END
+END
+
+STRINGTABLE DISCARDABLE 
+BEGIN
+    ID_TEXT_FETCHING		"メール確認中"
+    ID_TEXT_FETCHED_MAIL	"新着 %d 通, 未読 %d 通"
+    ID_TEXT_FETCH_ERROR		"メール確認でエラー発生"
+    ID_TEXT_BALLOON_TITLE	"メールが届きました。"
+    ID_TEXT_BALLOON_ERROR	"メールの確認に失敗。"
+    ID_TEXT_SUMMARY_TITLE	"一覧 - " APP_NAME
+    ID_TEXT_SUMMARY_COLUMN	"件名/送信者/日付/メールボックス/"
+    ID_TEXT_ABOUT		"\
+(C) 2009-2010 TSUBAKIMOTO Hiroya\n\
+ライセンス GPLv3+: GNU GPLバージョン3以降\
+ <http://gnu.org/licenses/gpl.html>\n\
+これはフリーソフトウェアで自由に改変、再頒布できます。\
+また、法令の許す範囲で""無保証""です。\
+"
+    ID_TEXT_VERSION             APP_NAME " バージョン " APP_VERSION
+END

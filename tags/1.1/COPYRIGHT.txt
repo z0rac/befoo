@@ -1,0 +1,11 @@
+Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+
+Befoo may be redistributed under the terms of the GNU General
+Public License Version 3 or later. Please read through the file
+LICENSE.txt for more information about this license.
+
+Some files are taken and modified from other projects:
+ - ico/*.ico from the gunbiff project, GNU GPL
+   <http://gnubiff.sourceforge.net/>
+ - src/mingw/mthr.c from the MinGW project, public domain
+   <http://www.mingw.org/>
