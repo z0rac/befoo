@@ -117,6 +117,21 @@ window::foreground(bool force) const
   SetForegroundWindow(_hwnd);
 }
 
+bool
+window::topmost() const
+{
+  assert(_hwnd);
+  return (GetWindowLong(_hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
+}
+
+void
+window::topmost(bool topmost)
+{
+  assert(_hwnd);
+  SetWindowPos(_hwnd, topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
+	       0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+}
+
 void
 window::move(int x, int y, int w, int h) const
 {

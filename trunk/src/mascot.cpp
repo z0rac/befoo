@@ -203,7 +203,7 @@ namespace {
 		 const string& title = string(), int icon = 0);
     int size() const { return _icon.size(); }
   public:
-    iconwindow();
+    iconwindow(int alpha);
     ~iconwindow() { if (hwnd()) _trayicon(false); }
     void trayicon(bool tray);
     bool intray() const { return !visible(); }
@@ -350,11 +350,11 @@ iconwindow::balloon(const string& text, unsigned sec,
   }
 }
 
-iconwindow::iconwindow()
+iconwindow::iconwindow(int alpha)
   : _tips(self())
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
-  SetLayeredWindowAttributes(hwnd(), ICON_BKGC, 255, LWA_COLORKEY | LWA_ALPHA);
+  SetLayeredWindowAttributes(hwnd(), ICON_BKGC, alpha, LWA_COLORKEY | LWA_ALPHA);
 }
 
 void
@@ -376,6 +376,7 @@ namespace {
     menu _menu;
     int _size;
     int _balloon;
+    static int _alpha();
     void _release();
   protected:
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
@@ -389,6 +390,14 @@ namespace {
   };
 }
 
+int
+mascotwindow::_alpha()
+{
+  int transparency = 0;
+  setting::preferences()["transparency"](transparency);
+  return 255 - 255 * min(max(transparency, 0), 100) / 100;
+}
+
 void
 mascotwindow::_release()
 {
@@ -399,7 +408,7 @@ mascotwindow::_release()
     RECT r = bounds();
     setting::preferences("mascot")
       ("position", setting::tuple
-       (r.left - dt.left)(r.top - dt.top)(dt.right)(dt.bottom))
+       (r.left - dt.left)(r.top - dt.top)(dt.right)(dt.bottom)(topmost()))
       ("tray", intray());
   } catch (...) {}
 }
@@ -489,7 +498,7 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 }
 
 mascotwindow::mascotwindow()
-  : _menu(MAKEINTRESOURCE(1))
+  : iconwindow(_alpha()), _menu(MAKEINTRESOURCE(1))
 {
   setting prefs = setting::preferences();
   prefs["icon"](_size = size());
@@ -501,14 +510,15 @@ mascotwindow::mascotwindow()
   GetWindowRect(GetDesktopWindow(), &dt);
   dt.right -= dt.left, dt.bottom -= dt.top;
   RECT r = { dt.right - _size, dt.top, dt.right, dt.bottom };
-  int tray;
-  prefs["position"](r.left)(r.top)(r.right)(r.bottom);
+  int raise, tray;
+  prefs["position"](r.left)(r.top)(r.right)(r.bottom)(raise = 0);
   prefs["tray"](tray = 0);
   r.left = dt.left + MulDiv(r.left, dt.right, r.right);
   r.top = dt.top + MulDiv(r.top, dt.bottom, r.bottom);
   r.right = r.left + _size;
   r.bottom = r.top + _size;
   move(adjust(r, _size / 4));
+  topmost(raise);
   trayicon(tray != 0);
 }
 
@@ -518,6 +528,15 @@ namespace cmd {
     { ((mascotwindow&)source).trayicon(!((mascotwindow&)source).intray()); }
     UINT state(window& source)
     { return ((mascotwindow&)source).intray() ? MFS_CHECKED : 0; }
+  };
+
+  class alwaysontop : public window::command {
+    void execute(window& source) { source.topmost(!source.topmost()); }
+    UINT state(window& source)
+    {
+      return ((mascotwindow&)source).intray() ?
+	MFS_DISABLED : source.topmost() ? MFS_CHECKED : 0;
+    }
   };
 
   class about : public window::command {
@@ -534,6 +553,7 @@ mascot()
 {
   auto_ptr<mascotwindow> w(new mascotwindow);
   w->addcmd(ID_MENU_TRAYICON, new cmd::trayicon);
+  w->addcmd(ID_MENU_ALWAYSONTOP, new cmd::alwaysontop);
   w->addcmd(ID_MENU_ABOUT, new cmd::about);
   if (string(setting::preferences("mascot")["tray"]).empty()) {
     w->execute(ID_MENU_ABOUT);

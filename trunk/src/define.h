@@ -15,6 +15,7 @@
 #define ID_MENU_SUMMARY        2
 #define ID_MENU_TRAYICON       10
 #define ID_MENU_SETTINGS       11
+#define ID_MENU_ALWAYSONTOP    12
 #define ID_MENU_ABOUT          90
 #define ID_MENU_EXIT           99
 
