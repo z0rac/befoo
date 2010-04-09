@@ -518,7 +518,7 @@ mascotwindow::mascotwindow()
   r.right = r.left + _size;
   r.bottom = r.top + _size;
   move(adjust(r, _size / 4));
-  topmost(raise);
+  topmost(raise != 0);
   trayicon(tray != 0);
 }
 
