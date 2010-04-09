@@ -59,6 +59,7 @@ balloon=5		; Period to show the balloon.(default: 10)
 summary=5,1		; Period to show the summary, and switch to show
 			; the summary when mail is fetched.(default: 3,0)
 delay=30		; Delay seconds to the first fetching.(default: 0)
+transparency=50		; Transparency rate of the mascot icon.(default: 0)
 
 
 Licensing:
