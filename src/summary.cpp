@@ -354,7 +354,7 @@ summarywindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_ENDSESSION:
     if (w) release();
     break;
-  case WM_SETCURSOR:
+  case WM_NCMOUSEMOVE:
     _autoclose.reset(*this);
     break;
   case WM_CONTEXTMENU:
