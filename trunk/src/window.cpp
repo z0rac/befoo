@@ -129,7 +129,7 @@ window::topmost(bool topmost)
 {
   assert(_hwnd);
   SetWindowPos(_hwnd, topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
-	       0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	       0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
 void

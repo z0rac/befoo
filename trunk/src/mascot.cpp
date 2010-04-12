@@ -99,7 +99,7 @@ namespace {
   public:
     tooltips(const window& owner);
     void tip(const string& text);
-    void reset(bool clear);
+    void reset(bool track);
     void balloon(const string& text, unsigned sec = 0,
 		 const string& title = string(), int icon = 0);
     void clearballoon();
@@ -111,6 +111,7 @@ tooltips::tooltips(const window& owner)
 {
   static commctrl tooltips(ICC_BAR_CLASSES);
   style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, WS_EX_TOOLWINDOW);
+  topmost(true);
   TOOLINFO ti = { sizeof(TOOLINFO), TTF_TRACK, owner.hwnd() };
   SendMessage(hwnd(), TTM_ADDTOOL, 0, LPARAM(&ti));
   ti.uFlags = TTF_SUBCLASS;
@@ -129,26 +130,24 @@ tooltips::tip(const string& text)
 }
 
 void
-tooltips::reset(bool clear)
+tooltips::reset(bool track)
 {
-  TOOLINFO ti = { sizeof(TOOLINFO), 0, GetParent(hwnd()), 1 };
-  if (!clear) GetClientRect(ti.hwnd, &ti.rect);
-  SendMessage(hwnd(), TTM_NEWTOOLRECT, 0, LPARAM(&ti));
-  TRACKMOUSEEVENT tme = {
-    sizeof(TRACKMOUSEEVENT),
-    clear ? TME_LEAVE : TME_LEAVE | TME_CANCEL, ti.hwnd
-  };
-  TrackMouseEvent(&tme);
+  if (track) {
+    TRACKMOUSEEVENT tme = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, GetParent(hwnd()) };
+    TrackMouseEvent(&tme);
+  } else {
+    SendMessage(hwnd(), TTM_ACTIVATE, FALSE, 0);
+    SendMessage(hwnd(), TTM_ACTIVATE, TRUE, 0);
+  }
 }
 
 void
 tooltips::balloon(const string& text, unsigned sec,
 		  const string& title, int icon)
 {
+  SetWindowLong(hwnd(), GWL_STYLE,
+		WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE);
   TOOLINFO ti = { sizeof(TOOLINFO), 0, GetParent(hwnd()), 0 };
-  SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
-  style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX |
-	TTS_BALLOON | TTS_CLOSE, WS_EX_TOOLWINDOW);
   RECT r;
   GetClientRect(ti.hwnd, &r);
   r.left = r.right / 2;
@@ -167,16 +166,18 @@ tooltips::clearballoon()
 {
   TOOLINFO ti = { sizeof(TOOLINFO), 0, GetParent(hwnd()), 0 };
   SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
-  SendMessage(hwnd(), TTM_SETTITLEA, 0, LPARAM(""));
-  style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, WS_EX_TOOLWINDOW);
 }
 
 LRESULT
 tooltips::notify(WPARAM w, LPARAM l)
 {
-  switch (LPNMHDR(l)->code) {
-  case TTN_SHOW: reset(false); return 0;
-  case TTN_POP: reset(LPNMHDR(l)->idFrom == 1); return 0;
+  if (LPNMHDR(l)->code == TTN_POP) {
+    if (LPNMHDR(l)->idFrom == 0) {
+      show(false, false);
+      SendMessage(hwnd(), TTM_SETTITLEA, 0, LPARAM(""));
+      SetWindowLong(hwnd(), GWL_STYLE, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX);
+    }
+    reset(true);
   }
   return window::notify(w, l);
 }
