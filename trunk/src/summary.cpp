@@ -339,8 +339,8 @@ summarywindow::summarywindow(const mailbox* mboxes)
   }
   setting::preferences()["summary"](_autoclose.sec = 3);
   _autoclose.reset(*this);
-  show(true, false);
-  foreground(true);
+  topmost(true);
+  show(true, GetActiveWindow() != NULL);
   _changed = false;
 }
 

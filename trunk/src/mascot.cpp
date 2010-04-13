@@ -99,7 +99,7 @@ namespace {
   public:
     tooltips(const window& owner);
     void tip(const string& text);
-    void reset(bool track);
+    void reset(bool await = true);
     void balloon(const string& text, unsigned sec = 0,
 		 const string& title = string(), int icon = 0);
     void clearballoon();
@@ -111,7 +111,6 @@ tooltips::tooltips(const window& owner)
 {
   static commctrl tooltips(ICC_BAR_CLASSES);
   style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, WS_EX_TOOLWINDOW);
-  topmost(true);
   TOOLINFO ti = { sizeof(TOOLINFO), TTF_TRACK, owner.hwnd() };
   SendMessage(hwnd(), TTM_ADDTOOL, 0, LPARAM(&ti));
   ti.uFlags = TTF_SUBCLASS;
@@ -130,14 +129,13 @@ tooltips::tip(const string& text)
 }
 
 void
-tooltips::reset(bool track)
+tooltips::reset(bool await)
 {
-  if (track) {
+  if (await) {
     TRACKMOUSEEVENT tme = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, GetParent(hwnd()) };
     TrackMouseEvent(&tme);
-  } else {
-    SendMessage(hwnd(), TTM_ACTIVATE, FALSE, 0);
-    SendMessage(hwnd(), TTM_ACTIVATE, TRUE, 0);
+  } else if (!visible()) {
+    for (int i = 0; i < 2; ++i) SendMessage(hwnd(), TTM_ACTIVATE, i, 0);
   }
 }
 
@@ -177,7 +175,7 @@ tooltips::notify(WPARAM w, LPARAM l)
       SendMessage(hwnd(), TTM_SETTITLEA, 0, LPARAM(""));
       SetWindowLong(hwnd(), GWL_STYLE, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX);
     }
-    reset(true);
+    reset();
   }
   return window::notify(w, l);
 }
@@ -266,10 +264,16 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_CREATE:
     tbc = RegisterWindowMessage("TaskbarCreated");
     break;
+  case WM_WINDOWPOSCHANGED:
+    if (!(PWINDOWPOS(l)->flags & SWP_NOZORDER)) {
+      bool t = topmost();
+      if (_tips.topmost() != t) _tips.topmost(t);
+    }
+    break;
   case WM_LBUTTONDOWN: case WM_RBUTTONDOWN: case WM_MBUTTONDOWN:
   case WM_SHOWWINDOW:
     _tips.clearballoon();
-    return 0;
+    break;
   case WM_MOUSELEAVE:
     _tips.reset(hascursor());
     return 0;
@@ -309,6 +313,7 @@ iconwindow::popup(const menu& menu, DWORD pt)
     NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
     Shell_NotifyIcon(NIM_SETFOCUS, &ni);
   }
+  _tips.reset();
   return t;
 }
 
@@ -355,7 +360,7 @@ iconwindow::iconwindow(int alpha)
   : _tips(self())
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
-  SetLayeredWindowAttributes(hwnd(), ICON_BKGC, alpha, LWA_COLORKEY | LWA_ALPHA);
+  SetLayeredWindowAttributes(hwnd(), ICON_BKGC, BYTE(alpha), LWA_COLORKEY | LWA_ALPHA);
 }
 
 void
