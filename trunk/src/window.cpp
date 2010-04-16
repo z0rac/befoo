@@ -127,7 +127,7 @@ window::topmost() const
 void
 window::topmost(bool topmost)
 {
-  assert(_hwnd);
+  assert(_hwnd && !child());
   SetWindowPos(_hwnd, topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
 	       0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
@@ -412,8 +412,12 @@ appwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     erase(HDC(w));
     return TRUE;
   case WM_GETMINMAXINFO:
+    window::dispatch(m, w, l);
     limit(LPMINMAXINFO(l));
     return 0;
+  case WM_WINDOWPOSCHANGED:
+    if (!(PWINDOWPOS(l)->flags & SWP_NOZORDER)) raised(topmost());
+    break;
   }
   return window::dispatch(m, w, l);
 }

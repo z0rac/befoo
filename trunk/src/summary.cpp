@@ -55,6 +55,7 @@ namespace {
     summary(const window& parent);
     ~summary();
     int initialize(const mailbox* mboxes);
+    void raised(bool topmost);
   };
 }
 
@@ -290,6 +291,16 @@ summary::item::operator()(LPCWSTR s)
   return *this;
 }
 
+void
+summary::raised(bool topmost)
+{
+  HWND h = ListView_GetToolTips(hwnd());
+  if (h && ((GetWindowLong(h, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0) != topmost) {
+    SetWindowPos(h, topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
+		 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  }
+}
+
 /** summarywindow - summary popup window
  */
 namespace {
@@ -308,6 +319,7 @@ namespace {
     void release();
     void limit(LPMINMAXINFO info);
     void resize(int w, int h);
+    void raised(bool topmost) { _summary.raised(topmost); }
   public:
     summarywindow(const mailbox* mboxes);
     ~summarywindow() { if (hwnd()) release(); }
@@ -319,7 +331,7 @@ summarywindow::summarywindow(const mailbox* mboxes)
 {
   style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
 	WS_THICKFRAME | WS_CLIPCHILDREN,
-	WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
+	WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
   SetWindowText(hwnd(), win32::exe.text(ID_TEXT_SUMMARY_TITLE).c_str());
   RECT r;
   GetWindowRect(GetDesktopWindow(), &r);
