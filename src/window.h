@@ -109,7 +109,7 @@ protected:
   virtual void draw(HDC) {}
   virtual void erase(HDC) {}
   virtual void limit(LPMINMAXINFO) {}
-
+  virtual void raised(bool) {}
   const RECT& adjust(RECT& bounds, int border = 8) const;
 public:
   appwindow(LPCSTR menu = NULL, HWND owner = NULL)

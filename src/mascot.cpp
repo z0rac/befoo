@@ -94,67 +94,118 @@ icon::reset(int type)
  */
 namespace {
   class tooltips : public window, window::timer {
+    static commctrl use;
+    struct info : public TOOLINFO {
+      info(const window& tips);
+    };
+    class status : public window {
+      LRESULT notify(WPARAM w, LPARAM l);
+      void tracking(bool tracking);
+    public:
+      status(const window& owner);
+      void operator()(const string& text);
+      void reset(bool await = true);
+      void disable();
+    };
+    status _status;
     void wakeup(window&) { clearballoon(); }
     LRESULT notify(WPARAM w, LPARAM l);
   public:
     tooltips(const window& owner);
-    void tip(const string& text);
-    void reset(bool await = true);
+    void tip(const string& text) { _status(text); }
+    void reset(bool await = true) { _status.reset(await); }
     void balloon(const string& text, unsigned sec = 0,
 		 const string& title = string(), int icon = 0);
     void clearballoon();
+    void topmost(bool owner);
   };
+  window::commctrl tooltips::use(ICC_BAR_CLASSES);
 }
 
-tooltips::tooltips(const window& owner)
+tooltips::info::info(const window& tips)
+{
+  ZeroMemory(this, sizeof(TOOLINFO));
+  cbSize = sizeof(TOOLINFO);
+  hwnd = GetParent(tips.hwnd());
+}
+
+tooltips::status::status(const window& owner)
   : window(TOOLTIPS_CLASS, NULL, owner.hwnd())
 {
-  static commctrl tooltips(ICC_BAR_CLASSES);
-  style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, WS_EX_TOOLWINDOW);
-  TOOLINFO ti = { sizeof(TOOLINFO), TTF_TRACK, owner.hwnd() };
-  SendMessage(hwnd(), TTM_ADDTOOL, 0, LPARAM(&ti));
+  style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX);
+  info ti(*this);
   ti.uFlags = TTF_SUBCLASS;
-  ti.uId = 1;
   GetClientRect(ti.hwnd, &ti.rect);
   SendMessage(hwnd(), TTM_ADDTOOL, 0, LPARAM(&ti));
-  SendMessage(hwnd(), TTM_SETMAXTIPWIDTH, 0, 300);
 }
 
 void
-tooltips::tip(const string& text)
+tooltips::status::operator()(const string& text)
 {
-  TOOLINFO ti = { sizeof(TOOLINFO), 0, GetParent(hwnd()), 1 };
+  info ti(*this);
   ti.lpszText = LPSTR(text.c_str());
   SendMessage(hwnd(), TTM_UPDATETIPTEXT, 0, LPARAM(&ti));
 }
 
 void
-tooltips::reset(bool await)
+tooltips::status::reset(bool await)
 {
   if (await) {
-    TRACKMOUSEEVENT tme = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, GetParent(hwnd()) };
-    TrackMouseEvent(&tme);
+    tracking(true);
   } else if (!visible()) {
     for (int i = 0; i < 2; ++i) SendMessage(hwnd(), TTM_ACTIVATE, i, 0);
   }
 }
 
 void
-tooltips::balloon(const string& text, unsigned sec,
-		  const string& title, int icon)
+tooltips::status::disable()
 {
-  SetWindowLong(hwnd(), GWL_STYLE,
-		WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE);
-  TOOLINFO ti = { sizeof(TOOLINFO), 0, GetParent(hwnd()), 0 };
-  RECT r;
-  GetClientRect(ti.hwnd, &r);
-  r.left = r.right / 2;
-  r.top = r.bottom * 9 / 16;
-  ClientToScreen(ti.hwnd, LPPOINT(&r));
-  SendMessage(hwnd(), TTM_TRACKPOSITION, 0, MAKELPARAM(r.left, r.top));
+  SendMessage(hwnd(), TTM_ACTIVATE, FALSE, 0);
+  tracking(false);
+}
+
+void
+tooltips::status::tracking(bool tracking)
+{
+  TRACKMOUSEEVENT tme = {
+    sizeof(TRACKMOUSEEVENT),
+    tracking ? TME_LEAVE : TME_LEAVE | TME_CANCEL,
+    GetParent(hwnd())
+  };
+  TrackMouseEvent(&tme);
+}
+
+LRESULT
+tooltips::status::notify(WPARAM w, LPARAM l)
+{
+  if (LPNMHDR(l)->code == TTN_POP) reset();
+  return window::notify(w, l);
+}
+
+tooltips::tooltips(const window& owner)
+  : window(TOOLTIPS_CLASS, NULL, owner.hwnd()), _status(owner)
+{
+  style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE);
+  info ti(*this);
+  ti.uFlags = TTF_TRACK;
+  SendMessage(hwnd(), TTM_ADDTOOL, 0, LPARAM(&ti));
+  SendMessage(hwnd(), TTM_SETMAXTIPWIDTH, 0, 300);
+}
+
+void
+tooltips::balloon(const string& text, unsigned sec, const string& title, int icon)
+{
+  info ti(*this);
+  SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
   ti.lpszText = LPSTR(text.c_str());
   SendMessage(hwnd(), TTM_UPDATETIPTEXT, 0, LPARAM(&ti));
   SendMessage(hwnd(), TTM_SETTITLEA, WPARAM(icon), LPARAM(title.c_str()));
+  _status.disable();
+  RECT r;
+  GetClientRect(ti.hwnd, &r);
+  r.left = r.right / 2, r.top = r.bottom * 9 / 16;
+  ClientToScreen(ti.hwnd, LPPOINT(&r));
+  SendMessage(hwnd(), TTM_TRACKPOSITION, 0, MAKELPARAM(r.left, r.top));
   SendMessage(hwnd(), TTM_TRACKACTIVATE, TRUE, LPARAM(&ti));
   settimer(*this, sec * 1000);
 }
@@ -162,21 +213,21 @@ tooltips::balloon(const string& text, unsigned sec,
 void
 tooltips::clearballoon()
 {
-  TOOLINFO ti = { sizeof(TOOLINFO), 0, GetParent(hwnd()), 0 };
+  info ti(*this);
   SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
+}
+
+void
+tooltips::topmost(bool owner)
+{
+  if (window::topmost() != owner) window::topmost(owner);
+  if (_status.topmost() != owner) _status.topmost(owner);
 }
 
 LRESULT
 tooltips::notify(WPARAM w, LPARAM l)
 {
-  if (LPNMHDR(l)->code == TTN_POP) {
-    if (LPNMHDR(l)->idFrom == 0) {
-      show(false, false);
-      SendMessage(hwnd(), TTM_SETTITLEA, 0, LPARAM(""));
-      SetWindowLong(hwnd(), GWL_STYLE, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX);
-    }
-    reset();
-  }
+  if (LPNMHDR(l)->code == TTN_POP) _status.reset();
   return window::notify(w, l);
 }
 
@@ -187,6 +238,7 @@ namespace {
     icon _icon;
     tooltips _tips;
     string _status;
+    UINT _tbcmsg;
     bool _trayicon(bool tray);
     void _update();
     void _updatetips();
@@ -194,6 +246,7 @@ namespace {
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
     void release() { _trayicon(false); }
     void draw(HDC hDC);
+    void raised(bool topmost) { _tips.topmost(topmost); }
     bool popup(const menu& menu, DWORD pt);
     void wakeup(window& source);
     void reset(int type);
@@ -259,17 +312,7 @@ iconwindow::_updatetips()
 LRESULT
 iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
 {
-  static UINT tbc = 0;
   switch (m) {
-  case WM_CREATE:
-    tbc = RegisterWindowMessage("TaskbarCreated");
-    break;
-  case WM_WINDOWPOSCHANGED:
-    if (!(PWINDOWPOS(l)->flags & SWP_NOZORDER)) {
-      bool t = topmost();
-      if (_tips.topmost() != t) _tips.topmost(t);
-    }
-    break;
   case WM_LBUTTONDOWN: case WM_RBUTTONDOWN: case WM_MBUTTONDOWN:
   case WM_SHOWWINDOW:
     _tips.clearballoon();
@@ -289,7 +332,7 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     PostMessage(hwnd(), l, 0, MAKELPARAM(pt.x, pt.y));
     return 0;
   default:
-    if (m == tbc && intray()) _trayicon(true);
+    if (m == _tbcmsg && intray()) _trayicon(true);
     break;
   }
   return appwindow::dispatch(m, w, l);
@@ -313,7 +356,6 @@ iconwindow::popup(const menu& menu, DWORD pt)
     NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
     Shell_NotifyIcon(NIM_SETFOCUS, &ni);
   }
-  _tips.reset();
   return t;
 }
 
@@ -357,7 +399,7 @@ iconwindow::balloon(const string& text, unsigned sec,
 }
 
 iconwindow::iconwindow(int alpha)
-  : _tips(self())
+  : _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
   SetLayeredWindowAttributes(hwnd(), ICON_BKGC, BYTE(alpha), LWA_COLORKEY | LWA_ALPHA);
@@ -380,14 +422,12 @@ iconwindow::trayicon(bool tray)
 namespace {
   class mascotwindow : public iconwindow {
     menu _menu;
-    int _size;
     int _balloon;
     static int _alpha();
     void _release();
   protected:
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
     void release();
-    void limit(LPMINMAXINFO info);
     void update(int recent, int unseen, list<mailbox*>* mboxes);
   public:
     mascotwindow();
@@ -464,13 +504,6 @@ mascotwindow::release()
 }
 
 void
-mascotwindow::limit(LPMINMAXINFO info)
-{
-  POINT size = { _size, _size };
-  info->ptMaxSize = info->ptMinTrackSize = info->ptMaxTrackSize = size;
-}
-
-void
 mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 {
   if (mboxes) {
@@ -507,23 +540,24 @@ mascotwindow::mascotwindow()
   : iconwindow(_alpha()), _menu(MAKEINTRESOURCE(1))
 {
   setting prefs = setting::preferences();
-  prefs["icon"](_size = size());
-  if (!_size) _size = GetSystemMetrics(SM_CXICON);
+  int icon;
+  prefs["icon"](icon = size());
+  if (!icon) icon = GetSystemMetrics(SM_CXICON);
   prefs["balloon"](_balloon = 10);
 
   prefs = setting::preferences("mascot");
   RECT dt;
   GetWindowRect(GetDesktopWindow(), &dt);
   dt.right -= dt.left, dt.bottom -= dt.top;
-  RECT r = { dt.right - _size, dt.top, dt.right, dt.bottom };
+  RECT r = { dt.right - icon, dt.top, dt.right, dt.bottom };
   int raise, tray;
   prefs["position"](r.left)(r.top)(r.right)(r.bottom)(raise = 0);
   prefs["tray"](tray = 0);
   r.left = dt.left + MulDiv(r.left, dt.right, r.right);
   r.top = dt.top + MulDiv(r.top, dt.bottom, r.bottom);
-  r.right = r.left + _size;
-  r.bottom = r.top + _size;
-  move(adjust(r, _size / 4));
+  r.right = r.left + icon;
+  r.bottom = r.top + icon;
+  move(adjust(r, icon / 4));
   topmost(raise != 0);
   trayicon(tray != 0);
 }
