@@ -441,7 +441,7 @@ mascotwindow::_alpha()
 {
   int transparency = 0;
   setting::preferences()["transparency"](transparency);
-  return 255 - 255 * min(max(transparency, 0), 100) / 100;
+  return 255 - 255 * transparency / 100;
 }
 
 void

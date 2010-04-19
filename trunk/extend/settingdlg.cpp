@@ -574,8 +574,9 @@ maindlg::initialize()
   setspin(IDC_SPIN_ICON, n, 0, 256);
   Button_SetCheck(item(IDC_CHECKBOX_ICON), b);
   _enableicon(b != 0);
-  pref["transparency"](n = 0);
-  setspin(IDC_SPIN_TRANSPARENCY, n, 0, 100);
+  pref["transparency"](n = 0)(b = 0);
+  setspin(IDC_SPIN_ICONTRANS, n, 0, 100);
+  setspin(IDC_SPIN_SUMMARYTRANS, b, 0, 100);
 }
 
 void
@@ -592,7 +593,8 @@ maindlg::done(bool ok)
     } else {
       pref.erase("icon");
     }
-    pref("transparency", setting::tuple(getint(IDC_EDIT_TRANSPARENCY)));
+    pref("transparency", setting::tuple(getint(IDC_EDIT_ICONTRANS))
+	 (getint(IDC_EDIT_SUMMARYTRANS)));
   }
   dialog::done(ok);
 }

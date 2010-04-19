@@ -314,6 +314,7 @@ namespace {
       void wakeup(window& source)
       { if (source.hascursor()) reset(source); else source.close(); }
     } _autoclose;
+    int _alpha;
   protected:
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
     void release();
@@ -331,7 +332,7 @@ summarywindow::summarywindow(const mailbox* mboxes)
 {
   style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
 	WS_THICKFRAME | WS_CLIPCHILDREN,
-	WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
+	WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE | WS_EX_LAYERED);
   SetWindowText(hwnd(), win32::exe.text(ID_TEXT_SUMMARY_TITLE).c_str());
   RECT r;
   GetWindowRect(GetDesktopWindow(), &r);
@@ -349,8 +350,12 @@ summarywindow::summarywindow(const mailbox* mboxes)
     }
     move(r);
   }
-  setting::preferences()["summary"](_autoclose.sec = 3);
+  setting prefs = setting::preferences();
+  prefs["summary"](_autoclose.sec = 3);
   _autoclose.reset(*this);
+  int transparency;
+  prefs["transparency"]()(transparency = 0);
+  _alpha = 255 - 255 * transparency / 100;
   topmost(true);
   show(true, GetActiveWindow() != NULL);
   _changed = false;
@@ -362,6 +367,9 @@ summarywindow::dispatch(UINT m, WPARAM w, LPARAM l)
   switch (m) {
   case WM_MOVE:
     _changed = true;
+    break;
+  case WM_ACTIVATE:
+    SetLayeredWindowAttributes(hwnd(), 0, BYTE(LOWORD(w) ? 255 : _alpha), LWA_ALPHA);
     break;
   case WM_ENDSESSION:
     if (w) release();
