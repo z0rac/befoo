@@ -82,13 +82,18 @@ public:
     char _sep;
     bool avail() const { return _next < _s.size(); }
     string next();
-    bool next(long& v);
+    bool next(int& v);
   public:
     manip(const string& s);
     manip& operator()() { next(); return *this; }
     manip& operator()(string& v);
     template<typename _Ty> manip& operator()(_Ty& v)
-    { long i; if (next(i)) v = static_cast<_Ty>(i); return *this; }
+    { int i = int(v); next(i), v = _Ty(i); return *this; }
+    template<typename _Ty, typename _Tz> manip& operator()(_Ty& v, _Tz& e)
+    { int i = int(v); e = _Tz(next(i)), v = _Ty(i); return *this; }
+    manip& operator()(int& v) { next(v); return *this; }
+    template<typename _Tz> manip& operator()(int& v, _Tz& e)
+    { e = _Tz(next(v)); return *this; }
     operator const string&() const { return _s; }
     manip& sep(char sep) { _sep = sep; return *this; }
     list<string> split();
@@ -97,8 +102,7 @@ public:
     list<_Ty> split()
     {
       list<_Ty> l;
-      long i;
-      while (next(i)) l.push_back(static_cast<_Ty>(i));
+      for (int i; next(i);) l.push_back(static_cast<_Ty>(i));
       return l;
     }
   };

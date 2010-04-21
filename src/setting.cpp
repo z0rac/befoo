@@ -196,7 +196,7 @@ setting::tuple::digit(long i)
 }
 
 /*
- * Functions of class setting::mainp
+ * Functions of class setting::manip
  */
 setting::manip::manip(const string& s)
   : _s(s), _next(0), _sep(',') {}
@@ -204,19 +204,16 @@ setting::manip::manip(const string& s)
 string
 setting::manip::next()
 {
+  static const char ws[] = " \t";
   if (!avail()) return string();
-  string::size_type i = _s.find_first_not_of(" \t", _next);
-  if (i == string::npos) {
-    _next = _s.size();
-    return string();
-  }
-  _next = _s.find_first_of(_sep, i);
-  if (_next == string::npos) _next = _s.size();
-  return _s.substr(i, _next++ - i);
+  string::size_type i = _s.find_first_not_of(ws, _next);
+  string::size_type n = _s.find_first_of(_sep, _next);
+  _next = n != string::npos ? n + 1 : (n = _s.size());
+  return i < n ? _s.substr(i, _s.find_last_not_of(ws, n - 1) - i + 1) : string();
 }
 
 bool
-setting::manip::next(long& v)
+setting::manip::next(int& v)
 {
   string s = next();
   if (s.empty()) return false;
@@ -227,7 +224,8 @@ setting::manip::next(long& v)
 setting::manip&
 setting::manip::operator()(string& v)
 {
-  if (avail()) v = win32::xenv(next());
+  string s = next();
+  if (!s.empty()) v = win32::xenv(s);
   return *this;
 }
 
