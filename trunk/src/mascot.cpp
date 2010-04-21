@@ -113,7 +113,7 @@ namespace {
   public:
     tooltips(const window& owner);
     void tip(const string& text) { _status(text); }
-    void reset(bool await = true) { _status.reset(await); }
+    void reset(bool await = true) { if (!visible()) _status.reset(await); }
     void balloon(const string& text, unsigned sec = 0,
 		 const string& title = string(), int icon = 0);
     void clearballoon();
@@ -254,8 +254,9 @@ namespace {
     void balloon(const string& text, unsigned sec,
 		 const string& title = string(), int icon = 0);
     int size() const { return _icon.size(); }
+    void alpha(int alpha);
   public:
-    iconwindow(int alpha);
+    iconwindow();
     ~iconwindow() { if (hwnd()) _trayicon(false); }
     void trayicon(bool tray);
     bool intray() const { return !visible(); }
@@ -316,10 +317,10 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_LBUTTONDOWN: case WM_RBUTTONDOWN: case WM_MBUTTONDOWN:
   case WM_SHOWWINDOW:
     _tips.clearballoon();
-    break;
+    // fall down
   case WM_MOUSELEAVE:
     _tips.reset(hascursor());
-    return 0;
+    break;
   case WM_USER: // from tray icon
     switch (l) {
     case WM_CONTEXTMENU: break;
@@ -398,11 +399,16 @@ iconwindow::balloon(const string& text, unsigned sec,
   }
 }
 
-iconwindow::iconwindow(int alpha)
+void
+iconwindow::alpha(int alpha)
+{
+  SetLayeredWindowAttributes(hwnd(), ICON_BKGC, BYTE(alpha), LWA_COLORKEY | LWA_ALPHA);
+}
+
+iconwindow::iconwindow()
   : _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
-  SetLayeredWindowAttributes(hwnd(), ICON_BKGC, BYTE(alpha), LWA_COLORKEY | LWA_ALPHA);
 }
 
 void
@@ -423,7 +429,6 @@ namespace {
   class mascotwindow : public iconwindow {
     menu _menu;
     int _balloon;
-    static int _alpha();
     void _release();
   protected:
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
@@ -434,14 +439,6 @@ namespace {
     ~mascotwindow() { if (hwnd()) _release(); }
     using iconwindow::balloon;
   };
-}
-
-int
-mascotwindow::_alpha()
-{
-  int transparency = 0;
-  setting::preferences()["transparency"](transparency);
-  return 255 - 255 * transparency / 100;
 }
 
 void
@@ -537,11 +534,11 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 }
 
 mascotwindow::mascotwindow()
-  : iconwindow(_alpha()), _menu(MAKEINTRESOURCE(1))
+  : _menu(MAKEINTRESOURCE(1))
 {
   setting prefs = setting::preferences();
-  int icon;
-  prefs["icon"](icon = size());
+  int icon, transparency;
+  prefs["icon"](icon = size())(transparency = 0);
   if (!icon) icon = GetSystemMetrics(SM_CXICON);
   prefs["balloon"](_balloon = 10);
 
@@ -558,6 +555,7 @@ mascotwindow::mascotwindow()
   r.right = r.left + icon;
   r.bottom = r.top + icon;
   move(adjust(r, icon / 4));
+  alpha(255 - 255 * transparency / 100);
   topmost(raise != 0);
   trayicon(tray != 0);
 }

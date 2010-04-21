@@ -513,23 +513,35 @@ mailboxdlg::_sound(const string& snd)
       : h(NULL) { RegOpenKeyEx(parent, path.c_str(), 0, KEY_READ, &h); }
     ~key() { if (h) RegCloseKey(h); }
     operator HKEY() const { return h; }
-    DWORD operator()(char* p, DWORD n) const
-    { return h && RegQueryValueEx(h, NULL, NULL, NULL,
-				  LPBYTE(p), &n) == ERROR_SUCCESS ? n : 0; }
+    DWORD operator()(char* p, DWORD n, const char* value = NULL) const
+    { return h && RegQueryValueEx(h, value, NULL, NULL,
+				  LPBYTE(p), &n) == ERROR_SUCCESS && n ? n - 1 : 0; }
     DWORD operator()(DWORD i, char* p, DWORD n) const
     { return h && RegEnumKeyEx(h, i, p, &n, NULL,
 			       NULL, NULL, NULL) == ERROR_SUCCESS ? n : 0; }
   };
+  win32::dll shlwapi("shlwapi.dll", false);
+  typedef HRESULT (WINAPI* SHLoadIndirectString)(LPCWSTR, LPWSTR, UINT, void**);
+  SHLoadIndirectString shload = shlwapi ?
+    SHLoadIndirectString(shlwapi("SHLoadIndirectString", NULL)) : NULL;
   key schemes("AppEvents\\Schemes\\Apps\\.Default");
   string disp = snd;
   for (DWORD i = 0;; ++i) {
     char s[256];
     string name(s, schemes(i, s, sizeof(s)));
     if (name.empty()) break;
-    if (key(name + "\\.Current", schemes)(s, sizeof(s)) > 1 &&
-	key("AppEvents\\EventLabels\\" + name)(s, sizeof(s)) > 1) {
-      _snd[s] = name;
-      if (name == snd) disp = s;
+    if (name[0] == '.' || !key(name + "\\.Current", schemes)(s, sizeof(s))) continue;
+    key event("AppEvents\\EventLabels\\" + name);
+    string label;
+    if (shload && event(s, sizeof(s), "DispFileName") &&
+	shload(win32::wstr(s), LPWSTR(s), sizeof(s) / sizeof(WCHAR), NULL) == S_OK) {
+      label = win32::wstr::mbstr(LPWSTR(s));
+    } else if (event(s, sizeof(s))) {
+      label = s;
+    }
+    if (!label.empty()) {
+      _snd[label] = name;
+      if (name == snd) disp = label;
     }
   }
   return disp;
@@ -560,23 +572,20 @@ maindlg::initialize()
   _enablebuttons();
 
   setting pref(setting::preferences());
-  int n, b;
+  int n, b, t;
   pref["balloon"](n = 10);
   setspin(IDC_SPIN_BALLOON, n);
-  pref["summary"](n = 3)(b = 0);
+  pref["summary"](n = 3)(b = 0)(t = 0);
   setspin(IDC_SPIN_SUMMARY, n);
   Button_SetCheck(item(IDC_CHECKBOX_SUMMARY), b);
+  setspin(IDC_SPIN_SUMMARYTRANS, t, 0, 100);
   pref["delay"](n = 0);
   setspin(IDC_SPIN_STARTUP, n);
-  setting::manip v(pref["icon"]);
-  b = !string(v).empty();
-  v(n = 64);
+  pref["icon"](n = 64, b)(t = 0);
   setspin(IDC_SPIN_ICON, n, 0, 256);
   Button_SetCheck(item(IDC_CHECKBOX_ICON), b);
   _enableicon(b != 0);
-  pref["transparency"](n = 0)(b = 0);
-  setspin(IDC_SPIN_ICONTRANS, n, 0, 100);
-  setspin(IDC_SPIN_SUMMARYTRANS, b, 0, 100);
+  setspin(IDC_SPIN_ICONTRANS, t, 0, 100);
 }
 
 void
@@ -586,15 +595,12 @@ maindlg::done(bool ok)
     setting pref(setting::preferences());
     pref("balloon", setting::tuple(getint(IDC_EDIT_BALLOON)));
     pref("summary", setting::tuple(getint(IDC_EDIT_SUMMARY))
-	 (Button_GetCheck(item(IDC_CHECKBOX_SUMMARY))));
-    pref("delay", setting::tuple(getint(IDC_EDIT_STARTUP)));
-    if (Button_GetCheck(item(IDC_CHECKBOX_ICON))) {
-      pref("icon", setting::tuple(min(getint(IDC_EDIT_ICON), 256)));
-    } else {
-      pref.erase("icon");
-    }
-    pref("transparency", setting::tuple(getint(IDC_EDIT_ICONTRANS))
+	 (Button_GetCheck(item(IDC_CHECKBOX_SUMMARY)))
 	 (getint(IDC_EDIT_SUMMARYTRANS)));
+    pref("delay", setting::tuple(getint(IDC_EDIT_STARTUP)));
+    pref("icon", setting::tuple(Button_GetCheck(item(IDC_CHECKBOX_ICON)) ?
+				gettext(IDC_EDIT_ICON) : "")
+	 (getint(IDC_EDIT_ICONTRANS)));
   }
   dialog::done(ok);
 }

@@ -54,13 +54,13 @@ uri=pop+ssl://username@pop.example.com/
 passwd=...
 
 [(preferences)]
-icon=32			; Size of the mascot icon.(default: 64)
+icon=32,50		; The mascot icon size and transparency.
+			; (default: 64,0)
 balloon=5		; Period to show the balloon.(default: 10)
-summary=5,1		; Period to show the summary, and switch to show
-			; the summary when mail is fetched.(default: 3,0)
+summary=5,1,20		; Period to show the summary, switch to show the
+			; summary when mail is fetched, and the inactive
+			; summary transparency.(default: 3,0,0)
 delay=30		; Delay seconds to the first fetching.(default: 0)
-transparency=50,20	; Transparency rates of the mascot icon and the
-			; inactive summary window.(default: 0,0)
 
 
 Licensing:

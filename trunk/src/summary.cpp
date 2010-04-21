@@ -351,10 +351,9 @@ summarywindow::summarywindow(const mailbox* mboxes)
     move(r);
   }
   setting prefs = setting::preferences();
-  prefs["summary"](_autoclose.sec = 3);
-  _autoclose.reset(*this);
   int transparency;
-  prefs["transparency"]()(transparency = 0);
+  prefs["summary"](_autoclose.sec = 3)()(transparency = 0);
+  _autoclose.reset(*this);
   _alpha = 255 - 255 * transparency / 100;
   topmost(true);
   show(true, GetActiveWindow() != NULL);
