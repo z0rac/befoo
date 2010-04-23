@@ -354,9 +354,9 @@ summarywindow::summarywindow(const mailbox* mboxes)
   int transparency;
   prefs["summary"](_autoclose.sec = 3)()(transparency = 0);
   _autoclose.reset(*this);
-  _alpha = 255 - 255 * transparency / 100;
+  transparent(_alpha = 255 - 255 * transparency / 100);
   topmost(true);
-  show(true, GetActiveWindow() != NULL);
+  show(true, GetActiveWindow() == GetForegroundWindow());
   _changed = false;
 }
 
@@ -367,17 +367,17 @@ summarywindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_MOVE:
     _changed = true;
     break;
-  case WM_ACTIVATE:
-    SetLayeredWindowAttributes(hwnd(), 0, BYTE(LOWORD(w) ? 255 : _alpha), LWA_ALPHA);
-    break;
   case WM_ENDSESSION:
     if (w) release();
+    break;
+  case WM_CONTEXTMENU:
+    return 0;
+  case WM_NCACTIVATE:
+    transparent(LOWORD(w) ? 255 : _alpha);
     break;
   case WM_NCMOUSEMOVE:
     _autoclose.reset(*this);
     break;
-  case WM_CONTEXTMENU:
-    return 0;
   }
   return appwindow::dispatch(m, w, l);
 }

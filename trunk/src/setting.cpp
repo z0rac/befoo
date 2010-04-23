@@ -107,8 +107,10 @@ void
 setting::cache(const string& key, const list<string>& data)
 {
   assert(_rep);
+  string id = cachekey(key);
+  _rep->erase(id);
   if (!data.empty()) {
-    auto_ptr<storage> cache(_rep->storage(cachekey(key)));
+    auto_ptr<storage> cache(_rep->storage(id));
     long i = 0;
     for (list<string>::const_iterator p = data.begin(); p != data.end(); ++p) {
       char s[35];

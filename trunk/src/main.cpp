@@ -41,7 +41,6 @@ namespace {
 	: mailbox(name), period(0), next(0) {}
     };
     mailbox* _mailboxes;
-    void _load();
     void _release();
     void wakeup(window& source) { fetch(source, false); }
   public:
@@ -58,6 +57,7 @@ namespace {
     unsigned _fetching;
     list<mailbox*> _fetched;
     int _summary;
+    HANDLE _idle;
     void _done(mbox& mb);
     static void _thread(void* param);
   };
@@ -65,10 +65,33 @@ namespace {
 }
 
 model::model()
-  : _mailboxes(NULL), _last(GetTickCount()), _fetching(0), _summary(0)
+  : _mailboxes(NULL), _last(GetTickCount()), _fetching(0), _summary(0),
+    _idle(win32::valid(CreateEvent(NULL, TRUE, TRUE, NULL)))
 {
   try {
-    _load();
+    mailbox* last = NULL;
+    list<string> mbs = setting::mailboxes();
+    for (list<string>::iterator p = mbs.begin(); p != mbs.end(); ++p) {
+      string name = *p;
+      LOG("Load mailbox [" << name << "]" << endl);
+      setting s = setting::mailbox(name);
+      mbox* mb = new mbox(name);
+      auto_ptr<mbox> hold(mb);
+      int ip, verify;
+      s["ip"](ip = 0);
+      s["verify"](verify = 3);
+      mb->uripasswd(s["uri"], s.cipher("passwd"))
+	.domain(ip == 4 ? AF_INET : ip == 6 ? AF_INET6 : AF_UNSPEC)
+	.verify(verify);
+      int period;
+      s["period"](period = 15);
+      s["sound"].sep(0)(mb->sound);
+      mb->period = period > 0 ? period * 60000U : 0;
+      mb->ignore(setting::cache(mb->uristr()));
+      hold.release();
+      last = last ? last->next(mb) : (_mailboxes = mb);
+    }
+    setting::cacheclear();
     setting::preferences()["summary"]()(_summary);
   } catch (...) {
     _release();
@@ -80,46 +103,19 @@ model::model()
 void
 model::_release()
 {
+  cache();
   for (mailbox* p = _mailboxes; p;) {
     mailbox* next = p->next();
     delete p;
     p = next;
   }
-  _mailboxes = NULL;
-}
-
-void
-model::_load()
-{
-  mailbox* last = NULL;
-  list<string> mbs = setting::mailboxes();
-  for (list<string>::iterator p = mbs.begin(); p != mbs.end(); ++p) {
-    string name = *p;
-    LOG("Load mailbox [" << name << "]" << endl);
-    setting s = setting::mailbox(name);
-    mbox* mb = new mbox(name);
-    auto_ptr<mbox> hold(mb);
-    int ip, verify;
-    s["ip"](ip = 0);
-    s["verify"](verify = 3);
-    mb->uripasswd(s["uri"], s.cipher("passwd"))
-      .domain(ip == 4 ? AF_INET : ip == 6 ? AF_INET6 : AF_UNSPEC)
-      .verify(verify);
-    int period;
-    s["period"](period = 15);
-    s["sound"].sep(0)(mb->sound);
-    mb->period = period > 0 ? period * 60000U : 0;
-    mb->ignore(setting::cache(mb->uristr()));
-    hold.release();
-    if (last) last = last->next(mb);
-    else last = _mailboxes = mb;
-  }
-  setting::cacheclear();
+  CloseHandle(_idle);
 }
 
 void
 model::cache()
 {
+  WaitForSingleObject(_idle, INFINITE);
   for (mailbox* p = _mailboxes; p; p = p->next()) {
     setting::cache(p->uristr(), p->ignore());
   }
@@ -155,7 +151,10 @@ model::fetch(window& source, bool force)
     list<mailbox*>::iterator end = _fetched.end();
     if (find(_fetched.begin(), end, fetch) == end) {
       CloseHandle(win32::thread(_thread, (void*)fetch));
-      if (_fetching++ == 0) window::broadcast(WM_APP, 0, 0);
+      if (_fetching++ == 0) {
+	ResetEvent(_idle);
+	window::broadcast(WM_APP, 0, 0);
+      }
       _fetched.push_front(fetch);
     }
   }
@@ -194,6 +193,7 @@ model::_done(mbox& mb)
   _fetched.clear();
   LOG("***** HEAP SIZE [" << win32::cheapsize() << ", "
       << win32::heapsize() << "] *****" << endl);
+  SetEvent(_idle);
 }
 
 void
@@ -208,8 +208,8 @@ model::_thread(void* param)
   } catch (...) {
     LOG("Unknown exception." << endl);
   }
-  _model->_done(mb);
   LOG("End thread [" << mb.name() << "]." << endl);
+  _model->_done(mb);
 }
 
 namespace { // misc. functions
@@ -264,8 +264,8 @@ repository::edit()
   struct key {
     HKEY h;
     key(const char* key)
-    { if (RegOpenKeyEx (HKEY_CURRENT_USER, key,
-			0, KEY_NOTIFY, &h) != ERROR_SUCCESS) throw win32::error(); }
+    { if (RegOpenKeyEx(HKEY_CURRENT_USER, key,
+		       0, KEY_NOTIFY, &h) != ERROR_SUCCESS) throw win32::error(); }
     ~key() { RegCloseKey(h); }
   } key(REG_KEY);
 
@@ -353,11 +353,26 @@ namespace cmd {
   };
 
   struct setting : public window::command {
-    model& _model;
     repository& _rep;
-    setting(model& model, repository& rep) : _model(model), _rep(rep) {}
-    void execute(window&) { if (_rep.edit()) PostQuitMessage(1); }
-    UINT state(window&) { return _model.fetching() ? MFS_DISABLED : 0; }
+    DWORD _tid;
+    HANDLE _thread;
+    setting(repository& rep) : _rep(rep), _tid(GetCurrentThreadId()), _thread(NULL) {}
+    ~setting() { _thread && WaitForSingleObject(_thread, INFINITE); }
+    void execute(window&) { if (!busy()) _thread = win32::thread(edit, (void*)this); }
+    UINT state(window&) { return busy() ? MFS_DISABLED : 0; }
+    static void edit(void* param)
+    {
+      setting& self = *reinterpret_cast<setting*>(param);
+      if (self._rep.edit()) PostThreadMessage(self._tid, WM_QUIT, 1, 0);
+    }
+    bool busy()
+    {
+      if (_thread && WaitForSingleObject(_thread, 0) == WAIT_OBJECT_0) {
+	CloseHandle(_thread);
+	_thread = NULL;
+      }
+      return _thread != NULL;
+    }
   };
 
   struct exit : public window::command {
@@ -391,12 +406,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
       auto_ptr<window> w(mascot());
       w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
       w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
-      w->addcmd(ID_MENU_SETTINGS, new cmd::setting(*m, rep));
+      w->addcmd(ID_MENU_SETTINGS, new cmd::setting(rep));
       w->addcmd(ID_MENU_EXIT, new cmd::exit);
       w->addcmd(ID_EVENT_LOGOFF, new cmd::logoff(*m));
       w->settimer(*m, delay > 0 ? delay * 1000 : 1);
       qc = window::eventloop();
-      m->cache();
     }
     return 0;
   } catch (...) {}

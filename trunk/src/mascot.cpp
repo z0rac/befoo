@@ -254,12 +254,12 @@ namespace {
     void balloon(const string& text, unsigned sec,
 		 const string& title = string(), int icon = 0);
     int size() const { return _icon.size(); }
-    void alpha(int alpha);
   public:
     iconwindow();
     ~iconwindow() { if (hwnd()) _trayicon(false); }
     void trayicon(bool tray);
     bool intray() const { return !visible(); }
+    void transparent(int alpha) { appwindow::transparent(alpha, ICON_BKGC); }
   };
 }
 
@@ -397,12 +397,6 @@ iconwindow::balloon(const string& text, unsigned sec,
   } else {
     _tips.balloon(text, sec, title, icon);
   }
-}
-
-void
-iconwindow::alpha(int alpha)
-{
-  SetLayeredWindowAttributes(hwnd(), ICON_BKGC, BYTE(alpha), LWA_COLORKEY | LWA_ALPHA);
 }
 
 iconwindow::iconwindow()
@@ -555,7 +549,7 @@ mascotwindow::mascotwindow()
   r.right = r.left + icon;
   r.bottom = r.top + icon;
   move(adjust(r, icon / 4));
-  alpha(255 - 255 * transparency / 100);
+  transparent(255 - 255 * transparency / 100);
   topmost(raise != 0);
   trayicon(tray != 0);
 }

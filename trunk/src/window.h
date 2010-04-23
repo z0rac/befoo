@@ -60,6 +60,7 @@ public:
   void foreground(bool force = false) const;
   bool topmost() const;
   void topmost(bool topmost);
+  void transparent(int alpha, COLORREF key = COLORREF(-1));
   void move(int x, int y, int w, int h) const;
   void move(const RECT& r) const;
   void invalidate() const { InvalidateRect(_hwnd, NULL, TRUE); }
