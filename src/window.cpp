@@ -4,6 +4,7 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
+#define _WIN32_WINNT 0x0500
 #define _WIN32_IE 0x0300
 #include "win32.h"
 #include "window.h"
@@ -130,6 +131,14 @@ window::topmost(bool topmost)
   assert(_hwnd && !child());
   SetWindowPos(_hwnd, topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
 	       0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+void
+window::transparent(int alpha, COLORREF key)
+{
+  assert(_hwnd);
+  SetLayeredWindowAttributes(_hwnd, key, BYTE(alpha),
+			     key != COLORREF(-1) ? LWA_COLORKEY | LWA_ALPHA : LWA_ALPHA);
 }
 
 void
