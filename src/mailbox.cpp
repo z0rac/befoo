@@ -144,7 +144,7 @@ namespace {
 }
 
 openssl::openssl()
-  : ssleay("ssleay32.dll", false), libeay("libeay32.dll", false)
+  : ssleay("ssleay32.dll"), libeay("libeay32.dll")
 {
   if (ssleay && libeay) XSSL(SSL_library_init)();
 }

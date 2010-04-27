@@ -271,20 +271,6 @@ win32::module::resource(LPCSTR type, LPCSTR name) const
 const win32::module win32::exe(GetModuleHandle(NULL));
 
 /*
- * Functions of the class win32::dll
- */
-win32::dll::dll(LPCSTR file, bool must)
-  : module(LoadLibrary(file))
-{
-  must && valid<HMODULE>(*this);
-}
-
-win32::dll::~dll()
-{
-  if (*this) FreeLibrary(*this);
-}
-
-/*
  * Functions of the class win32::wstr
  */
 win32::wstr::wstr(const string& s, UINT cp)

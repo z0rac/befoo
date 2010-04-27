@@ -5,6 +5,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "befoo", "befoo.vcproj", "{D
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "extend", "extend.vcproj", "{BFDE788B-D681-4F39-98E2-E4686391BD4D}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "icons", "icons.vcproj", "{7200AD75-CA09-46D9-B54C-AE7C542986D5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -19,6 +21,10 @@ Global
 		{BFDE788B-D681-4F39-98E2-E4686391BD4D}.Debug|Win32.Build.0 = Debug|Win32
 		{BFDE788B-D681-4F39-98E2-E4686391BD4D}.Release|Win32.ActiveCfg = Release|Win32
 		{BFDE788B-D681-4F39-98E2-E4686391BD4D}.Release|Win32.Build.0 = Release|Win32
+		{7200AD75-CA09-46D9-B54C-AE7C542986D5}.Debug|Win32.ActiveCfg = Debug|Win32
+		{7200AD75-CA09-46D9-B54C-AE7C542986D5}.Debug|Win32.Build.0 = Debug|Win32
+		{7200AD75-CA09-46D9-B54C-AE7C542986D5}.Release|Win32.ActiveCfg = Release|Win32
+		{7200AD75-CA09-46D9-B54C-AE7C542986D5}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

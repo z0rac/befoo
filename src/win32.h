@@ -56,8 +56,8 @@ public:
   class dll : public module {
     dll(const dll&); void operator=(const dll&); // disable to copy
   public:
-    dll(LPCSTR file, bool must = true);
-    ~dll();
+    dll(LPCSTR file) : module(LoadLibrary(file)) {}
+    ~dll() { *this && FreeLibrary(*this); }
   };
 
   // mex - exclusive control

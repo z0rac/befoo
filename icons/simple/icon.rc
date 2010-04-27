@@ -1,0 +1,25 @@
+/*
+ * Copyright (C) 2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ *
+ * This software comes with ABSOLUTELY NO WARRANTY; for details of
+ * the license terms, see the LICENSE.txt file included with the program.
+ */
+#include <winresrc.h>
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+#pragma code_page(1252)
+
+1 ICON DISCARDABLE "fetch.ico"
+2 ICON DISCARDABLE "exist.ico"
+3 ICON DISCARDABLE "empty.ico"
+
+1 RCDATA DISCARDABLE
+BEGIN
+    8,  // Bytes of header
+    48, // Icon size
+    1,  // Animation frames
+    1,	// Initial icon
+    1, 0, // Animation for fetching.
+    2, 0, // Animation for having mail.
+    3, 0  // Animation for no mail.
+END

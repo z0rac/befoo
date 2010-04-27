@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -10,25 +10,7 @@
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 #pragma code_page(1252)
 
-0 ICON DISCARDABLE "../ico/app.ico"
-1 ICON DISCARDABLE "../ico/jump1.ico"
-2 ICON DISCARDABLE "../ico/jump2.ico"
-3 ICON DISCARDABLE "../ico/jump3.ico"
-4 ICON DISCARDABLE "../ico/jump4.ico"
-5 ICON DISCARDABLE "../ico/sleep1.ico"
-6 ICON DISCARDABLE "../ico/sleep2.ico"
-7 ICON DISCARDABLE "../ico/sleep3.ico"
-8 ICON DISCARDABLE "../ico/sleep4.ico"
-
-1 RCDATA DISCARDABLE
-BEGIN
-    6,  // Bytes of header
-    64, // Icon size
-    4,  // Animation frames
-    1, 0, 0L, 0L, 0L, // Animation for fetching.
-    1, 60, 2,  9, 3,  9, 4, 9, // Animation for having mail.
-    5, 30, 6, 30, 7, 30, 8, 30 // Animation for no mail.
-END
+#include "icon.rc"
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "befoo.exe.manifest"
 

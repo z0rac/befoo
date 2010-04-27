@@ -9,9 +9,7 @@
 namespace extend { extern win32::module dll; }
 win32::module extend::dll;
 
-extern "C" BOOL APIENTRY DllMain(HANDLE,  DWORD, LPVOID);
-
-BOOL APIENTRY
+extern "C" BOOL APIENTRY
 DllMain(HANDLE instance, DWORD reason, LPVOID)
 {
   switch (reason) {

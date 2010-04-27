@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -10,6 +10,8 @@
 #include "win32.h"
 #include "window.h"
 #include <cassert>
+#include <stdexcept>
+#include <shlwapi.h>
 
 #ifdef _DEBUG
 #include <iostream>
@@ -31,16 +33,20 @@
  */
 namespace {
   class icon {
+    win32::module _mod;
     PWORD _rc;
     struct anim { WORD id, ticks; };
     const anim* _anim;
     int _size;
     int _step;
     HICON _icon;
+    void _release();
+    HICON _read(int id);
     void _load(int step = 0);
   public:
-    icon(LPCSTR rc = MAKEINTRESOURCE(1));
-    ~icon() { if (_icon) DestroyIcon(_icon); }
+    icon(LPCSTR id, LPCSTR fn = NULL);
+    ~icon() { _release(); }
+    bool reload(LPCSTR id, LPCSTR fn = NULL);
     operator HICON() const { return _icon; }
     int size() const { return _rc[1]; }
     icon& resize(int size);
@@ -50,21 +56,72 @@ namespace {
   };
 }
 
-icon::icon(LPCSTR rc)
-  : _rc(PWORD(win32::valid(win32::exe.resource(RT_RCDATA, rc)))),
-    _anim(reinterpret_cast<anim*>(PBYTE(_rc) + _rc[0])),
-    _size(size()), _step(0), _icon(NULL)
+icon::icon(LPCSTR id, LPCSTR fn)
+  : _icon(NULL)
 {
-  _load();
-  win32::valid(_icon);
+  try {
+    if (fn && *fn) {
+      char path[MAX_PATH];
+      if (GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
+	  PathRemoveFileSpec(path) && PathCombine(path, path, fn)) {
+	_mod = win32::valid(LoadLibraryEx(path, NULL, LOAD_LIBRARY_AS_DATAFILE));
+      }
+    }
+    HRSRC h = win32::valid(FindResource(_mod, id, RT_RCDATA));
+    DWORD rsz = SizeofResource(_mod, h);
+    _rc = PWORD(win32::valid(LockResource(LoadResource(_mod, h))));
+    if (rsz < 2 || (_rc[0] & 1) || rsz < _rc[0] || _rc[0] < 8 ||
+	_rc[2] == 0 || rsz < _rc[0] + _rc[2] * sizeof(anim)) {
+      throw runtime_error("Invalid icon resource.");
+    }
+    _anim = reinterpret_cast<anim*>(PBYTE(_rc) + _rc[0]);
+    for (int t = 0; t < 3; ++t) {
+      const anim* p = _anim + _rc[2] * t;
+      for (int i = 0; i < _rc[2]; ++i) {
+	win32::valid(FindResource(_mod, MAKEINTRESOURCE(p[i].id), RT_ICON));
+	if (p[i].ticks == 0) break;
+      }
+    }
+    _size = size(), _step = 0, _icon = win32::valid(_read(_rc[3]));
+  } catch (...) {
+    _release();
+    throw;
+  }
+}
+
+bool
+icon::reload(LPCSTR id, LPCSTR fn)
+{
+  try {
+    icon newicon(id, fn);
+    _release();
+    *this = newicon;
+    newicon._mod = NULL, newicon._icon = NULL;
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+void
+icon::_release()
+{
+  if (_icon) DestroyIcon(_icon);
+  if (_mod) FreeLibrary(_mod);
+}
+
+HICON
+icon::_read(int id)
+{
+  return HICON(LoadImage(_mod ? _mod : win32::exe, MAKEINTRESOURCE(id),
+			 IMAGE_ICON, _size, _size, LR_DEFAULTCOLOR));
 }
 
 void
 icon::_load(int step)
 {
   _step = _anim[step].id ? step : 0;
-  HICON icon = HICON(LoadImage(win32::exe, MAKEINTRESOURCE(_anim[_step].id),
-			       IMAGE_ICON, _size, _size, LR_DEFAULTCOLOR));
+  HICON icon = _read(_anim[_step].id);
   if (icon) {
     if (_icon) DestroyIcon(_icon);
     _icon = icon;
@@ -197,15 +254,15 @@ tooltips::balloon(const string& text, unsigned sec, const string& title, int ico
 {
   info ti(*this);
   SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
-  ti.lpszText = LPSTR(text.c_str());
-  SendMessage(hwnd(), TTM_UPDATETIPTEXT, 0, LPARAM(&ti));
-  SendMessage(hwnd(), TTM_SETTITLEA, WPARAM(icon), LPARAM(title.c_str()));
   _status.disable();
   RECT r;
   GetClientRect(ti.hwnd, &r);
   r.left = r.right / 2, r.top = r.bottom * 9 / 16;
   ClientToScreen(ti.hwnd, LPPOINT(&r));
   SendMessage(hwnd(), TTM_TRACKPOSITION, 0, MAKELPARAM(r.left, r.top));
+  ti.lpszText = LPSTR(text.c_str());
+  SendMessage(hwnd(), TTM_UPDATETIPTEXT, 0, LPARAM(&ti));
+  SendMessage(hwnd(), TTM_SETTITLEA, WPARAM(icon), LPARAM(title.c_str()));
   SendMessage(hwnd(), TTM_TRACKACTIVATE, TRUE, LPARAM(&ti));
   settimer(*this, sec * 1000);
 }
@@ -254,8 +311,9 @@ namespace {
     void balloon(const string& text, unsigned sec,
 		 const string& title = string(), int icon = 0);
     int size() const { return _icon.size(); }
+    bool reload(LPCSTR id, LPCSTR fn = NULL) { return _icon.reload(id, fn); }
   public:
-    iconwindow();
+    iconwindow(LPCSTR id, LPCSTR fn = NULL);
     ~iconwindow() { if (hwnd()) _trayicon(false); }
     void trayicon(bool tray);
     bool intray() const { return !visible(); }
@@ -399,8 +457,9 @@ iconwindow::balloon(const string& text, unsigned sec,
   }
 }
 
-iconwindow::iconwindow()
-  : _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
+iconwindow::iconwindow(LPCSTR id, LPCSTR fn)
+  : _icon(id, fn), _tips(self()),
+    _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
 }
@@ -528,10 +587,13 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 }
 
 mascotwindow::mascotwindow()
-  : _menu(MAKEINTRESOURCE(1))
+  : iconwindow(MAKEINTRESOURCE(1)), _menu(MAKEINTRESOURCE(1))
 {
   setting prefs = setting::preferences();
-  int icon, transparency;
+  int icon, transparency, id;
+  string fn;
+  prefs["icon"]()()(fn)(id = 1);
+  if (!fn.empty() || id != 1) reload(MAKEINTRESOURCE(id), fn.c_str());
   prefs["icon"](icon = size())(transparency = 0);
   if (!icon) icon = GetSystemMetrics(SM_CXICON);
   prefs["balloon"](_balloon = 10);

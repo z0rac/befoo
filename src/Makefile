@@ -4,9 +4,9 @@
 # This software comes with ABSOLUTELY NO WARRANTY; for details of
 # the license terms, see the LICENSE.txt file included with the program.
 #
-NAME = befoo
-OPTS = -mwin32 -m32 -mthreads
-OPTS += -mno-cygwin
+PROG = befoo.exe
+
+OPTS = -mwin32 -m32 -mthreads -mno-cygwin
 CFLAGS = $(OPTS)
 LDFLAGS = $(OPTS) -mwindows
 
@@ -32,28 +32,23 @@ LDFLAGS += -Wl,--strip-all -Wl,-O1 -Wl,--as-needed
 endif
 CXXFLAGS = $(CFLAGS)
 
-PROG = $(NAME).exe
 OBJS = main.o imap4.o pop3.o mail.o codepage.o mailbox.o uri.o
 OBJS += mascot.o summary.o setting.o window.o win32.o winsock.o mingw/mthr.o
-L10N = ja.rc
+OBJS += befoo.res
 LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcrypt32 -lcomctl32 -lwinmm
 
-RSRC = $(PROG).manifest ../ico/app.ico
-RSRC += ../ico/jump1.ico ../ico/jump2.ico ../ico/jump3.ico ../ico/jump4.ico
-RSRC += ../ico/sleep1.ico ../ico/sleep2.ico ../ico/sleep3.ico ../ico/sleep4.ico
+ICON = ../icons/default
+RSRC = $(PROG).manifest $(ICON)/icon.rc ja.rc
 
 MAKECP = codepage.exe
 
-.SUFFIXES:
-.SUFFIXES: .c .cpp .o .rc .res
-
-.rc.res:
-	windres --output-format=coff --input=$< --output=$@
+.SUFFIXES: .rc .res
+.rc.res:	; windres -I$(ICON) -O coff -i $< -o $@
 
 all: $(PROG)
 
-$(PROG): $(OBJS) $(NAME).res
-	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(NAME).res $(LIBS)
+$(PROG): $(OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
 codepage.h: codepage.txt $(MAKECP)
 	./$(MAKECP) < codepage.txt > $@
@@ -61,19 +56,14 @@ codepage.h: codepage.txt $(MAKECP)
 $(MAKECP): %.exe: %.cpp
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(LDFLAGS) -DMAIN=1 -o $@ $<
 
-$(OBJS) $(NAME).res: Makefile
+$(OBJS): Makefile
 main.o mascot.o summary.o: define.h mailbox.h setting.h window.h win32.h
 mail.o uri.o imap4.o pop3.o: mailbox.h
 main.o mailbox.o: win32.h winsock.h
 mail.o setting.o window.o winsock.o: win32.h
 codepage.o mailbox.o setting.o window.o win32.o winsock.o: %.o: %.h
-$(NAME).res: $(L10N) $(RSRC) define.h
+befoo.res: $(RSRC) define.h
 
-clean: mostlyclean
-	@$(RM) $(PROG)
-
-distclean: clean
-	@$(RM) $(MAKECP) *~
-
-mostlyclean:
-	@$(RM) $(OBJS) $(NAME).res
+clean: mostlyclean	; @$(RM) $(PROG)
+distclean: clean	; @$(RM) $(MAKECP) *~
+mostlyclean:		; @$(RM) $(OBJS)

@@ -56,6 +56,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
+				AdditionalIncludeDirectories="..\icons\default"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
@@ -136,6 +137,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
+				AdditionalIncludeDirectories="..\icons\default"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"

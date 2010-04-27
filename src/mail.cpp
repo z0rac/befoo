@@ -45,7 +45,7 @@ namespace {
     operator bool() const { return _cd != iconv_t(-1); }
     string operator()(const string& text);
   };
-  win32::dll u8conv::_dll("iconv.dll", false);
+  win32::dll u8conv::_dll("iconv.dll");
 }
 
 u8conv&
@@ -116,7 +116,7 @@ namespace {
     operator bool() const { return _codepage != 0; }
     string operator()(const string& text);
   };
-  win32::dll u8conv::_dll("mlang.dll", false);
+  win32::dll u8conv::_dll("mlang.dll");
   ConvertINetMultiByteToUnicode
   u8conv::_mb2u = FUNC(ConvertINetMultiByteToUnicode);
 #undef FUNC

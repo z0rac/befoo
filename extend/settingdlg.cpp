@@ -520,10 +520,10 @@ mailboxdlg::_sound(const string& snd)
     { return h && RegEnumKeyEx(h, i, p, &n, NULL,
 			       NULL, NULL, NULL) == ERROR_SUCCESS ? n : 0; }
   };
-  win32::dll shlwapi("shlwapi.dll", false);
+  static win32::dll shlwapi("shlwapi.dll");
   typedef HRESULT (WINAPI* SHLoadIndirectString)(LPCWSTR, LPWSTR, UINT, void**);
-  SHLoadIndirectString shload = shlwapi ?
-    SHLoadIndirectString(shlwapi("SHLoadIndirectString", NULL)) : NULL;
+  SHLoadIndirectString shload =
+    SHLoadIndirectString(shlwapi("SHLoadIndirectString", NULL));
   key schemes("AppEvents\\Schemes\\Apps\\.Default");
   string disp = snd;
   for (DWORD i = 0;; ++i) {
@@ -679,9 +679,7 @@ maindlg::_enableicon(bool en)
   enable(IDC_SPIN_ICON, en);
 }
 
-extern "C" __declspec(dllexport) void settingdlg(HWND, HINSTANCE, LPSTR, int);
-
-void
+extern "C" __declspec(dllexport) void
 settingdlg(HWND hwnd, HINSTANCE, LPSTR cmdln, int)
 {
   try {

@@ -4,9 +4,9 @@
 # This software comes with ABSOLUTELY NO WARRANTY; for details of
 # the license terms, see the LICENSE.txt file included with the program.
 #
-NAME = extend
-OPTS = -mwin32 -m32
-OPTS += -mno-cygwin
+DLL = extend.dll
+
+OPTS = -mwin32 -m32 -mno-cygwin
 LIBDIR = ../src
 CFLAGS = $(OPTS) -D_USRDLL -DISOLATION_AWARE_ENABLED=1 -I$(LIBDIR)
 LDFLAGS = $(OPTS) -mwindows --target=i386-mingw32
@@ -23,40 +23,29 @@ LDFLAGS += -Wl,--strip-all -Wl,-O1 -Wl,--as-needed
 endif
 CXXFLAGS = $(CFLAGS)
 
-DLL = $(NAME).dll
-OBJS = main.o settingdlg.o
+OBJS = main.o settingdlg.o $(LOBJS) extend.res
 LOBJS = setting.o uri.o win32.o
-OBJS += $(LOBJS)
-L10N = ja.rc
 LIBS = -lstdc++ -lshlwapi -lcomctl32 -lwinmm
 
-RSRC = $(DLL).manifest
+RSRC = $(DLL).manifest ja.rc
 
-.SUFFIXES:
-.SUFFIXES: .c .cpp .o .rc .res
-
-.rc.res:
-	windres --output-format=coff --input=$< --output=$@
+.SUFFIXES: .rc .res
+.rc.res:	; windres -O coff -i $< -o $@
 
 all: $(DLL)
 
-$(DLL): $(OBJS) $(NAME).res
-	dllwrap $(LDFLAGS) -o $@ $(OBJS) $(NAME).res $(LIBS)
+$(DLL): $(OBJS)
+	dllwrap $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
 $(LOBJS): %.o: $(LIBDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-$(OBJS) $(NAME).res: Makefile
+$(OBJS): Makefile
 main.o settingdlg.o setting.o win32.o: $(LIBDIR)/win32.h
 settingdlg.o: define.h $(LIBDIR)/setting.h $(LIBDIR)/mailbox.h
 setting.o: $(LIBDIR)/setting.h
-$(NAME).res: $(L10N) $(RSRC) define.h
+extend.res: $(RSRC) define.h
 
-clean: mostlyclean
-	@$(RM) $(DLL)
-
-distclean: clean
-	@$(RM) *~
-
-mostlyclean:
-	@$(RM) $(OBJS) $(NAME).res
+clean: mostlyclean	; @$(RM) $(DLL)
+distclean: clean	; @$(RM) *~
+mostlyclean:		; @$(RM) $(OBJS)

@@ -4,29 +4,19 @@
 # This software comes with ABSOLUTELY NO WARRANTY; for details of
 # the license terms, see the LICENSE.txt file included with the program.
 #
-NAME = befoo
-SRCDIR = src
-EXTDIR = extend
-TARGETS = $(NAME).exe extend.dll
+TARGETS = befoo.exe extend.dll *.ico
+SUBDIRS = src extend icons
 
 all: $(TARGETS)
 
-$(NAME).exe:
-	@$(MAKE) -C $(SRCDIR)
-	@mv $(SRCDIR)/$@ .
+befoo.exe: src		; @cp $</$@ .
+extend.dll: extend	; @cp $</$@ .
+*.ico: icons		; @cp $</*.ico .
 
-extend.dll:
-	@$(MAKE) -C $(EXTDIR)
-	@mv $(EXTDIR)/$@ .
+$(SUBDIRS)::		; @$(MAKE) -C $@
+%.clean:		; @$(MAKE) -C $(basename $@) clean
+%.distclean:		; @$(MAKE) -C $(basename $@) distclean
 
-clean: mostlyclean
-	@$(MAKE) -C $(SRCDIR) $@
-	@$(MAKE) -C $(EXTDIR) $@
-
-distclean: mostlyclean
-	@$(RM) *~
-	@$(MAKE) -C $(SRCDIR) $@
-	@$(MAKE) -C $(EXTDIR) $@
-
-mostlyclean:
-	@$(RM) $(TARGETS)
+clean: mostlyclean $(SUBDIRS:=.clean)
+distclean: mostlyclean $(SUBDIRS:=.distclean) ; @$(RM) *~
+mostlyclean: 		; @$(RM) befoo.exe extend.dll *.ico
