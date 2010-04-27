@@ -1,0 +1,31 @@
+/*
+ * Copyright (C) 2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ *
+ * This software comes with ABSOLUTELY NO WARRANTY; for details of
+ * the license terms, see the LICENSE.txt file included with the program.
+ */
+#include <winresrc.h>
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+#pragma code_page(1252)
+
+0 ICON DISCARDABLE "app.ico"
+1 ICON DISCARDABLE "jump1.ico"
+2 ICON DISCARDABLE "jump2.ico"
+3 ICON DISCARDABLE "jump3.ico"
+4 ICON DISCARDABLE "jump4.ico"
+5 ICON DISCARDABLE "sleep1.ico"
+6 ICON DISCARDABLE "sleep2.ico"
+7 ICON DISCARDABLE "sleep3.ico"
+8 ICON DISCARDABLE "sleep4.ico"
+
+1 RCDATA DISCARDABLE
+BEGIN
+    8,  // Bytes of header
+    64, // Icon size
+    4,  // Animation frames
+    1,	// Initial icon
+    1, 0, 0L, 0L, 0L, // Animation for fetching.
+    1, 60, 2,  9, 3,  9, 4, 9, // Animation for having mail.
+    5, 30, 6, 30, 7, 30, 8, 30 // Animation for no mail.
+END

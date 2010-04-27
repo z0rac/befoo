@@ -99,7 +99,7 @@ winsock::_free_t winsock::_free = NULL;
 
 winsock::winsock()
 {
-  static win32::dll ws2("ws2_32.dll", false);
+  static win32::dll ws2("ws2_32.dll");
   _get = _get_t(ws2("getaddrinfo", FARPROC(_getaddrinfo)));
   _free = _free_t(ws2("freeaddrinfo", FARPROC(_freeaddrinfo)));
 
@@ -339,7 +339,7 @@ winsock::tlsclient::shutdown()
     try {
 #if defined(__MINGW32__) // for MinGWs bug.
       win32::dll secur32("secur32.dll");
-      typedef SECURITY_STATUS WINAPI (*act)(PCtxtHandle,PSecBufferDesc);
+      typedef SECURITY_STATUS (WINAPI* act)(PCtxtHandle,PSecBufferDesc);
       act ApplyControlTokenA = act(secur32("ApplyControlToken"));
 #endif
       DWORD value = SCHANNEL_SHUTDOWN;

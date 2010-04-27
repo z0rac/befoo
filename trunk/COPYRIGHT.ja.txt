@@ -5,7 +5,10 @@ befooはGNU一般公衆利用許諾書(GNU General Public License)
 関する詳細はLICENSE.txtをお読みください。
 
 以下のファイルは他のプロジェクトから取得、改変されています。
-・ico/*.ico
+・icons/default/*.ico
 　gnubiffプロジェクト<http://gnubiff.sourceforge.net/>。GNU GPL。
+・icons/simple/*.ico
+　Human-O2アイコンセット<http://schollidesign.deviantart.com/art/
+Human-O2-Iconset-105344123>。GNU GPL。
 ・src/mingw/mthr.c
 　MinGWプロジェクト<http://www.mingw.org/>。パブリックドメイン。
