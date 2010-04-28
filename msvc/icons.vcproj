@@ -65,18 +65,76 @@
 			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
+			<File
+				RelativePath="..\icons\main.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
-			Name="ヘッダー ファイル"
-			Filter="h;hpp;hxx;hm;inl;inc;xsd"
-			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
-			>
-		</Filter>
-		<Filter
-			Name="リソース ファイル"
+			Name="simple"
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
-			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
+			<File
+				RelativePath="..\icons\simple\empty.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\simple\exist.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\simple\fetch.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\simple\icon.rc"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="default"
+			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
+			>
+			<File
+				RelativePath="..\icons\default\app.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\icon.rc"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\jump1.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\jump2.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\jump3.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\jump4.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\sleep1.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\sleep2.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\sleep3.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\default\sleep4.ico"
+				>
+			</File>
 		</Filter>
 	</Files>
 	<Globals>

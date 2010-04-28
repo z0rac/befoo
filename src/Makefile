@@ -33,7 +33,7 @@ endif
 CXXFLAGS = $(CFLAGS)
 
 OBJS = main.o imap4.o pop3.o mail.o codepage.o mailbox.o uri.o
-OBJS += mascot.o summary.o setting.o window.o win32.o winsock.o mingw/mthr.o
+OBJS += mascot.o icon.o summary.o setting.o window.o win32.o winsock.o mingw/mthr.o
 OBJS += befoo.res
 LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcrypt32 -lcomctl32 -lwinmm
 
@@ -60,8 +60,9 @@ $(OBJS): Makefile
 main.o mascot.o summary.o: define.h mailbox.h setting.h window.h win32.h
 mail.o uri.o imap4.o pop3.o: mailbox.h
 main.o mailbox.o: win32.h winsock.h
-mail.o setting.o window.o winsock.o: win32.h
-codepage.o mailbox.o setting.o window.o win32.o winsock.o: %.o: %.h
+icon.o mail.o setting.o window.o winsock.o: win32.h
+mascot.o: icon.h
+codepage.o icon.o mailbox.o setting.o window.o win32.o winsock.o: %.o: %.h
 befoo.res: $(RSRC) define.h
 
 clean: mostlyclean	; @$(RM) $(PROG)
