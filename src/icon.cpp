@@ -113,3 +113,12 @@ icon::reset(int type)
   _load();
   return *this;
 }
+
+HICON
+icon::symbol(int size) const
+{
+  if (!size) size = _rc[1];
+  return HICON(win32::valid(LoadImage(_mod ? _mod : win32::exe,
+				      MAKEINTRESOURCE(_rc[3]), IMAGE_ICON,
+				      size, size, LR_DEFAULTCOLOR)));
+}

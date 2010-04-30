@@ -131,6 +131,13 @@ setting::cacheclear()
   }
 }
 
+const char*
+setting::invalidchars()
+{
+  assert(_rep);
+  return _rep->invalidchars();
+}
+
 static const char code64[] =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 

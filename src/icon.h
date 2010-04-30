@@ -32,6 +32,7 @@ public:
   icon& reset(int type);
   icon& next() { _load((_step + 1) % _rc[2]); return *this; }
   UINT delay() const { return _anim[_step].ticks * 50 / 3; };
+  HICON symbol(int size = 0) const;
 };
 
 #endif
