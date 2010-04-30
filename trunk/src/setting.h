@@ -116,6 +116,7 @@ public:
   static list<string> cache(const string& key);
   static void cache(const string& key, const list<string>& data);
   static void cacheclear();
+  static const char* invalidchars();
 public:
   string cipher(_str key);
   setting& cipher(_str key, const string& value);
