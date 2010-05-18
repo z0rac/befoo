@@ -103,6 +103,18 @@ public:
     static string mbstr(LPCWSTR ws, UINT cp = GetACP());
   };
 
+  // find - find files with the path
+  class find : public WIN32_FIND_DATA {
+    HANDLE _h;
+    WIN32_FIND_DATA* _fd() { return this; }
+    void _close() { FindClose(_h), _h = INVALID_HANDLE_VALUE; }
+  public:
+    find(const string& path) : _h(FindFirstFile(path.c_str(), _fd())) {}
+    ~find() { if (_h != INVALID_HANDLE_VALUE) _close(); }
+    operator bool() const { return _h != INVALID_HANDLE_VALUE; }
+    void next() { if (!FindNextFile(_h, this)) _close(); }
+  };
+
   // error - exception type
   class error : public exception {
     string _msg;

@@ -184,6 +184,14 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
+				RelativePath="..\src\icon.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\extend\mailboxdlg.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\extend\main.cpp"
 				>
 			</File>
@@ -211,6 +219,10 @@
 			>
 			<File
 				RelativePath="..\extend\define.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\icon.h"
 				>
 			</File>
 			<File

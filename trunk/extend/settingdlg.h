@@ -26,6 +26,7 @@ protected:
   virtual void initialize() {}
   virtual void done(bool ok);
   virtual bool action(int id, int cmd);
+  virtual bool drawitem(int id, LPDRAWITEMSTRUCT ctx);
 public:
   dialog() : _hwnd(NULL), _tips(NULL), _balloon(false) {}
   virtual ~dialog() {}
