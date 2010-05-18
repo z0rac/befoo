@@ -7,6 +7,7 @@
 #include "settingdlg.h"
 #include "icon.h"
 #include <cassert>
+#include <vector>
 #include <shlwapi.h>
 
 /** textbuf - temporary text buffer
@@ -40,9 +41,14 @@ dialog::_dlgproc(HWND h, UINT m, WPARAM w, LPARAM l)
       return TRUE;
     }
     dialog* dp = reinterpret_cast<dialog*>(GetWindowLongPtr(h, GWLP_USERDATA));
-    if (dp && m == WM_COMMAND) {
-      dp->clearballoon();
-      return dp->action(GET_WM_COMMAND_ID(w, l), GET_WM_COMMAND_CMD(w, l));
+    if (dp) {
+      switch (m) {
+      case WM_COMMAND:
+	dp->clearballoon();
+	return dp->action(GET_WM_COMMAND_ID(w, l), GET_WM_COMMAND_CMD(w, l));
+      case WM_DRAWITEM:
+	return dp->drawitem(w, LPDRAWITEMSTRUCT(l));
+      }
     }
   } catch (...) {}
   return FALSE;
@@ -63,6 +69,12 @@ dialog::action(int id, int)
     done(id == IDOK);
     return true;
   }
+  return false;
+}
+
+bool
+dialog::drawitem(int, LPDRAWITEMSTRUCT)
+{
   return false;
 }
 
@@ -205,50 +217,213 @@ dialog::modal(int id, HWND parent)
 			parent, &_dlgproc, LPARAM(this));
 }
 
+/** iconlist - list of icons
+ */
+namespace {
+  struct iconspec {
+    string setting;
+    int size;
+    HICON symbol;
+  public:
+    iconspec() : symbol(NULL) {}
+    iconspec(int id, LPCSTR path, int width);
+    iconspec(const string& setting, int width);
+    static string filepath(LPCSTR file);
+  };
+
+  class iconlist : vector<iconspec> {
+    static BOOL CALLBACK _enum(HMODULE, LPCSTR, LPSTR, LONG_PTR);
+    void _scan(const char* file);
+  public:
+    iconlist() {}
+    ~iconlist() { clear(); }
+    using vector<iconspec>::size_type;
+    using vector<iconspec>::size;
+    using vector<iconspec>::operator[];
+  public:
+    void load();
+    void add(const char* file);
+    void clear();
+  };
+}
+
+iconspec::iconspec(int id, LPCSTR path, int width)
+  : setting(setting::tuple(id))
+{
+  icon mascot(MAKEINTRESOURCE(id), path);
+  size = mascot.size();
+  symbol = mascot.symbol(min(size, width));
+}
+
+iconspec::iconspec(const string& setting, int width)
+  : setting(setting), size(64)
+{
+  try {
+    int id;
+    string path;
+    (setting::manip(setting))(id = 1)(path);
+    path = filepath(path.empty() ? "befoo.exe" : path.c_str());
+    if (path.empty()) throw -1;
+    icon mascot(MAKEINTRESOURCE(id), path.c_str());
+    size = mascot.size();
+    symbol = mascot.symbol(min(size, width));
+  } catch (...) {
+    symbol = CopyIcon(LoadIcon(NULL, IDI_QUESTION));
+  }
+}
+
+string
+iconspec::filepath(LPCSTR file)
+{
+  char path[MAX_PATH];
+  return GetModuleFileName(extend::dll, path, MAX_PATH) < MAX_PATH &&
+    PathRemoveFileSpec(path) && PathCombine(path, path, file) ? path : "";
+}
+
+BOOL CALLBACK
+iconlist::_enum(HMODULE, LPCSTR, LPSTR name, LONG_PTR param)
+{
+  try {
+    if (name != LPSTR(int(name) & 0xffff)) {
+      if (name[0] != '#') return TRUE;
+      name = LPSTR(StrToInt(name + 1));
+    }
+    LONG_PTR* pp = reinterpret_cast<LONG_PTR*>(param);
+    struct spec : public iconspec {
+      spec(int id, LPCSTR path) : iconspec(id, path, 64) {}
+      ~spec() { symbol && DestroyIcon(symbol); }
+    } spec(LOWORD(name), LPCSTR(pp[0]));
+    spec.size = min(spec.size, 64);
+    reinterpret_cast<iconlist*>(pp[1])->push_back(spec);
+    spec.symbol = NULL;
+  } catch (...) {}
+  return TRUE;
+}
+
+void
+iconlist::_scan(const char* file)
+{
+  string path = iconspec::filepath(file);
+  if (path.empty()) return;
+  HMODULE h = LoadLibraryEx(path.c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE);
+  if (h) {
+    LONG_PTR param[] = { LONG_PTR(path.c_str()), LONG_PTR(this) };
+    EnumResourceNames(h, RT_RCDATA, _enum, LONG_PTR(param));
+    FreeLibrary(h);
+  }
+}
+
+void
+iconlist::load()
+{
+  _scan("befoo.exe");
+  for (vector<iconspec>::iterator p = begin(); p != end(); ++p) {
+    if (p->setting == "1") p->setting.clear();
+  }
+  for (win32::find f(iconspec::filepath("*.ico")); f; f.next()) add(f.cFileName);
+}
+
+void
+iconlist::add(const char* file)
+{
+  iconlist::size_type i = size();
+  _scan(file);
+  char path[MAX_PATH];
+  if (i < size() && GetModuleFileName(extend::dll, path, MAX_PATH) < MAX_PATH) {
+    string suffix = string(",") + &file[PathCommonPrefix(file, path, path)];
+    vector<iconspec>::iterator p = begin() + i;
+    for (; p != end(); ++p) p->setting += suffix;
+  }
+}
+
+void
+iconlist::clear()
+{
+  vector<iconspec>::iterator p = begin();
+  for (; p != end(); ++p) DestroyIcon(p->symbol);
+  vector<iconspec>::clear();
+}
+
 /** icondlg - icon dialog
  */
 namespace {
   class icondlg : public dialog {
-    int _id;
-    string _file;
-    int _size;
+    string _setting;
+    iconlist _list;
+    void initialize();
+    void done(bool ok);
+    bool action(int id, int cmd);
+    bool drawitem(int id, LPDRAWITEMSTRUCT ctx);
   public:
-    icondlg() : _id(1), _size(64) {}
-    int id() const { return _id; }
-    const string& file() const { return _file; }
-    int size() const { return _size; }
-    HICON load(int id, const string& file);
+    icondlg(const string& setting) : _setting(setting) { _list.load(); }
+    const string& setting() const { return _setting; }
   };
 }
 
-HICON
-icondlg::load(int id, const string& file)
+void
+icondlg::initialize()
 {
-  _id = id, _file = file, _size = 64;
-  try {
-    const char* fn = file.empty() ? "befoo.exe" : file.c_str();
-    char path[MAX_PATH];
-    if (GetModuleFileName(extend::dll, path, MAX_PATH) >= MAX_PATH ||
-	!PathRemoveFileSpec(path) || !PathCombine(path, path, fn)) throw -1;
-    icon mascot(MAKEINTRESOURCE(id), path);
-    _size = mascot.size();
-    return mascot.symbol(42);
-  } catch (...) {
-    return CopyIcon(LoadIcon(NULL, IDI_QUESTION));
+  HWND h = item(IDC_LIST_ICON);
+  RECT rc;
+  GetClientRect(h, &rc);
+  ListBox_SetItemHeight(h, 0, rc.bottom / max(int(rc.bottom / 66), 1));
+  ListBox_SetColumnWidth(h, 66);
+  for (iconlist::size_type i = 0; i < _list.size(); ++i) {
+    ListBox_AddItemData(h, NULL);
+    if (_list[i].setting == _setting) ListBox_SetCurSel(h, i);
   }
+}
+
+void
+icondlg::done(bool ok)
+{
+  if (ok) {
+    unsigned i = ListBox_GetCurSel(item(IDC_LIST_ICON));
+    if (i >= _list.size()) error(IDC_LIST_ICON, extend::dll.text(IDS_MSG_ITEM_REQUIRED));
+    _setting = _list[i].setting;
+  }
+  dialog::done(ok);
+}
+
+bool
+icondlg::action(int id, int cmd)
+{
+  if (id == IDC_LIST_ICON && cmd == LBN_DBLCLK) {
+    done(true);
+    return true;
+  }
+  return dialog::action(id, cmd);
+}
+
+bool
+icondlg::drawitem(int, LPDRAWITEMSTRUCT ctx)
+{
+  if (ctx->itemID != UINT(-1)) {
+    int cx = (ctx->rcItem.left + ctx->rcItem.right) >> 1;
+    int cy = (ctx->rcItem.top + ctx->rcItem.bottom) >> 1;
+    int hw = _list[ctx->itemID].size >> 1;
+    HBRUSH br = GetSysColorBrush(ctx->itemState & ODS_SELECTED ?
+				 COLOR_HIGHLIGHT : COLOR_WINDOW);
+    FillRect(ctx->hDC, &ctx->rcItem, br);
+    DrawIconEx(ctx->hDC, cx - hw, cy - hw,
+	       _list[ctx->itemID].symbol, 0, 0, 0, br, DI_NORMAL);
+  }
+  return true;
 }
 
 /** maindlg - main dialog
  */
 namespace {
   class maindlg : public dialog {
-    icondlg _icondlg;
+    string _icon;
     void initialize();
     void done(bool ok);
     bool action(int id, int cmd);
     void _mailbox(bool edit = false);
     void _delete();
     void _enablebuttons();
+    void _changeicon();
+    int _iconwidth() const;
     void _enableicon(bool en);
   };
 }
@@ -266,11 +441,10 @@ maindlg::initialize()
   setting pref(setting::preferences());
   int n, b, t;
   { // initialize icon group
-    int id;
-    string fn;
-    pref["icon"](n = 64, b)(t = 0)(fn)(id = 1);
-    seticon(IDC_BUTTON_ICON, _icondlg.load(id, fn));
-    if (!b) n = _icondlg.size();
+    pref["icon"](n = 64, b)(t = 0).sep(0)(_icon);
+    iconspec icon(_icon, _iconwidth());
+    seticon(IDC_BUTTON_ICON, icon.symbol);
+    if (!b) n = icon.size;
     setspin(IDC_SPIN_ICON, n, 0, 256);
     Button_SetCheck(item(IDC_CHECKBOX_ICON), b);
     _enableicon(b != 0);
@@ -291,16 +465,11 @@ maindlg::done(bool ok)
 {
   if (ok) {
     setting pref(setting::preferences());
-    { // save icon group
-      setting::tuple icon
-	(Button_GetCheck(item(IDC_CHECKBOX_ICON)) ? gettext(IDC_EDIT_ICON) : "");
-      icon(getint(IDC_EDIT_ICONTRANS));
-      if (_icondlg.id() != 1 || !_icondlg.file().empty()) {
-	icon(_icondlg.file());
-	if (_icondlg.id() != 1) icon(_icondlg.id());
-      }
-      pref("icon", icon);
-    }
+    setting::tuple icon
+      (Button_GetCheck(item(IDC_CHECKBOX_ICON)) ? gettext(IDC_EDIT_ICON) : "");
+    icon(getint(IDC_EDIT_ICONTRANS));
+    if (!_icon.empty()) icon(_icon);
+    pref("icon", icon);
     pref("balloon", setting::tuple(getint(IDC_EDIT_BALLOON)));
     pref("summary", setting::tuple(getint(IDC_EDIT_SUMMARY))
 	 (Button_GetCheck(item(IDC_CHECKBOX_SUMMARY)))
@@ -330,6 +499,9 @@ maindlg::action(int id, int cmd)
       _enablebuttons();
       break;
     }
+    return true;
+  case IDC_BUTTON_ICON:
+    _changeicon();
     return true;
   case IDC_CHECKBOX_ICON:
     _enableicon(Button_GetCheck(item(IDC_CHECKBOX_ICON)) != 0);
@@ -376,6 +548,28 @@ maindlg::_enablebuttons()
   bool en = ListBox_GetCurSel(item(IDC_LIST_MAILBOX)) != LB_ERR;
   enable(IDC_BUTTON_EDIT, en);
   enable(IDC_BUTTON_DELETE, en);
+}
+
+void
+maindlg::_changeicon()
+{
+  icondlg dlg(_icon);
+  if (dlg.modal(IDD_ICON, hwnd())) {
+    _icon = dlg.setting();
+    iconspec icon(_icon, _iconwidth());
+    seticon(IDC_BUTTON_ICON, icon.symbol);
+    if (!Button_GetCheck(item(IDC_CHECKBOX_ICON))) {
+      setspin(IDC_SPIN_ICON, icon.size, 0, 256);
+    }
+  }
+}
+
+int
+maindlg::_iconwidth() const
+{
+  RECT rc;
+  GetClientRect(item(IDC_BUTTON_ICON), &rc);
+  return min(rc.right, rc.bottom);
 }
 
 void

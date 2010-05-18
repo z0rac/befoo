@@ -472,8 +472,8 @@ mascotwindow::mascotwindow()
   setting prefs = setting::preferences();
   int icon, transparency, id;
   string fn;
-  prefs["icon"]()()(fn)(id = 1);
-  if (!fn.empty() || id != 1) reload(MAKEINTRESOURCE(id), fn.c_str());
+  prefs["icon"]()()(id = 1)(fn);
+  if (id != 1 || !fn.empty()) reload(MAKEINTRESOURCE(id), fn.c_str());
   prefs["icon"](icon = size())(transparency = 0);
   if (!icon) icon = GetSystemMetrics(SM_CXICON);
   prefs["balloon"](_balloon = 10);

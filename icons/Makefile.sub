@@ -5,10 +5,10 @@
 # the license terms, see the LICENSE.txt file included with the program.
 #
 TARGET = $(notdir $(shell pwd)).ico
-LDFLAGS = -mwin32 -m32 -mno-cygwin -mwindows --target=i386-mingw32
-LDFLAGS += -Wl,--strip-all -Wl,-O1 -Wl,--as-needed
+LDFLAGS = -mno-cygwin --target=i386-mingw32
+LDFLAGS += -Wl,--strip-all -Wl,--as-needed
 
-OBJS = ../main.o icon.res
+OBJS = icon.res
 ICONS = $(*.ico: $TARGET=)
 
 .SUFFIXES: .rc .res

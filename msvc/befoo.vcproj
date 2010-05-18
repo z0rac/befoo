@@ -190,6 +190,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\src\icon.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\src\imap4.cpp"
 				>
 			</File>
@@ -249,6 +253,10 @@
 			</File>
 			<File
 				RelativePath="..\src\define.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\icon.h"
 				>
 			</File>
 			<File
