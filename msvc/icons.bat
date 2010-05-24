@@ -4,26 +4,27 @@ REM
 REM This software comes with ABSOLUTELY NO WARRANTY; for details of
 REM the license terms, see the LICENSE.txt file included with the program.
 
-SET ICONS=simple
+SETLOCAL
 SET OUTDIR=%1
 SET INTDIR=%1\icons
 SET ICONSDIR=..\icons
 
-IF "%2"=="clean" GOTO clean
-FOR %%I IN (%ICONS%) DO CALL :build %%I
-EXIT
+SHIFT
+IF "%1"=="clean" GOTO clean
+IF "%1"=="build" GOTO build
+EXIT 1
 
 :build
-rc /I%ICONSDIR%\%1 /Fo%INTDIR%\%1.res %ICONSDIR%\%1\icon.rc
-IF ERRORLEVEL 1 GOTO abort
+SHIFT
+IF "%1"=="" EXIT
+rc /I%ICONSDIR% /Fo%INTDIR%\%1.res %ICONSDIR%\%1.rc
+IF ERRORLEVEL 1 EXIT 1
 link /DLL /NOENTRY /MACHINE:X86 /OUT:%OUTDIR%\%1.ico %INTDIR%\%1.res
-IF ERRORLEVEL 1 GOTO abort
-EXIT /B
+IF ERRORLEVEL 1 EXIT 1
+GOTO build
 
 :clean
-DEL /Q %INTDIR%\*.res
-FOR %%I IN (%ICONS%) DO DEL /Q %OUTDIR%\%%I.ico
-EXIT
-
-:abort
-EXIT 1
+SHIFT
+IF "%1"=="" EXIT
+DEL /Q %INTDIR%\%1.res %OUTDIR%\%1.ico
+GOTO clean

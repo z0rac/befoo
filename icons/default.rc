@@ -9,17 +9,16 @@
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 #pragma code_page(1252)
 
-0 ICON DISCARDABLE "app.ico"
-1 ICON DISCARDABLE "jump1.ico"
-2 ICON DISCARDABLE "jump2.ico"
-3 ICON DISCARDABLE "jump3.ico"
-4 ICON DISCARDABLE "jump4.ico"
-5 ICON DISCARDABLE "sleep1.ico"
-6 ICON DISCARDABLE "sleep2.ico"
-7 ICON DISCARDABLE "sleep3.ico"
-8 ICON DISCARDABLE "sleep4.ico"
+1 ICON DISCARDABLE "default/jump1.ico"
+2 ICON DISCARDABLE "default/jump2.ico"
+3 ICON DISCARDABLE "default/jump3.ico"
+4 ICON DISCARDABLE "default/jump4.ico"
+5 ICON DISCARDABLE "default/sleep1.ico"
+6 ICON DISCARDABLE "default/sleep2.ico"
+7 ICON DISCARDABLE "default/sleep3.ico"
+8 ICON DISCARDABLE "default/sleep4.ico"
 
-1 RCDATA DISCARDABLE
+1 MASCOTICON DISCARDABLE
 BEGIN
     8,  // Bytes of header
     64, // Icon size
