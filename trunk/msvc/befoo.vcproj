@@ -56,7 +56,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="..\icons\default"
+				AdditionalIncludeDirectories="..\icons"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
@@ -137,7 +137,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="..\icons\default"
+				AdditionalIncludeDirectories="..\icons"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
@@ -286,9 +286,49 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 			<File
+				RelativePath="..\icons\default\app.ico"
+				>
+			</File>
+			<File
 				RelativePath="..\src\befoo.rc"
 				>
 			</File>
+			<Filter
+				Name="default.ico"
+				>
+				<File
+					RelativePath="..\icons\default\jump1.ico"
+					>
+				</File>
+				<File
+					RelativePath="..\icons\default\jump2.ico"
+					>
+				</File>
+				<File
+					RelativePath="..\icons\default\jump3.ico"
+					>
+				</File>
+				<File
+					RelativePath="..\icons\default\jump4.ico"
+					>
+				</File>
+				<File
+					RelativePath="..\icons\default\sleep1.ico"
+					>
+				</File>
+				<File
+					RelativePath="..\icons\default\sleep2.ico"
+					>
+				</File>
+				<File
+					RelativePath="..\icons\default\sleep3.ico"
+					>
+				</File>
+				<File
+					RelativePath="..\icons\default\sleep4.ico"
+					>
+				</File>
+			</Filter>
 		</Filter>
 	</Files>
 	<Globals>

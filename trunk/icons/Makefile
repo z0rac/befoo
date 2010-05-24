@@ -5,16 +5,17 @@
 # the license terms, see the LICENSE.txt file included with the program.
 #
 TARGETS = simple.ico
-MAKE := $(MAKE) -f../Makefile.sub
+LDFLAGS = -mno-cygwin --target=i386-mingw32
+LDFLAGS += -Wl,--strip-all -Wl,--as-needed
+
+.SUFFIXES: .rc .res .ico
+.rc.res:	; windres -O coff -i $< -o $@
+.res.ico:	; dllwrap $(LDFLAGS) -o $@ $<
 
 all: $(TARGETS)
 
-$(TARGETS): %.ico: %/icon.rc $(wildcard %/*.ico)
+$(TARGETS): %.ico: $(wildcard %/*.ico)
 
-$(TARGETS):		; $(MAKE) -C $(basename $@)
-%.clean:		; $(MAKE) -C $(basename $@) clean
-%.distclean:		; $(MAKE) -C $(basename $@) distclean
-
-clean: mostlyclean $(TARGETS:.ico=.clean)
-distclean: mostlyclean $(TARGETS:.ico=.distclean) ; @$(RM) *~
-mostlyclean:		; @$(RM) $(TARGETS)
+clean: mostlyclean	; @$(RM) $(TARGETS)
+distclean: clean	; @$(RM) *~
+mostlyclean:		; @$(RM) $(TARGETS:.ico=.res)

@@ -37,13 +37,13 @@ OBJS += mascot.o icon.o summary.o setting.o window.o win32.o winsock.o mingw/mth
 OBJS += befoo.res
 LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcrypt32 -lcomctl32 -lwinmm
 
-ICON = ../icons/default
-RSRC = $(PROG).manifest $(ICON)/icon.rc ja.rc
+ICONSDIR = ../icons
+RSRC = $(PROG).manifest $(ICONSDIR)/default.rc ja.rc
 
 MAKECP = codepage.exe
 
 .SUFFIXES: .rc .res
-.rc.res:	; windres -I$(ICON) -O coff -i $< -o $@
+.rc.res:	; windres -I$(ICONSDIR) -O coff -i $< -o $@
 
 all: $(PROG)
 

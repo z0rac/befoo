@@ -24,10 +24,10 @@
 			>
 			<Tool
 				Name="VCNMakeTool"
-				BuildCommandLine="icons.bat $(ConfigurationName)"
-				ReBuildCommandLine="icons.bat $(ConfigurationName)"
-				CleanCommandLine="icons.bat $(ConfigurationName) clean"
-				Output="*.ico"
+				BuildCommandLine="icons.bat $(ConfigurationName) build $(TargetName)"
+				ReBuildCommandLine="icons.bat $(ConfigurationName) build $(TargetName)"
+				CleanCommandLine="icons.bat $(ConfigurationName) clean $(TargetName)"
+				Output="simple"
 				PreprocessorDefinitions="WIN32;_DEBUG"
 				IncludeSearchPath=""
 				ForcedIncludes=""
@@ -44,10 +44,10 @@
 			>
 			<Tool
 				Name="VCNMakeTool"
-				BuildCommandLine="icons.bat $(ConfigurationName)"
-				ReBuildCommandLine="icons.bat $(ConfigurationName)"
-				CleanCommandLine="icons.bat $(ConfigurationName) clean"
-				Output="*.ico"
+				BuildCommandLine="icons.bat $(ConfigurationName) build $(TargetName)"
+				ReBuildCommandLine="icons.bat $(ConfigurationName) build $(TargetName)"
+				CleanCommandLine="icons.bat $(ConfigurationName) clean $(TargetName)"
+				Output="simple"
 				PreprocessorDefinitions="WIN32;NDEBUG"
 				IncludeSearchPath=""
 				ForcedIncludes=""
@@ -61,17 +61,7 @@
 	</References>
 	<Files>
 		<Filter
-			Name="ソース ファイル"
-			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
-			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
-			>
-			<File
-				RelativePath="..\icons\main.cpp"
-				>
-			</File>
-		</Filter>
-		<Filter
-			Name="simple"
+			Name="simple.ico"
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
 			>
 			<File
@@ -87,52 +77,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\icons\simple\icon.rc"
-				>
-			</File>
-		</Filter>
-		<Filter
-			Name="default"
-			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
-			>
-			<File
-				RelativePath="..\icons\default\app.ico"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\icon.rc"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\jump1.ico"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\jump2.ico"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\jump3.ico"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\jump4.ico"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\sleep1.ico"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\sleep2.ico"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\sleep3.ico"
-				>
-			</File>
-			<File
-				RelativePath="..\icons\default\sleep4.ico"
+				RelativePath="..\icons\simple.rc"
 				>
 			</File>
 		</Filter>

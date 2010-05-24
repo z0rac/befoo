@@ -63,13 +63,9 @@ dialog::done(bool ok)
 bool
 dialog::action(int id, int)
 {
-  switch (id) {
-  case IDOK:
-  case IDCANCEL:
-    done(id == IDOK);
-    return true;
-  }
-  return false;
+  if (id != IDOK && id != IDCANCEL) return false;
+  done(id == IDOK);
+  return true;
 }
 
 bool
@@ -275,9 +271,9 @@ iconspec::iconspec(const string& setting, int width)
 string
 iconspec::filepath(LPCSTR file)
 {
-  char path[MAX_PATH];
-  return GetModuleFileName(extend::dll, path, MAX_PATH) < MAX_PATH &&
-    PathRemoveFileSpec(path) && PathCombine(path, path, file) ? path : "";
+  textbuf buf;
+  return GetModuleFileName(extend::dll, buf(MAX_PATH), MAX_PATH) < MAX_PATH &&
+    PathRemoveFileSpec(buf.data) && PathCombine(buf.data, buf.data, file) ? buf.data : "";
 }
 
 BOOL CALLBACK
@@ -308,7 +304,7 @@ iconlist::_scan(const char* file)
   HMODULE h = LoadLibraryEx(path.c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE);
   if (h) {
     LONG_PTR param[] = { LONG_PTR(path.c_str()), LONG_PTR(this) };
-    EnumResourceNames(h, RT_RCDATA, _enum, LONG_PTR(param));
+    EnumResourceNames(h, RT_MASCOTICON, _enum, LONG_PTR(param));
     FreeLibrary(h);
   }
 }
@@ -320,7 +316,9 @@ iconlist::load()
   for (vector<iconspec>::iterator p = begin(); p != end(); ++p) {
     if (p->setting == "1") p->setting.clear();
   }
-  for (win32::find f(iconspec::filepath("*.ico")); f; f.next()) add(f.cFileName);
+  for (const char* p = "*.dll\0*.ico\0"; *p; p += strlen(p) + 1) {
+    for (win32::find f(iconspec::filepath(p)); f; f.next()) add(f.cFileName);
+  }
 }
 
 void
@@ -328,9 +326,13 @@ iconlist::add(const char* file)
 {
   iconlist::size_type i = size();
   _scan(file);
-  char path[MAX_PATH];
-  if (i < size() && GetModuleFileName(extend::dll, path, MAX_PATH) < MAX_PATH) {
-    string suffix = string(",") + &file[PathCommonPrefix(file, path, path)];
+  if (i == size()) return;
+  textbuf buf;
+  if (GetModuleFileName(extend::dll, buf(MAX_PATH), MAX_PATH) < MAX_PATH &&
+      PathRemoveFileSpec(buf.data)) {
+    int n = strlen(buf.data);
+    if (PathCommonPrefix(file, buf.data, buf.data) < n) n = 0;
+    string suffix = string(",") + &file[n];
     vector<iconspec>::iterator p = begin() + i;
     for (; p != end(); ++p) p->setting += suffix;
   }
@@ -388,10 +390,7 @@ icondlg::done(bool ok)
 bool
 icondlg::action(int id, int cmd)
 {
-  if (id == IDC_LIST_ICON && cmd == LBN_DBLCLK) {
-    done(true);
-    return true;
-  }
+  if (id == IDC_LIST_ICON && cmd == LBN_DBLCLK) id = IDOK;
   return dialog::action(id, cmd);
 }
 
@@ -399,14 +398,13 @@ bool
 icondlg::drawitem(int, LPDRAWITEMSTRUCT ctx)
 {
   if (ctx->itemID != UINT(-1)) {
-    int cx = (ctx->rcItem.left + ctx->rcItem.right) >> 1;
-    int cy = (ctx->rcItem.top + ctx->rcItem.bottom) >> 1;
-    int hw = _list[ctx->itemID].size >> 1;
+    const iconspec& spec = _list[ctx->itemID];
+    int x = (ctx->rcItem.left + ctx->rcItem.right - spec.size) >> 1;
+    int y = (ctx->rcItem.top + ctx->rcItem.bottom - spec.size) >> 1;
     HBRUSH br = GetSysColorBrush(ctx->itemState & ODS_SELECTED ?
 				 COLOR_HIGHLIGHT : COLOR_WINDOW);
     FillRect(ctx->hDC, &ctx->rcItem, br);
-    DrawIconEx(ctx->hDC, cx - hw, cy - hw,
-	       _list[ctx->itemID].symbol, 0, 0, 0, br, DI_NORMAL);
+    DrawIconEx(ctx->hDC, x, y, spec.symbol, 0, 0, 0, br, DI_NORMAL);
   }
   return true;
 }
@@ -431,16 +429,17 @@ namespace {
 void
 maindlg::initialize()
 {
-  list<string> mboxes = setting::mailboxes();
-  list<string>::iterator p = mboxes.begin();
-  for (; p != mboxes.end(); ++p) {
-    ListBox_AddString(item(IDC_LIST_MAILBOX), p->c_str());
+  { // mailbox list and buttons
+    list<string> mboxes = setting::mailboxes();
+    list<string>::iterator p = mboxes.begin();
+    for (; p != mboxes.end(); ++p) {
+      ListBox_AddString(item(IDC_LIST_MAILBOX), p->c_str());
+    }
+    _enablebuttons();
   }
-  _enablebuttons();
-
   setting pref(setting::preferences());
   int n, b, t;
-  { // initialize icon group
+  { // icon group
     pref["icon"](n = 64, b)(t = 0).sep(0)(_icon);
     iconspec icon(_icon, _iconwidth());
     seticon(IDC_BUTTON_ICON, icon.symbol);
@@ -448,8 +447,9 @@ maindlg::initialize()
     setspin(IDC_SPIN_ICON, n, 0, 256);
     Button_SetCheck(item(IDC_CHECKBOX_ICON), b);
     _enableicon(b != 0);
+    setspin(IDC_SPIN_ICONTRANS, t, 0, 100);
   }
-  setspin(IDC_SPIN_ICONTRANS, t, 0, 100);
+  // general group
   pref["balloon"](n = 10);
   setspin(IDC_SPIN_BALLOON, n);
   pref["summary"](n = 3)(b = 0)(t = 0);
@@ -492,12 +492,8 @@ maindlg::action(int id, int cmd)
     return true;
   case IDC_LIST_MAILBOX:
     switch (cmd) {
-    case LBN_DBLCLK:
-      _mailbox(true);
-      break;
-    case LBN_SELCHANGE:
-      _enablebuttons();
-      break;
+    case LBN_DBLCLK: _mailbox(true); break;
+    case LBN_SELCHANGE: _enablebuttons(); break;
     }
     return true;
   case IDC_BUTTON_ICON:
@@ -505,6 +501,7 @@ maindlg::action(int id, int cmd)
     return true;
   case IDC_CHECKBOX_ICON:
     _enableicon(Button_GetCheck(item(IDC_CHECKBOX_ICON)) != 0);
+    return true;
   }
   return dialog::action(id, cmd);
 }

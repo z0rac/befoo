@@ -9,6 +9,8 @@
 
 #include "win32.h"
 
+#define RT_MASCOTICON "MASCOTICON"
+
 /** icon - animation icons
  */
 class icon {

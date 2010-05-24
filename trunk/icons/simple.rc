@@ -9,11 +9,11 @@
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 #pragma code_page(1252)
 
-1 ICON DISCARDABLE "fetch.ico"
-2 ICON DISCARDABLE "exist.ico"
-3 ICON DISCARDABLE "empty.ico"
+1 ICON DISCARDABLE "simple/fetch.ico"
+2 ICON DISCARDABLE "simple/exist.ico"
+3 ICON DISCARDABLE "simple/empty.ico"
 
-1 RCDATA DISCARDABLE
+1 MASCOTICON DISCARDABLE
 BEGIN
     8,  // Bytes of header
     48, // Icon size

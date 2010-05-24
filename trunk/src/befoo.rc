@@ -10,7 +10,8 @@
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 #pragma code_page(1252)
 
-#include "icon.rc"
+0 ICON DISCARDABLE "../icons/default/app.ico"
+#include "../icons/default.rc"
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "befoo.exe.manifest"
 

@@ -32,7 +32,7 @@ icon::icon(LPCSTR id, LPCSTR fn)
 	_mod = win32::valid(LoadLibraryEx(path, NULL, LOAD_LIBRARY_AS_DATAFILE));
       }
     }
-    HRSRC h = win32::valid(FindResource(_mod, id, RT_RCDATA));
+    HRSRC h = win32::valid(FindResource(_mod, id, RT_MASCOTICON));
     DWORD rsz = SizeofResource(_mod, h);
     _rc = PWORD(win32::valid(LockResource(LoadResource(_mod, h))));
     if (rsz < 2 || (_rc[0] & 1) || rsz < _rc[0] || _rc[0] < 8 ||
