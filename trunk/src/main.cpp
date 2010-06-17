@@ -232,9 +232,14 @@ namespace { // misc. functions
   bool rundll(const char* arg)
   {
     char s[MAX_PATH];
-    return appendix("extend.dll", s) &&
-      GetShortPathName(s, s, sizeof(s)) < sizeof(s) &&
-      shell(string("rundll32.exe ") + s + ",settingdlg " + arg);
+    if (!appendix("extend.dll", s)) return false;
+    win32::dll extend(s);
+    if (!extend) return false;
+    typedef void (*settingdlg)(HWND, HINSTANCE, LPCSTR, int);
+    settingdlg fun = settingdlg(extend("settingdlg", NULL));
+    if (!fun) return false;
+    fun(NULL, win32::exe, arg, SW_NORMAL);
+    return true;
   }
 }
 

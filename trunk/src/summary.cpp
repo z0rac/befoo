@@ -330,9 +330,20 @@ namespace {
 summarywindow::summarywindow(const mailbox* mboxes)
   : _summary(self())
 {
-  style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
-	WS_THICKFRAME | WS_CLIPCHILDREN,
-	WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE | WS_EX_LAYERED);
+  setting prefs = setting::preferences();
+  int transparency;
+  prefs["summary"](_autoclose.sec = 3)()(transparency = 0);
+  _autoclose.reset(*this);
+  _alpha = 255 - 255 * transparency / 100;
+  if (_alpha < 255) {
+    style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
+	  WS_THICKFRAME | WS_CLIPCHILDREN,
+	  WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE | WS_EX_LAYERED);
+    transparent(_alpha);
+  } else {
+    style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
+	  WS_THICKFRAME | WS_CLIPCHILDREN, WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
+  }
   SetWindowText(hwnd(), win32::exe.text(ID_TEXT_SUMMARY_TITLE).c_str());
   RECT r;
   GetWindowRect(GetDesktopWindow(), &r);
@@ -350,11 +361,6 @@ summarywindow::summarywindow(const mailbox* mboxes)
     }
     move(r);
   }
-  setting prefs = setting::preferences();
-  int transparency;
-  prefs["summary"](_autoclose.sec = 3)()(transparency = 0);
-  _autoclose.reset(*this);
-  transparent(_alpha = 255 - 255 * transparency / 100);
   topmost(true);
   show(true, GetActiveWindow() == GetForegroundWindow());
   _changed = false;
@@ -373,7 +379,7 @@ summarywindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_CONTEXTMENU:
     return 0;
   case WM_NCACTIVATE:
-    transparent(LOWORD(w) ? 255 : _alpha);
+    if (_alpha < 255) transparent((!LOWORD(w) - 1) | _alpha);
     break;
   case WM_NCMOUSEMOVE:
     _autoclose.reset(*this);

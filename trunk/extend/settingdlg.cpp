@@ -222,14 +222,12 @@ namespace {
     HICON symbol;
   public:
     iconspec() : symbol(NULL) {}
-    iconspec(int id, LPCSTR path, int width);
+    iconspec(int id, const icon& icon, int width);
     iconspec(const string& setting, int width);
-    static string filepath(LPCSTR file);
   };
 
-  class iconlist : vector<iconspec> {
-    static BOOL CALLBACK _enum(HMODULE, LPCSTR, LPSTR, LONG_PTR);
-    void _scan(const char* file);
+  class iconlist : vector<iconspec>, iconmodule::accept {
+    void operator()(LPCSTR name, const icon& icon);
   public:
     iconlist() {}
     ~iconlist() { clear(); }
@@ -243,13 +241,8 @@ namespace {
   };
 }
 
-iconspec::iconspec(int id, LPCSTR path, int width)
-  : setting(setting::tuple(id))
-{
-  icon mascot(MAKEINTRESOURCE(id), path);
-  size = mascot.size();
-  symbol = mascot.symbol(min(size, width));
-}
+iconspec::iconspec(int id, const icon& icon, int size)
+  : setting(setting::tuple(id)), size(size), symbol(icon.read(size)) {}
 
 iconspec::iconspec(const string& setting, int width)
   : setting(setting), size(64)
@@ -258,66 +251,36 @@ iconspec::iconspec(const string& setting, int width)
     int id;
     string path;
     (setting::manip(setting))(id = 1)(path);
-    path = filepath(path.empty() ? "befoo.exe" : path.c_str());
-    if (path.empty()) throw -1;
-    icon mascot(MAKEINTRESOURCE(id), path.c_str());
+    iconmodule dll(path.c_str());
+    win32::valid(dll);
+    icon mascot(MAKEINTRESOURCE(id), dll);
     size = mascot.size();
-    symbol = mascot.symbol(min(size, width));
+    symbol = mascot.read(min(size, width));
   } catch (...) {
     symbol = CopyIcon(LoadIcon(NULL, IDI_QUESTION));
   }
 }
 
-string
-iconspec::filepath(LPCSTR file)
-{
-  textbuf buf;
-  return GetModuleFileName(extend::dll, buf(MAX_PATH), MAX_PATH) < MAX_PATH &&
-    PathRemoveFileSpec(buf.data) && PathCombine(buf.data, buf.data, file) ? buf.data : "";
-}
-
-BOOL CALLBACK
-iconlist::_enum(HMODULE, LPCSTR, LPSTR name, LONG_PTR param)
-{
-  try {
-    if (name != LPSTR(int(name) & 0xffff)) {
-      if (name[0] != '#') return TRUE;
-      name = LPSTR(StrToInt(name + 1));
-    }
-    LONG_PTR* pp = reinterpret_cast<LONG_PTR*>(param);
-    struct spec : public iconspec {
-      spec(int id, LPCSTR path) : iconspec(id, path, 64) {}
-      ~spec() { symbol && DestroyIcon(symbol); }
-    } spec(LOWORD(name), LPCSTR(pp[0]));
-    spec.size = min(spec.size, 64);
-    reinterpret_cast<iconlist*>(pp[1])->push_back(spec);
-    spec.symbol = NULL;
-  } catch (...) {}
-  return TRUE;
-}
-
 void
-iconlist::_scan(const char* file)
+iconlist::operator()(LPCSTR name, const icon& icon)
 {
-  string path = iconspec::filepath(file);
-  if (path.empty()) return;
-  HMODULE h = LoadLibraryEx(path.c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE);
-  if (h) {
-    LONG_PTR param[] = { LONG_PTR(path.c_str()), LONG_PTR(this) };
-    EnumResourceNames(h, RT_MASCOTICON, _enum, LONG_PTR(param));
-    FreeLibrary(h);
-  }
+  struct spec : public iconspec {
+    spec(const iconspec& spec) : iconspec(spec) {}
+    ~spec() { symbol && DestroyIcon(symbol); }
+  } spec(iconspec(LOWORD(name), icon, min(icon.size(), 64)));
+  push_back(spec);
+  spec.symbol = NULL;
 }
 
 void
 iconlist::load()
 {
-  _scan("befoo.exe");
+  iconmodule().collect(*this);
   for (vector<iconspec>::iterator p = begin(); p != end(); ++p) {
     if (p->setting == "1") p->setting.clear();
   }
   for (const char* p = "*.dll\0*.ico\0"; *p; p += strlen(p) + 1) {
-    for (win32::find f(iconspec::filepath(p)); f; f.next()) add(f.cFileName);
+    for (win32::find f(iconmodule::path(p)); f; f.next()) add(f.cFileName);
   }
 }
 
@@ -325,10 +288,10 @@ void
 iconlist::add(const char* file)
 {
   iconlist::size_type i = size();
-  _scan(file);
+  iconmodule(file).collect(*this);
   if (i == size()) return;
   textbuf buf;
-  if (GetModuleFileName(extend::dll, buf(MAX_PATH), MAX_PATH) < MAX_PATH &&
+  if (GetModuleFileName(win32::exe, buf(MAX_PATH), MAX_PATH) < MAX_PATH &&
       PathRemoveFileSpec(buf.data)) {
     int n = strlen(buf.data);
     if (PathCommonPrefix(file, buf.data, buf.data) < n) n = 0;

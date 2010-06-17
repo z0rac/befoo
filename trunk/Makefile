@@ -11,7 +11,7 @@ all: $(TARGETS)
 
 befoo.exe: src		; @cp $</$@ .
 extend.dll: extend	; @cp $</$@ .
-*.ico: icons		; @-cp $</*.ico .
+*.ico: icons		; @find $< -maxdepth 1 -name '*.ico' -exec cp {} . \;
 
 $(SUBDIRS)::		; @$(MAKE) -C $@
 %.clean:		; @$(MAKE) -C $(basename $@) clean
