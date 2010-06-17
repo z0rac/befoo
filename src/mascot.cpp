@@ -191,9 +191,9 @@ namespace {
     void balloon(const string& text, unsigned sec,
 		 const string& title = string(), int icon = 0);
     int size() const { return _icon.size(); }
-    bool reload(LPCSTR id, LPCSTR fn = NULL) { return _icon.reload(id, fn); }
+    bool reload(LPCSTR id, LPCSTR fn = NULL);
   public:
-    iconwindow(LPCSTR id, LPCSTR fn = NULL);
+    iconwindow(LPCSTR id);
     ~iconwindow() { if (hwnd()) _trayicon(false); }
     void trayicon(bool tray);
     bool intray() const { return !visible(); }
@@ -337,9 +337,21 @@ iconwindow::balloon(const string& text, unsigned sec,
   }
 }
 
-iconwindow::iconwindow(LPCSTR id, LPCSTR fn)
-  : _icon(id, fn), _tips(self()),
-    _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
+bool
+iconwindow::reload(LPCSTR id, LPCSTR fn)
+{
+  try {
+    iconmodule dll(fn);
+    win32::valid(dll);
+    _icon = icon(id, dll);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+iconwindow::iconwindow(LPCSTR id)
+  : _icon(id), _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
 }

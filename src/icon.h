@@ -9,32 +9,55 @@
 
 #include "win32.h"
 
-#define RT_MASCOTICON "MASCOTICON"
+/** iconmodule - module includes animation icons
+ */
+class icon;
+class iconmodule {
+  struct rep {
+    win32::module module;
+    size_t count;
+    rep() : count(1) {}
+  };
+  rep* _rep;
+  void _release();
+public:
+  iconmodule(LPCSTR fn = NULL);
+  iconmodule(const iconmodule& module);
+  ~iconmodule() { _release(); }
+  const iconmodule& operator=(const iconmodule& module);
+  operator HMODULE() const { return _rep->module; }
+  static string path(LPCSTR fn);
+public:
+  struct accept {
+    virtual void operator()(LPCSTR name, const icon& icon) = 0;
+  };
+  void collect(accept& accept) const;
+};
 
 /** icon - animation icons
  */
 class icon {
-  win32::module _mod;
+  iconmodule _mod;
   PWORD _rc;
   struct anim { WORD id, ticks; };
   const anim* _anim;
   int _size;
   int _step;
   HICON _icon;
-  void _release();
-  HICON _read(int id);
-  void _load(int step = 0);
+  HICON _read(int id, int size = 0) const;
+  icon& _load(int step = 0);
 public:
-  icon(LPCSTR id, LPCSTR fn = NULL);
-  ~icon() { _release(); }
-  bool reload(LPCSTR id, LPCSTR fn = NULL);
+  icon(LPCSTR id, const iconmodule& mod = iconmodule());
+  icon(const icon& copy) : _icon(NULL) { *this = copy; }
+  ~icon();
+  const icon& operator=(const icon& copy);
   operator HICON() const { return _icon; }
   int size() const { return _rc[1]; }
   icon& resize(int size);
   icon& reset(int type);
-  icon& next() { _load((_step + 1) % _rc[2]); return *this; }
-  UINT delay() const { return _anim[_step].ticks * 50 / 3; };
-  HICON symbol(int size = 0) const;
+  icon& next();
+  UINT delay() const;
+  HICON read(int size = 0) const { return _read(_rc[3], size); }
 };
 
 #endif

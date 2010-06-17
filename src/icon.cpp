@@ -18,90 +18,141 @@
 #define LOG(s)
 #endif
 
+#define RT_MASCOTICON "MASCOTICON"
+
+/*
+ * Functions of the class iconmodule
+ */
+iconmodule::iconmodule(LPCSTR fn)
+{
+  string s = path(fn);
+  _rep = new rep;
+  _rep->module = s.empty() ? win32::exe :
+    LoadLibraryEx(s.c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE);
+}
+
+iconmodule::iconmodule(const iconmodule& module)
+  : _rep(module._rep)
+{
+  ++_rep->count;
+}
+
+const iconmodule&
+iconmodule::operator=(const iconmodule& module)
+{
+  module._rep->count++;
+  _release();
+  _rep = module._rep;
+  return *this;
+}
+
+void
+iconmodule::_release()
+{
+  if (--_rep->count) return;
+  HMODULE h = _rep->module;
+  delete _rep;
+  h && h != win32::exe && FreeLibrary(h);
+}
+
+string
+iconmodule::path(LPCSTR fn)
+{
+  char path[MAX_PATH] = "";
+  if (fn && *fn) {
+    win32::valid(GetModuleFileName(NULL, path, MAX_PATH) &&
+		 PathRemoveFileSpec(path) && PathCombine(path, path, fn));
+  }
+  return path;
+}
+
+static BOOL CALLBACK
+enumicon(HMODULE, LPCSTR, LPSTR name, LONG_PTR param)
+{
+  try {
+    if (name != LPSTR(int(name) & 0xffff)) {
+      if (name[0] != '#') return TRUE;
+      name = MAKEINTRESOURCE(StrToInt(name + 1));
+    }
+    LONG_PTR* p = reinterpret_cast<LONG_PTR*>(param);
+    (*reinterpret_cast<iconmodule::accept*>(p[1]))
+      (name, icon(name, *reinterpret_cast<iconmodule*>(p[0])));
+  } catch (...) {}
+  return TRUE;
+}
+
+void
+iconmodule::collect(accept& accept) const
+{
+  if (!_rep->module) return;
+  LONG_PTR param[] = { reinterpret_cast<LONG_PTR>(this), LONG_PTR(&accept) };
+  EnumResourceNames(_rep->module, RT_MASCOTICON, enumicon, LONG_PTR(param));
+}
+
 /*
  * Functions of the class icon
  */
-icon::icon(LPCSTR id, LPCSTR fn)
-  : _icon(NULL)
+icon::icon(LPCSTR id, const iconmodule& mod)
+  : _mod(mod), _anim(NULL), _step(0), _icon(NULL)
 {
-  try {
-    if (fn && *fn) {
-      char path[MAX_PATH];
-      if (GetModuleFileName(NULL, path, MAX_PATH) < MAX_PATH &&
-	  PathRemoveFileSpec(path) && PathCombine(path, path, fn)) {
-	_mod = win32::valid(LoadLibraryEx(path, NULL, LOAD_LIBRARY_AS_DATAFILE));
-      }
-    }
-    HRSRC h = win32::valid(FindResource(_mod, id, RT_MASCOTICON));
-    DWORD rsz = SizeofResource(_mod, h);
-    _rc = PWORD(win32::valid(LockResource(LoadResource(_mod, h))));
-    if (rsz < 2 || (_rc[0] & 1) || rsz < _rc[0] || _rc[0] < 8 ||
-	_rc[2] == 0 || rsz < _rc[0] + _rc[2] * sizeof(anim)) {
-      throw runtime_error("Invalid icon resource.");
-    }
-    _anim = reinterpret_cast<anim*>(PBYTE(_rc) + _rc[0]);
-    for (int t = 0; t < 3; ++t) {
-      const anim* p = _anim + _rc[2] * t;
-      for (int i = 0; i < _rc[2]; ++i) {
-	win32::valid(FindResource(_mod, MAKEINTRESOURCE(p[i].id), RT_ICON));
-	if (p[i].ticks == 0) break;
-      }
-    }
-    _size = size(), _step = 0, _icon = win32::valid(_read(_rc[3]));
-  } catch (...) {
-    _release();
-    throw;
+  HRSRC h = win32::valid(FindResource(_mod, id, RT_MASCOTICON));
+  DWORD rsz = SizeofResource(_mod, h);
+  _rc = PWORD(win32::valid(LockResource(LoadResource(_mod, h))));
+  if (rsz < 2 || (_rc[0] & 1) || rsz < _rc[0] || _rc[0] < 8 ||
+      _rc[2] == 0 || rsz < _rc[0] + _rc[2] * sizeof(anim)) {
+    throw runtime_error("Invalid icon resource.");
   }
+  for (int t = 0; t < 3; ++t) {
+    const anim* p = reinterpret_cast<anim*>(PBYTE(_rc) + _rc[0]) + _rc[2] * t;
+    for (int i = 0; i < _rc[2]; ++i) {
+      win32::valid(FindResource(_mod, MAKEINTRESOURCE(p[i].id), RT_ICON));
+      if (p[i].ticks == 0) break;
+    }
+  }
+  _size = size();
 }
 
-bool
-icon::reload(LPCSTR id, LPCSTR fn)
+icon::~icon()
 {
-  try {
-    icon newicon(id, fn);
-    _release();
-    *this = newicon;
-    newicon._mod = NULL, newicon._icon = NULL;
-    return true;
-  } catch (...) {
-    return false;
-  }
+  _icon && DestroyIcon(_icon);
 }
 
-void
-icon::_release()
+const icon&
+icon::operator=(const icon& copy)
 {
-  if (_icon) DestroyIcon(_icon);
-  if (_mod) FreeLibrary(_mod);
+  if (this != &copy) {
+    _mod = copy._mod, _rc = copy._rc, _anim = copy._anim,
+    _size = copy._size, _step = copy._step;
+    if (_icon) DestroyIcon(_icon), _icon = NULL;
+  }
+  return *this;
 }
 
 HICON
-icon::_read(int id)
+icon::_read(int id, int size) const
 {
-  return HICON(LoadImage(_mod ? _mod : win32::exe, MAKEINTRESOURCE(id),
-			 IMAGE_ICON, _size, _size, LR_DEFAULTCOLOR));
+  if (size <= 0) size = _size;
+  return HICON(LoadImage(_mod, MAKEINTRESOURCE(id),
+			 IMAGE_ICON, size, size, LR_DEFAULTCOLOR));
 }
 
-void
+icon&
 icon::_load(int step)
 {
   assert(step >= 0 && step < _rc[2]);
-  _step = _anim[step].id ? step : 0;
-  HICON icon = _read(_anim[_step].id);
+  HICON icon = _read(_anim ? _anim[_step = _anim[step].id ? step : 0].id : _rc[3]);
   if (icon) {
     if (_icon) DestroyIcon(_icon);
     _icon = icon;
   }
+  return *this;
 }
 
 icon&
 icon::resize(int size)
 {
   assert(size > 0);
-  if (_size != size) {
-    _size = size;
-    _load();
-  }
+  if (_size != size) _size = size, _load();
   return *this;
 }
 
@@ -110,15 +161,17 @@ icon::reset(int type)
 {
   assert(type >= 0 && type <= 2);
   _anim = reinterpret_cast<anim*>(PBYTE(_rc) + _rc[0]) + _rc[2] * type;
-  _load();
-  return *this;
+  return _load();
 }
 
-HICON
-icon::symbol(int size) const
+icon&
+icon::next()
 {
-  if (!size) size = _rc[1];
-  return HICON(win32::valid(LoadImage(_mod ? _mod : win32::exe,
-				      MAKEINTRESOURCE(_rc[3]), IMAGE_ICON,
-				      size, size, LR_DEFAULTCOLOR)));
+  return _load((_step + 1) % _rc[2]);
+}
+
+UINT
+icon::delay() const
+{
+  return _anim ? _anim[_step].ticks * 50 / 3 : 0;
 }
