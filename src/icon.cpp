@@ -28,7 +28,7 @@ iconmodule::iconmodule(LPCSTR fn)
   string s = path(fn);
   _rep = new rep;
   _rep->module = s.empty() ? win32::exe :
-    LoadLibraryEx(s.c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE);
+    win32::module(LoadLibraryEx(s.c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE));
 }
 
 iconmodule::iconmodule(const iconmodule& module)
