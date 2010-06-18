@@ -529,7 +529,7 @@ maindlg::_iconwidth() const
 {
   RECT rc;
   GetClientRect(item(IDC_BUTTON_ICON), &rc);
-  return min(rc.right, rc.bottom);
+  return min(rc.right, rc.bottom) - 8;
 }
 
 void
