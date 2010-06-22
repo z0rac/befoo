@@ -227,7 +227,7 @@ namespace {
   };
 
   class iconlist : vector<iconspec>, iconmodule::accept {
-    void operator()(LPCSTR name, const icon& icon);
+    void operator()(int id, const icon& icon);
   public:
     iconlist() {}
     ~iconlist() { clear(); }
@@ -236,7 +236,6 @@ namespace {
     using vector<iconspec>::operator[];
   public:
     void load();
-    void add(const char* file);
     void clear();
   };
 }
@@ -249,25 +248,22 @@ iconspec::iconspec(const string& setting, int width)
 {
   try {
     int id;
-    string path;
-    (setting::manip(setting))(id = 1)(path);
-    iconmodule dll(path.c_str());
-    win32::valid(dll);
-    icon mascot(MAKEINTRESOURCE(id), dll);
-    size = mascot.size();
-    symbol = mascot.read(min(size, width));
+    string fn;
+    (setting::manip(setting))(id = 1).sep(0)(fn);
+    icon mascot(id, fn);
+    size = mascot.size(), symbol = mascot.read(min(size, width));
   } catch (...) {
     symbol = CopyIcon(LoadIcon(NULL, IDI_QUESTION));
   }
 }
 
 void
-iconlist::operator()(LPCSTR name, const icon& icon)
+iconlist::operator()(int id, const icon& icon)
 {
   struct spec : public iconspec {
     spec(const iconspec& spec) : iconspec(spec) {}
     ~spec() { symbol && DestroyIcon(symbol); }
-  } spec(iconspec(LOWORD(name), icon, min(icon.size(), 64)));
+  } spec(iconspec(id, icon, min(icon.size(), 64)));
   push_back(spec);
   spec.symbol = NULL;
 }
@@ -280,24 +276,14 @@ iconlist::load()
     if (p->setting == "1") p->setting.clear();
   }
   for (const char* p = "*.dll\0*.ico\0"; *p; p += strlen(p) + 1) {
-    for (win32::find f(iconmodule::path(p)); f; f.next()) add(f.cFileName);
-  }
-}
-
-void
-iconlist::add(const char* file)
-{
-  iconlist::size_type i = size();
-  iconmodule(file).collect(*this);
-  if (i == size()) return;
-  textbuf buf;
-  if (GetModuleFileName(win32::exe, buf(MAX_PATH), MAX_PATH) < MAX_PATH &&
-      PathRemoveFileSpec(buf.data)) {
-    int n = strlen(buf.data);
-    if (PathCommonPrefix(file, buf.data, buf.data) < n) n = 0;
-    string suffix = string(",") + &file[n];
-    vector<iconspec>::iterator p = begin() + i;
-    for (; p != end(); ++p) p->setting += suffix;
+    for (win32::find f(iconmodule::path(p)); f; f.next()) {
+      iconlist::size_type i = size();
+      iconmodule(f.cFileName).collect(*this);
+      if (i == size()) continue;
+      string suffix = string(",") + PathFindFileName(f.cFileName);
+      vector<iconspec>::iterator p = begin() + i;
+      for (; p != end(); ++p) p->setting += suffix;
+    }
   }
 }
 

@@ -23,13 +23,10 @@
 /*
  * Functions of the class iconmodule
  */
-iconmodule::iconmodule(LPCSTR fn)
-{
-  string s = path(fn);
-  _rep = new rep;
-  _rep->module = s.empty() ? win32::exe :
-    win32::module(LoadLibraryEx(s.c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE));
-}
+iconmodule::iconmodule(const string& fn)
+  : _rep(new rep(fn.empty() ? HMODULE(win32::exe) :
+		 LoadLibraryEx(path(fn.c_str()).c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE)))
+{}
 
 iconmodule::iconmodule(const iconmodule& module)
   : _rep(module._rep)
@@ -40,7 +37,7 @@ iconmodule::iconmodule(const iconmodule& module)
 const iconmodule&
 iconmodule::operator=(const iconmodule& module)
 {
-  module._rep->count++;
+  ++module._rep->count;
   _release();
   _rep = module._rep;
   return *this;
@@ -49,20 +46,15 @@ iconmodule::operator=(const iconmodule& module)
 void
 iconmodule::_release()
 {
-  if (--_rep->count) return;
-  HMODULE h = _rep->module;
-  delete _rep;
-  h && h != win32::exe && FreeLibrary(h);
+  if (--_rep->count == 0) delete _rep;
 }
 
 string
 iconmodule::path(LPCSTR fn)
 {
-  char path[MAX_PATH] = "";
-  if (fn && *fn) {
-    win32::valid(GetModuleFileName(NULL, path, MAX_PATH) &&
-		 PathRemoveFileSpec(path) && PathCombine(path, path, fn));
-  }
+  char path[MAX_PATH];
+  win32::valid(GetModuleFileName(NULL, path, MAX_PATH));
+  fn && *fn && win32::valid(PathRemoveFileSpec(path) && PathCombine(path, path, fn));
   return path;
 }
 
@@ -70,13 +62,14 @@ static BOOL CALLBACK
 enumicon(HMODULE, LPCSTR, LPSTR name, LONG_PTR param)
 {
   try {
-    if (name != LPSTR(int(name) & 0xffff)) {
+    int id = LOWORD(name);
+    if (name != MAKEINTRESOURCE(id)) {
       if (name[0] != '#') return TRUE;
-      name = MAKEINTRESOURCE(StrToInt(name + 1));
+      id = StrToInt(name + 1);
     }
     LONG_PTR* p = reinterpret_cast<LONG_PTR*>(param);
     (*reinterpret_cast<iconmodule::accept*>(p[1]))
-      (name, icon(name, *reinterpret_cast<iconmodule*>(p[0])));
+      (id, icon(id, *reinterpret_cast<iconmodule*>(p[0])));
   } catch (...) {}
   return TRUE;
 }
@@ -92,10 +85,10 @@ iconmodule::collect(accept& accept) const
 /*
  * Functions of the class icon
  */
-icon::icon(LPCSTR id, const iconmodule& mod)
-  : _mod(mod), _anim(NULL), _step(0), _icon(NULL)
+icon::icon(int id, const iconmodule& mod)
+  : _mod(win32::valid(mod)), _anim(NULL), _step(0), _icon(NULL)
 {
-  HRSRC h = win32::valid(FindResource(_mod, id, RT_MASCOTICON));
+  HRSRC h = win32::valid(FindResource(_mod, MAKEINTRESOURCE(id), RT_MASCOTICON));
   DWORD rsz = SizeofResource(_mod, h);
   _rc = PWORD(win32::valid(LockResource(LoadResource(_mod, h))));
   if (rsz < 2 || (_rc[0] & 1) || rsz < _rc[0] || _rc[0] < 8 ||

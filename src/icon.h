@@ -14,22 +14,23 @@
 class icon;
 class iconmodule {
   struct rep {
-    win32::module module;
+    HMODULE module;
     size_t count;
-    rep() : count(1) {}
+    rep(HMODULE module) : module(module), count(1) {}
+    ~rep() { module && module != win32::exe && FreeLibrary(module); }
   };
   rep* _rep;
   void _release();
 public:
-  iconmodule(LPCSTR fn = NULL);
+  iconmodule(const string& fn = string());
   iconmodule(const iconmodule& module);
   ~iconmodule() { _release(); }
   const iconmodule& operator=(const iconmodule& module);
   operator HMODULE() const { return _rep->module; }
-  static string path(LPCSTR fn);
+  static string path(LPCSTR fn = NULL);
 public:
   struct accept {
-    virtual void operator()(LPCSTR name, const icon& icon) = 0;
+    virtual void operator()(int id, const icon& icon) = 0;
   };
   void collect(accept& accept) const;
 };
@@ -47,7 +48,7 @@ class icon {
   HICON _read(int id, int size = 0) const;
   icon& _load(int step = 0);
 public:
-  icon(LPCSTR id, const iconmodule& mod = iconmodule());
+  icon(int id, const iconmodule& mod = iconmodule());
   icon(const icon& copy) : _icon(NULL) { *this = copy; }
   ~icon();
   const icon& operator=(const icon& copy);
