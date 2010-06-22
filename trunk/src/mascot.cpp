@@ -191,9 +191,8 @@ namespace {
     void balloon(const string& text, unsigned sec,
 		 const string& title = string(), int icon = 0);
     int size() const { return _icon.size(); }
-    bool reload(LPCSTR id, LPCSTR fn = NULL);
   public:
-    iconwindow(LPCSTR id);
+    iconwindow(const icon& icon);
     ~iconwindow() { if (hwnd()) _trayicon(false); }
     void trayicon(bool tray);
     bool intray() const { return !visible(); }
@@ -337,21 +336,8 @@ iconwindow::balloon(const string& text, unsigned sec,
   }
 }
 
-bool
-iconwindow::reload(LPCSTR id, LPCSTR fn)
-{
-  try {
-    iconmodule dll(fn);
-    win32::valid(dll);
-    _icon = icon(id, dll);
-    return true;
-  } catch (...) {
-    return false;
-  }
-}
-
-iconwindow::iconwindow(LPCSTR id)
-  : _icon(id), _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
+iconwindow::iconwindow(const icon& icon)
+  : _icon(icon), _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
 }
@@ -375,6 +361,7 @@ namespace {
     menu _menu;
     int _balloon;
     void _release();
+    static icon _icon();
   protected:
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
     void release();
@@ -399,6 +386,19 @@ mascotwindow::_release()
        (r.left - dt.left)(r.top - dt.top)(dt.right)(dt.bottom)(topmost()))
       ("tray", intray());
   } catch (...) {}
+}
+
+icon
+mascotwindow::_icon()
+{
+  try {
+    int id;
+    string fn;
+    setting::preferences()["icon"]()()(id = 1).sep(0)(fn);
+    return icon(id, fn);
+  } catch (...) {
+    return icon(1);
+  }
 }
 
 LRESULT
@@ -479,13 +479,10 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 }
 
 mascotwindow::mascotwindow()
-  : iconwindow(MAKEINTRESOURCE(1)), _menu(MAKEINTRESOURCE(1))
+  : iconwindow(_icon()), _menu(MAKEINTRESOURCE(1))
 {
   setting prefs = setting::preferences();
-  int icon, transparency, id;
-  string fn;
-  prefs["icon"]()()(id = 1)(fn);
-  if (id != 1 || !fn.empty()) reload(MAKEINTRESOURCE(id), fn.c_str());
+  int icon, transparency;
   prefs["icon"](icon = size())(transparency = 0);
   if (!icon) icon = GetSystemMetrics(SM_CXICON);
   prefs["balloon"](_balloon = 10);
