@@ -12,6 +12,7 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 
 0 ICON DISCARDABLE "../icons/default/app.ico"
 #include "../icons/default.rc"
+#include "../icons/simple.rc"
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "befoo.exe.manifest"
 

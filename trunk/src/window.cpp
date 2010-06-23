@@ -66,7 +66,9 @@ window::broadcast(UINT m, WPARAM w, LPARAM l)
       DWORD id;
       GetWindowThreadProcessId(h, &id);
       _enum* p = reinterpret_cast<_enum*>(l);
-      if (id == p->id) SendMessage(h, p->m, p->w, p->l);
+      if (id == p->id) {
+	SendMessageTimeout(h, p->m, p->w, p->l, SMTO_NORMAL, 1000, NULL);
+      }
       return TRUE;
     }
   } enums = { m, w, l, GetCurrentProcessId() };

@@ -58,28 +58,30 @@ iconmodule::path(LPCSTR fn)
   return path;
 }
 
-static BOOL CALLBACK
-enumicon(HMODULE, LPCSTR, LPSTR name, LONG_PTR param)
-{
-  try {
-    int id = LOWORD(name);
-    if (name != MAKEINTRESOURCE(id)) {
-      if (name[0] != '#') return TRUE;
-      id = StrToInt(name + 1);
-    }
-    LONG_PTR* p = reinterpret_cast<LONG_PTR*>(param);
-    (*reinterpret_cast<iconmodule::accept*>(p[1]))
-      (id, icon(id, *reinterpret_cast<iconmodule*>(p[0])));
-  } catch (...) {}
-  return TRUE;
-}
-
 void
 iconmodule::collect(accept& accept) const
 {
   if (!_rep->module) return;
-  LONG_PTR param[] = { reinterpret_cast<LONG_PTR>(this), LONG_PTR(&accept) };
-  EnumResourceNames(_rep->module, RT_MASCOTICON, enumicon, LONG_PTR(param));
+
+  struct _iconenum {
+    const iconmodule* module;
+    iconmodule::accept* accept;
+
+    static BOOL CALLBACK proc(HMODULE, LPCSTR, LPSTR name, LONG_PTR param)
+    {
+      try {
+	int id = LOWORD(name);
+	if (name != MAKEINTRESOURCE(id)) {
+	  if (name[0] != '#') return TRUE;
+	  id = StrToInt(name + 1);
+	}
+	_iconenum* p = reinterpret_cast<_iconenum*>(param);
+	(*p->accept)(id, icon(id, *p->module));
+      } catch (...) {}
+      return TRUE;
+    }
+  } param = { this, &accept };
+  EnumResourceNames(_rep->module, RT_MASCOTICON, _iconenum::proc, LONG_PTR(&param));
 }
 
 /*
@@ -98,7 +100,7 @@ icon::icon(int id, const iconmodule& mod)
   for (int t = 0; t < 3; ++t) {
     const anim* p = reinterpret_cast<anim*>(PBYTE(_rc) + _rc[0]) + _rc[2] * t;
     for (int i = 0; i < _rc[2]; ++i) {
-      win32::valid(FindResource(_mod, MAKEINTRESOURCE(p[i].id), RT_ICON));
+      win32::valid(FindResource(_mod, MAKEINTRESOURCE(p[i].id), RT_GROUP_ICON));
       if (p[i].ticks == 0) break;
     }
   }
@@ -114,8 +116,7 @@ const icon&
 icon::operator=(const icon& copy)
 {
   if (this != &copy) {
-    _mod = copy._mod, _rc = copy._rc, _anim = copy._anim,
-    _size = copy._size, _step = copy._step;
+    _mod = copy._mod, _rc = copy._rc, _anim = NULL, _size = copy._size, _step = 0;
     if (_icon) DestroyIcon(_icon), _icon = NULL;
   }
   return *this;
