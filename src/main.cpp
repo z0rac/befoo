@@ -407,8 +407,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     int delay;
     setting::preferences()["delay"](delay = 0);
     for (int qc = 1; qc > 0; delay = 0) {
-      auto_ptr<model> m(new model);
       auto_ptr<window> w(mascot());
+      auto_ptr<model> m(new model);
       w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
       w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
       w->addcmd(ID_MENU_SETTINGS, new cmd::setting(rep));

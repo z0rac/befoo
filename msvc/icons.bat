@@ -6,7 +6,7 @@ REM the license terms, see the LICENSE.txt file included with the program.
 
 SETLOCAL
 SET OUTDIR=%1
-SET INTDIR=%1\icons
+SET INTDIR=%1
 SET ICONSDIR=..\icons
 
 SHIFT

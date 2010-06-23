@@ -9,17 +9,17 @@
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 #pragma code_page(1252)
 
-1 ICON DISCARDABLE "simple/fetch.ico"
-2 ICON DISCARDABLE "simple/exist.ico"
-3 ICON DISCARDABLE "simple/empty.ico"
+10 ICON DISCARDABLE "simple/fetch.ico"
+11 ICON DISCARDABLE "simple/exist.ico"
+12 ICON DISCARDABLE "simple/empty.ico"
 
-1 MASCOTICON DISCARDABLE
+2 MASCOTICON DISCARDABLE
 BEGIN
     8,  // Bytes of header
     48, // Icon size
     1,  // Animation frames
-    1,	// Initial icon
-    1, 0, // Animation for fetching.
-    2, 0, // Animation for having mail.
-    3, 0  // Animation for no mail.
+    10,	// Initial icon
+    10, 0, // Animation for fetching.
+    11, 0, // Animation for having mail.
+    12, 0  // Animation for no mail.
 END
