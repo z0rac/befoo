@@ -27,7 +27,7 @@ OBJS = main.o settingdlg.o mailboxdlg.o $(LOBJS) extend.res
 LOBJS = setting.o uri.o icon.o win32.o
 LIBS = -lstdc++ -lshlwapi -lcomctl32 -lwinmm
 
-RSRC = $(DLL).manifest ja.rc
+RSRC = ja.rc
 
 .SUFFIXES: .rc .res
 .rc.res:	; windres -O coff -i $< -o $@
