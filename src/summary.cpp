@@ -81,13 +81,12 @@ void
 summary::release()
 {
   try {
-    setting::tuple columns(ListView_GetColumnWidth(hwnd(), 0));
-    for (int i = 1; i < LAST; ++i) {
-      columns(ListView_GetColumnWidth(hwnd(), i));
-    }
-    setting::preferences("summary")
-      ("columns", columns)
-      ("sort", setting::tuple(_column)(_order));
+    setting prefs = setting::preferences("summary");
+    setting::tuple tuple = setting::tuple(ListView_GetColumnWidth(hwnd(), 0));
+    for (int i = 1; i < LAST; ++i) tuple(ListView_GetColumnWidth(hwnd(), i));
+    if (tuple.row().compare(prefs["columns"])) prefs("columns", tuple);
+    tuple = setting::tuple(_column)(_order);
+    if (tuple.row().compare(prefs["sort"])) prefs("sort", tuple);
   } catch (...) {}
 }
 
@@ -330,19 +329,19 @@ namespace {
 summarywindow::summarywindow(const mailbox* mboxes)
   : _summary(self())
 {
+  const DWORD style(WS_OVERLAPPED | WS_CAPTION |
+		    WS_SYSMENU | WS_THICKFRAME | WS_CLIPCHILDREN);
+  const DWORD exstyle(WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
   setting prefs = setting::preferences();
   int transparency;
   prefs["summary"](_autoclose.sec = 3)()(transparency = 0);
   _autoclose.reset(*this);
   _alpha = 255 - 255 * transparency / 100;
   if (_alpha < 255) {
-    style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
-	  WS_THICKFRAME | WS_CLIPCHILDREN,
-	  WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE | WS_EX_LAYERED);
+    summarywindow::style(style, exstyle | WS_EX_LAYERED);
     transparent(_alpha);
   } else {
-    style(WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
-	  WS_THICKFRAME | WS_CLIPCHILDREN, WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
+    summarywindow::style(style, exstyle);
   }
   SetWindowText(hwnd(), win32::exe.text(ID_TEXT_SUMMARY_TITLE).c_str());
   RECT r;

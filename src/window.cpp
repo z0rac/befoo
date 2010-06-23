@@ -323,7 +323,6 @@ bool
 window::popup(const menu& menu, DWORD pt)
 {
   _updatemenu(menu);
-  SetForegroundWindow(_hwnd);
   UINT cmd = UINT(TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD,
 				 GET_X_LPARAM(pt), GET_Y_LPARAM(pt),
 				 0, _hwnd, NULL));

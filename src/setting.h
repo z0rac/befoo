@@ -63,6 +63,7 @@ public:
     tuple& operator()(const string& v) { return add(v); }
     template<typename _Ty>
     tuple& operator()(_Ty v) { return add(digit(v)); }
+    const string& row() const { return _s; }
     operator const string&() const { return _s; }
   };
   setting& operator()(_str key, const string& value)
@@ -94,6 +95,7 @@ public:
     manip& operator()(int& v) { next(v); return *this; }
     template<typename _Tz> manip& operator()(int& v, _Tz& e)
     { e = _Tz(next(v)); return *this; }
+    const string& row() const { return _s; }
     operator const string&() const { return _s; }
     manip& sep(char sep) { _sep = sep; return *this; }
     list<string> split();

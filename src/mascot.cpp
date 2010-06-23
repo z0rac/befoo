@@ -50,7 +50,7 @@ namespace {
   public:
     tooltips(const window& owner);
     void tip(const string& text) { _status(text); }
-    void reset(bool await = true) { if (!visible()) _status.reset(await); }
+    void reset(bool await = true) { _status.reset(await); }
     void balloon(const string& text, unsigned sec = 0,
 		 const string& title = string(), int icon = 0);
     void clearballoon();
@@ -267,6 +267,7 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     }
     POINT pt;
     GetCursorPos(&pt);
+    foreground();
     PostMessage(hwnd(), l, 0, MAKELPARAM(pt.x, pt.y));
     return 0;
   default:
