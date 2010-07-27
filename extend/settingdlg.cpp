@@ -465,7 +465,7 @@ maindlg::_mailbox(bool edit)
   }
   extern string editmailbox(const string&, HWND);
   string n = editmailbox(name, hwnd());
-  if (n != name) {
+  if (!n.empty() && n != name) {
     HWND h = item(IDC_LIST_MAILBOX);
     if (!name.empty()) ListBox_DeleteString(h, ListBox_GetCurSel(h));
     ListBox_AddString(h, n.c_str());
