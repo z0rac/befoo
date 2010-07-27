@@ -55,6 +55,7 @@ public:
   operator HICON() const { return _icon; }
   int size() const { return _rc[1]; }
   icon& resize(int size);
+  icon& reset() { return _load(_step); }
   icon& reset(int type);
   icon& next();
   UINT delay() const;
