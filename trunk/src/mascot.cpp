@@ -341,6 +341,7 @@ iconwindow::iconwindow(const icon& icon)
   : _icon(icon), _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
+  _icon.reset();
 }
 
 void
