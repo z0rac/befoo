@@ -34,7 +34,7 @@ iconmodule::iconmodule(const iconmodule& module)
   ++_rep->count;
 }
 
-const iconmodule&
+iconmodule&
 iconmodule::operator=(const iconmodule& module)
 {
   ++module._rep->count;
@@ -112,7 +112,7 @@ icon::~icon()
   _icon && DestroyIcon(_icon);
 }
 
-const icon&
+icon&
 icon::operator=(const icon& copy)
 {
   if (this != &copy) {

@@ -283,15 +283,27 @@ win32::wstr::wstr(const string& s, UINT cp)
   }
 }
 
-const win32::wstr&
-win32::wstr::operator=(const wstr& ws)
+win32::wstr&
+win32::wstr::operator=(LPCWSTR ws)
 {
-  LPWSTR data = NULL;
-  if (ws._data) {
-    data = lstrcpyW(new WCHAR[lstrlenW(ws._data) + 1], ws._data);
-  }
+  LPWSTR data = ws ? lstrcpyW(new WCHAR[lstrlenW(ws) + 1], ws) : NULL;
   delete [] _data;
   _data = data;
+  return *this;
+}
+
+win32::wstr&
+win32::wstr::operator+=(LPCWSTR ws)
+{
+  size_t n = ws ? lstrlenW(ws) : 0;
+  if (n) {
+    size_t l = _data ? lstrlenW(_data) : 0;
+    LPWSTR data = new WCHAR[l + n + 1];
+    if (l) lstrcpyW(data, _data);
+    lstrcpyW(data + l, ws);
+    delete [] _data;
+    _data = data;
+  }
   return *this;
 }
 

@@ -51,7 +51,7 @@ namespace {
     tooltips(const window& owner);
     void tip(const string& text) { _status(text); }
     void reset(bool await = true) { _status.reset(await); }
-    void balloon(const string& text, unsigned sec = 0,
+    void balloon(LPCWSTR text, unsigned sec = 0,
 		 const string& title = string(), int icon = 0);
     void clearballoon();
     void topmost(bool owner);
@@ -130,9 +130,10 @@ tooltips::tooltips(const window& owner)
 }
 
 void
-tooltips::balloon(const string& text, unsigned sec, const string& title, int icon)
+tooltips::balloon(LPCWSTR text, unsigned sec, const string& title, int icon)
 {
-  info ti(*this);
+  TOOLINFOW ti = { sizeof(TOOLINFOW) };
+  ti.hwnd = GetParent(hwnd());
   SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
   _status.disable();
   RECT r;
@@ -140,8 +141,8 @@ tooltips::balloon(const string& text, unsigned sec, const string& title, int ico
   r.left = r.right / 2, r.top = r.bottom * 9 / 16;
   ClientToScreen(ti.hwnd, LPPOINT(&r));
   SendMessage(hwnd(), TTM_TRACKPOSITION, 0, MAKELPARAM(r.left, r.top));
-  ti.lpszText = LPSTR(text.c_str());
-  SendMessage(hwnd(), TTM_UPDATETIPTEXT, 0, LPARAM(&ti));
+  ti.lpszText = LPWSTR(text);
+  SendMessage(hwnd(), TTM_UPDATETIPTEXTW, 0, LPARAM(&ti));
   SendMessage(hwnd(), TTM_SETTITLEA, WPARAM(icon), LPARAM(title.c_str()));
   SendMessage(hwnd(), TTM_TRACKACTIVATE, TRUE, LPARAM(&ti));
   settimer(*this, sec * 1000);
@@ -188,7 +189,7 @@ namespace {
     void wakeup(window& source);
     void reset(int type);
     void status(const string& text);
-    void balloon(const string& text, unsigned sec,
+    void balloon(LPCWSTR text, unsigned sec,
 		 const string& title = string(), int icon = 0);
     int size() const { return _icon.size(); }
   public:
@@ -321,17 +322,18 @@ iconwindow::status(const string& text)
 }
 
 void
-iconwindow::balloon(const string& text, unsigned sec,
+iconwindow::balloon(LPCWSTR text, unsigned sec,
 		    const string& title, int icon)
 {
   if (intray()) {
-    NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
+    NOTIFYICONDATAW ni = { sizeof(NOTIFYICONDATAW), hwnd() };
     ni.uFlags = NIF_INFO;
-    lstrcpyn(ni.szInfo, text.c_str(), sizeof(ni.szInfo));
+    lstrcpynW(ni.szInfo, text, sizeof(ni.szInfo) / sizeof(ni.szInfo[0]));
     ni.uTimeout = sec * 1000;
-    lstrcpyn(ni.szInfoTitle, title.c_str(), sizeof(ni.szInfoTitle));
+    lstrcpynW(ni.szInfoTitle, win32::wstr(title),
+	      sizeof(ni.szInfoTitle) / sizeof(ni.szInfoTitle[0]));
     ni.dwInfoFlags = icon & 3;
-    Shell_NotifyIcon(NIM_MODIFY, &ni);
+    Shell_NotifyIconW(NIM_MODIFY, &ni);
   } else {
     _tips.balloon(text, sec, title, icon);
   }
@@ -452,23 +454,24 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 {
   if (mboxes) {
     LOG("Update: " << recent << ", " << unseen << endl);
-    string info;
+    win32::wstr info;
     bool newer = false;
     list<mailbox*>::const_iterator p = mboxes->begin();
     for (; p != mboxes->end(); ++p) {
       int n = (*p)->recent();
       if (n && (_balloon || n < 0)) {
-	info += win32::exe.textf(n < 0 ? ID_TEXT_FETCH_ERROR :
-				 ID_TEXT_FETCHED_MAIL,
-				 n, (*p)->mails().size());
-	info += " @ " + (*p)->name() + "\n";
+	info += win32::wstr('\n' +
+			    win32::exe.textf(n < 0 ? ID_TEXT_FETCH_ERROR :
+					     ID_TEXT_FETCHED_MAIL,
+					     n, (*p)->mails().size()));
+	info += win32::wstr(" @ " + (*p)->name());
       }
       newer = newer || n > 0;
     }
     ReplyMessage(0);
     status(win32::exe.textf(ID_TEXT_FETCHED_MAIL, recent, unseen));
-    if (!info.empty()) {
-      balloon(info.erase(info.size() - 1), _balloon ? _balloon : 10,
+    if (info) {
+      balloon(info + 1, _balloon ? _balloon : 10,
 	      win32::exe.text(newer ? ID_TEXT_BALLOON_TITLE :
 			      ID_TEXT_BALLOON_ERROR),
 	      newer ? NIIF_INFO : NIIF_ERROR);
@@ -527,7 +530,7 @@ namespace cmd {
   class about : public window::command {
     void execute(window& source)
     {
-      ((mascotwindow&)source).balloon(win32::exe.text(ID_TEXT_ABOUT), 10,
+      ((mascotwindow&)source).balloon(win32::wstr(win32::exe.text(ID_TEXT_ABOUT)), 10,
 				      win32::exe.text(ID_TEXT_VERSION));
     }
   };

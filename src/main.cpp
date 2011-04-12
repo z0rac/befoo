@@ -87,7 +87,8 @@ model::model()
       s["period"](period = 15);
       s["sound"].sep(0)(mb->sound);
       mb->period = period > 0 ? period * 60000U : 0;
-      mb->ignore(setting::cache(mb->uristr()));
+      list<string> cache = setting::cache(mb->uristr());
+      mb->ignore(cache);
       hold.release();
       last = last ? last->next(mb) : (_mailboxes = mb);
     }

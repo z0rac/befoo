@@ -25,7 +25,7 @@ public:
   iconmodule(const string& fn = string());
   iconmodule(const iconmodule& module);
   ~iconmodule() { _release(); }
-  const iconmodule& operator=(const iconmodule& module);
+  iconmodule& operator=(const iconmodule& module);
   operator HMODULE() const { return _rep->module; }
   static string path(LPCSTR fn = NULL);
 public:
@@ -51,7 +51,7 @@ public:
   icon(int id, const iconmodule& mod = iconmodule());
   icon(const icon& copy) : _icon(NULL) { *this = copy; }
   ~icon();
-  const icon& operator=(const icon& copy);
+  icon& operator=(const icon& copy);
   operator HICON() const { return _icon; }
   int size() const { return _rc[1]; }
   icon& resize(int size);

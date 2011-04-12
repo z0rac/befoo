@@ -115,13 +115,13 @@ public:
   mailbox& domain(int domain) { _domain = domain; return *this; }
   mailbox& verify(int verify) { _verify = verify; return *this; }
   const list<mail>& mails() const { return _mails; }
-  const list<mail>& mails(const list<mail>& mails)
-  { return _mails = mails; }
+  const list<mail>& mails(list<mail>& mails)
+  { return _mails.swap(mails), _mails; }
   int recent() const { return _recent; }
   const mail* find(const string& uid) const;
   const list<string>& ignore() const { return _ignore; }
-  const list<string>& ignore(const list<string>& ignore)
-  { return _ignore = ignore; }
+  const list<string>& ignore(list<string>& ignore)
+  { return _ignore.swap(ignore), _ignore; }
   void fetchmail();
 public:
   class backend {
