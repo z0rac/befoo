@@ -94,13 +94,15 @@ public:
   public:
     wstr() : _data(NULL) {}
     wstr(const wstr& ws) : _data(NULL) { *this = ws; }
-    wstr(const string& s, UINT cp = GetACP());
+    wstr(const string& s, UINT cp = CP_ACP);
     ~wstr() { delete [] _data; }
-    const wstr& operator=(const wstr& ws);
+    wstr& operator=(LPCWSTR ws);
+    wstr& operator=(const wstr& ws) { return operator=(LPCWSTR(ws)); }
+    wstr& operator+=(LPCWSTR ws);
     operator LPCWSTR() const { return _data; }
     size_t size() const { return _data ? lstrlenW(_data) : 0; }
-    string mbstr(UINT cp = GetACP()) const { return mbstr(_data, cp); }
-    static string mbstr(LPCWSTR ws, UINT cp = GetACP());
+    string mbstr(UINT cp = CP_ACP) const { return mbstr(_data, cp); }
+    static string mbstr(LPCWSTR ws, UINT cp = CP_ACP);
   };
 
   // find - find files with the path

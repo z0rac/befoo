@@ -79,9 +79,9 @@ pop3::fetch(mailbox& mbox, const uri& uri)
 {
   const list<string>& ignore = mbox.ignore();
   list<string> ignored;
-  list<mail> fetched;
+  list<mail> mails;
+  list<mail> recents;
   bool recent = uri[uri::fragment] == "recent";
-  int count = 0;
   _command("UIDL");
   plist uidl(_plist());
   plist::iterator uidp = uidl.begin();
@@ -98,11 +98,16 @@ pop3::fetch(mailbox& mbox, const uri& uri)
       ignored.push_back(uid);
       continue;
     }
-    if (recent) ignored.push_back(uid);
-    fetched.push_back(m);
-    count += int(recent || !mbox.find(uid));
+    if (recent) {
+      ignored.push_back(uid);
+      recents.push_back(m);
+    } else {
+      (mbox.find(uid) ? &mails : &recents)->push_back(m);
+    }
   }
-  mbox.mails(fetched);
+  int count = recents.size();
+  mails.splice(mails.end(), recents);
+  mbox.mails(mails);
   mbox.ignore(ignored);
   return count;
 }

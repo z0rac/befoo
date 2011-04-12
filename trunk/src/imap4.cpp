@@ -102,20 +102,19 @@ imap4::fetch(mailbox& mbox, const uri& uri)
 {
   const string& path = uri[uri::path];
   _command("EXAMINE" + _arg(path.empty() ? "INBOX" : path));
-  list<mail> fetched;
-  size_t copies = 0;
+  list<mail> mails;
+  list<mail> recents;
   for (parser ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
     string uid = ids.token();
     const mail* p = mbox.find(uid);
     if (p) {
-      fetched.push_back(*p);
-      ++copies;
+      mails.push_back(*p);
       continue;
     }
     LOG("Fetch mail: " << uid << endl);
     parser parse(_command("UID FETCH " + uid +
-			   " BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]",
-			   "FETCH"));
+			  " BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]",
+			  "FETCH"));
     parse.token(); // drop sequence#
     if (parse.peek() != '(') throw mailbox::error(parse.data());
     for (parse = parse.token(true); parse;) {
@@ -124,13 +123,15 @@ imap4::fetch(mailbox& mbox, const uri& uri)
       if (item == "BODY[HEADER.FIELDS (SUBJECT FROM DATE)]") {
 	mail m(uid);
 	m.header(value);
-	fetched.push_back(m);
+	recents.push_back(m);
 	break;
       }
     }
   }
-  mbox.mails(fetched);
-  return int(fetched.size() - copies);
+  int count = recents.size();
+  mails.splice(mails.end(), recents);
+  mbox.mails(mails);
+  return count;
 }
 
 string

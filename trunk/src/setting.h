@@ -38,7 +38,7 @@ public:
   typedef _repository repository;
   typedef _repository::_storage storage;
   setting(const setting& s) : _st(const_cast<setting&>(s)._st) {}
-  const setting& operator=(const setting& s)
+  setting& operator=(const setting& s)
   { _st = const_cast<setting&>(s)._st; return *this; }
 public:
   struct _str {
