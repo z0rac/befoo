@@ -55,6 +55,15 @@ namespace {
 		 const string& title = string(), int icon = 0);
     void clearballoon();
     void topmost(bool owner);
+  public:
+    class ellipsis {
+      HDC hDC;
+      HGDIOBJ hFont;
+    public:
+      ellipsis();
+      ~ellipsis();
+      win32::wstr operator()(LPCWSTR ws) const;
+    };
   };
   window::commctrl tooltips::use(ICC_BAR_CLASSES);
 }
@@ -167,6 +176,37 @@ tooltips::notify(WPARAM w, LPARAM l)
 {
   if (LPNMHDR(l)->code == TTN_POP) _status.reset();
   return window::notify(w, l);
+}
+
+tooltips::ellipsis::ellipsis()
+  : hDC(CreateCompatibleDC(NULL))
+{
+  NONCLIENTMETRICS ncm = { sizeof(NONCLIENTMETRICS) };
+  SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+  hFont = SelectObject(hDC, CreateFontIndirect(&ncm.lfStatusFont));
+}
+
+tooltips::ellipsis::~ellipsis()
+{
+  DeleteObject(SelectObject(hDC, hFont));
+  DeleteDC(hDC);
+}
+
+win32::wstr
+tooltips::ellipsis::operator()(LPCWSTR ws) const
+{
+  struct buf {
+    LPWSTR data;
+    buf(LPCWSTR ws) : data(lstrcpyW(new WCHAR[lstrlenW(ws) + 5], ws)) {}
+    ~buf() { delete [] data; }
+  } buf(ws);
+  for (LPWSTR p = buf.data; *++p;) {
+    if (*p == L'\t') *p = L' ';
+  }
+  static RECT r = { 0, 0, 300, 300 };
+  DrawTextW(hDC, buf.data, -1, &r,
+	    DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS | DT_MODIFYSTRING);
+  return buf.data;
 }
 
 /** iconwindow - icon window with system tray
@@ -328,7 +368,13 @@ iconwindow::balloon(LPCWSTR text, unsigned sec,
   if (intray()) {
     NOTIFYICONDATAW ni = { sizeof(NOTIFYICONDATAW), hwnd() };
     ni.uFlags = NIF_INFO;
-    lstrcpynW(ni.szInfo, text, sizeof(ni.szInfo) / sizeof(ni.szInfo[0]));
+    int n = lstrlenW(text);
+    if (n >= sizeof(ni.szInfo) / sizeof(ni.szInfo[0])) {
+      n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]);
+      while (n-- && text[n] != L'\n') continue;
+      if (n < 0) n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]) - 1;
+    }
+    lstrcpynW(ni.szInfo, text, n + 1);
     ni.uTimeout = sec * 1000;
     lstrcpynW(ni.szInfoTitle, win32::wstr(title),
 	      sizeof(ni.szInfoTitle) / sizeof(ni.szInfoTitle[0]));
@@ -364,6 +410,7 @@ namespace {
   class mascotwindow : public iconwindow {
     menu _menu;
     int _balloon;
+    int _subjects;
     void _release();
     static icon _icon();
   protected:
@@ -456,15 +503,22 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
     LOG("Update: " << recent << ", " << unseen << endl);
     win32::wstr info;
     bool newer = false;
+    tooltips::ellipsis ellips;
     list<mailbox*>::const_iterator p = mboxes->begin();
     for (; p != mboxes->end(); ++p) {
       int n = (*p)->recent();
-      if (n && (_balloon || n < 0)) {
-	info += win32::wstr('\n' +
-			    win32::exe.textf(n < 0 ? ID_TEXT_FETCH_ERROR :
-					     ID_TEXT_FETCHED_MAIL,
-					     n, (*p)->mails().size()));
-	info += win32::wstr(" @ " + (*p)->name());
+      if (n > 0 && _balloon) {
+	const list<mail>& mails = (*p)->mails();
+	info += win32::wstr('\n' + win32::exe.textf(ID_TEXT_FETCHED_MAIL,
+						    n, mails.size()) +
+			    " @ " + (*p)->name());
+	list<mail>::const_iterator p = mails.end();
+	for (int i = min(n, _subjects); i-- > 0;) {
+	  --p, info += ellips(win32::wstr("\n- " + p->subject(), CP_UTF8));
+	}
+      } else if (n < 0) {
+	info += win32::wstr('\n' + win32::exe.text(ID_TEXT_FETCH_ERROR) +
+			    " @ " + (*p)->name());
       }
       newer = newer || n > 0;
     }
@@ -490,7 +544,7 @@ mascotwindow::mascotwindow()
   int icon, transparency;
   prefs["icon"](icon = size())(transparency = 0);
   if (!icon) icon = GetSystemMetrics(SM_CXICON);
-  prefs["balloon"](_balloon = 10);
+  prefs["balloon"](_balloon = 10)(_subjects = 0);
 
   prefs = setting::preferences("mascot");
   RECT dt;

@@ -93,6 +93,7 @@ public:
     LPWSTR _data;
   public:
     wstr() : _data(NULL) {}
+    wstr(LPCWSTR ws) : _data(NULL) { *this = ws; }
     wstr(const wstr& ws) : _data(NULL) { *this = ws; }
     wstr(const string& s, UINT cp = CP_ACP);
     ~wstr() { delete [] _data; }
