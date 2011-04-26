@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -30,7 +30,7 @@ BEGIN
     ID_TEXT_SUMMARY_TITLE	"一覧 - " APP_NAME
     ID_TEXT_SUMMARY_COLUMN	"件名/送信者/日付/メールボックス/"
     ID_TEXT_ABOUT		"\
-(C) 2009-2010 TSUBAKIMOTO Hiroya\n\
+(C) 2009-2011 TSUBAKIMOTO Hiroya\n\
 ライセンス GPLv3+: GNU GPLバージョン3以降\
  <http://gnu.org/licenses/gpl.html>\n\
 これはフリーソフトウェアで自由に改変、再頒布できます。\
