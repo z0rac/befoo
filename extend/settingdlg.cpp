@@ -399,8 +399,9 @@ maindlg::initialize()
     setspin(IDC_SPIN_ICONTRANS, t, 0, 100);
   }
   // general group
-  pref["balloon"](n = 10);
+  pref["balloon"](n = 10)(b = 0);
   setspin(IDC_SPIN_BALLOON, n);
+  setspin(IDC_SPIN_SUBJECTS, b);
   pref["summary"](n = 3)(b = 0)(t = 0);
   setspin(IDC_SPIN_SUMMARY, n);
   Button_SetCheck(item(IDC_CHECKBOX_SUMMARY), b);
@@ -419,7 +420,8 @@ maindlg::done(bool ok)
     icon(getint(IDC_EDIT_ICONTRANS));
     if (!_icon.empty()) icon(_icon);
     pref("icon", icon);
-    pref("balloon", setting::tuple(getint(IDC_EDIT_BALLOON)));
+    pref("balloon", setting::tuple(getint(IDC_EDIT_BALLOON))
+	 (getint(IDC_EDIT_SUBJECTS)));
     pref("summary", setting::tuple(getint(IDC_EDIT_SUMMARY))
 	 (Button_GetCheck(item(IDC_CHECKBOX_SUMMARY)))
 	 (getint(IDC_EDIT_SUMMARYTRANS)));

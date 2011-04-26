@@ -56,7 +56,8 @@ passwd=...
 [(preferences)]
 icon=32,50,2		; The mascot icon size, transparency and resource
 			; number. (default: 64,0,1)
-balloon=5		; Period to show the balloon.(default: 10)
+balloon=5,3		; Period and subjects to show the balloon.
+			; (default: 10,0)
 summary=5,1,20		; Period to show the summary, switch to show the
 			; summary when mail is fetched, and the inactive
 			; summary transparency.(default: 3,0,0)

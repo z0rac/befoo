@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -21,13 +21,15 @@
 #define IDC_SPIN_ICONTRANS			1009
 #define IDC_EDIT_BALLOON			1010
 #define IDC_SPIN_BALLOON			1011
-#define IDC_EDIT_SUMMARY			1012
-#define IDC_SPIN_SUMMARY			1013
-#define IDC_CHECKBOX_SUMMARY			1014
-#define IDC_EDIT_SUMMARYTRANS			1015
-#define IDC_SPIN_SUMMARYTRANS			1016
-#define IDC_EDIT_STARTUP			1017
-#define IDC_SPIN_STARTUP			1018
+#define IDC_EDIT_SUBJECTS			1012
+#define IDC_SPIN_SUBJECTS			1013
+#define IDC_EDIT_SUMMARY			1014
+#define IDC_SPIN_SUMMARY			1015
+#define IDC_CHECKBOX_SUMMARY			1016
+#define IDC_EDIT_SUMMARYTRANS			1017
+#define IDC_SPIN_SUMMARYTRANS			1018
+#define IDC_EDIT_STARTUP			1019
+#define IDC_SPIN_STARTUP			1020
 
 #define IDD_MAILBOX				101
 #define IDC_EDIT_NAME				1000
