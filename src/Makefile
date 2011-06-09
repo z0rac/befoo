@@ -6,6 +6,9 @@
 #
 PROG = befoo.exe
 
+CC = gcc-3
+CXX = g++-3
+
 OPTS = -mwin32 -m32 -mthreads -mno-cygwin
 CFLAGS = $(OPTS)
 LDFLAGS = $(OPTS) -mwindows
