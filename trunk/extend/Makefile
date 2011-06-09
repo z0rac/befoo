@@ -6,10 +6,13 @@
 #
 DLL = extend.dll
 
+CC = gcc-3
+CXX = g++-3
+
 OPTS = -mwin32 -m32 -mno-cygwin
 LIBDIR = ../src
 CFLAGS = $(OPTS) -D_USRDLL -DISOLATION_AWARE_ENABLED=1 -I$(LIBDIR)
-LDFLAGS = $(OPTS) -mwindows --target=i386-mingw32
+LDFLAGS = $(OPTS) -mwindows --target=i386-mingw32 --driver-name=gcc-3
 
 ifdef USE_REG # use registory instead of .INI file.
 CFLAGS += -DUSE_REG=$(USE_REG)

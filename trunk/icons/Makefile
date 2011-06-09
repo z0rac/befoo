@@ -5,7 +5,7 @@
 # the license terms, see the LICENSE.txt file included with the program.
 #
 TARGETS = simple.ico
-LDFLAGS = -mno-cygwin --target=i386-mingw32
+LDFLAGS = -mno-cygwin --target=i386-mingw32 --driver-name=gcc-3
 LDFLAGS += -Wl,--strip-all -Wl,--as-needed
 
 .SUFFIXES: .rc .res .ico
