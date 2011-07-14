@@ -64,7 +64,7 @@ summary::summary(const window& parent)
     _column(3), _order(1)
 {
   static commctrl listview(ICC_LISTVIEW_CLASSES);
-  style(LVS_REPORT | LVS_SINGLESEL, WS_EX_CLIENTEDGE);
+  style(LVS_REPORT | LVS_SINGLESEL);
   ListView_SetExtendedListViewStyle
     (hwnd(), LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_LABELTIP);
   setting::preferences("summary")["sort"](_column)(_order);
