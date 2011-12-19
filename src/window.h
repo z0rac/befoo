@@ -55,7 +55,7 @@ public:
   HWND hwnd() const { return _hwnd; }
   bool visible() const { return IsWindowVisible(_hwnd) != 0; }
   bool child() const;
-  void close() const;
+  void close(bool root = false) const;
   void show(bool show = true, bool active = true) const;
   void foreground(bool force = false) const;
   bool topmost() const;
