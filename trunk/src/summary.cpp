@@ -216,16 +216,14 @@ void
 summary::_open()
 {
   int item = ListView_GetNextItem(hwnd(), WPARAM(-1), LVNI_SELECTED);
-  if (item >= 0) {
-    LVITEM lv = { LVIF_PARAM, item };
-    if (ListView_GetItem(hwnd(), &lv)) {
-      size_t i = 0;
-      while (_mboxes[i].first <= size_t(lv.lParam)) ++i;
-      string mua;
-      setting::mailbox(_mboxes[i].second)["mua"].sep(0)(mua);
-      if (!mua.empty()) win32::shell(mua);
-    }
-  }
+  if (item < 0) return;
+  LVITEM lv = { LVIF_PARAM, item };
+  if (!ListView_GetItem(hwnd(), &lv)) return;
+  size_t i = 0;
+  while (_mboxes[i].first <= size_t(lv.lParam)) ++i;
+  string mua;
+  setting::mailbox(_mboxes[i].second)["mua"].sep(0)(mua);
+  if (!mua.empty() && win32::shell(mua)) close(true);
 }
 
 int

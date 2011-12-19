@@ -83,10 +83,10 @@ window::child() const
 }
 
 void
-window::close() const
+window::close(bool root) const
 {
-  assert(_hwnd && !child());
-  PostMessage(_hwnd, WM_CLOSE, 0, 0);
+  assert(_hwnd);
+  PostMessage(root ? GetAncestor(_hwnd, GA_ROOT) : _hwnd, WM_CLOSE, 0, 0);
 }
 
 void
