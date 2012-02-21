@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -23,13 +23,6 @@
  */
 win32::win32(LPCSTR mutex)
 {
-#if defined(__MINGW32__) && defined(_MT)
-  extern CRITICAL_SECTION __mingwthr_cs;
-  static struct mingwthr_cs {
-    mingwthr_cs() { InitializeCriticalSection(&__mingwthr_cs); }
-    ~mingwthr_cs() { DeleteCriticalSection(&__mingwthr_cs); }
-  } mingwthr_cs;
-#endif
   if (mutex &&
       (!CreateMutex(NULL, TRUE, mutex) ||
        GetLastError() == ERROR_ALREADY_EXISTS)) throw error();
@@ -116,10 +109,6 @@ win32::shell(const string& cmd, unsigned flags)
 }
 
 #ifdef _MT
-#if defined(__MINGW32__)
-extern "C" void __mingwthr_run_key_dtors(void);
-#endif
-
 HANDLE
 win32::thread(void (*func)(void*), void* param)
 {
@@ -132,9 +121,6 @@ win32::thread(void (*func)(void*), void* param)
       _thread th = *reinterpret_cast<_thread*>(param);
       SetEvent(th._event);
       try { th._func(th._param); } catch (...) {}
-#if defined(__MINGW32__)
-      __mingwthr_run_key_dtors();
-#endif
       return 0;
     }
   public:

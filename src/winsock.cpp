@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -226,8 +226,8 @@ winsock::tlsclient::tlsclient(DWORD proto)
   SCHANNEL_CRED auth = { SCHANNEL_CRED_VERSION };
   auth.grbitEnabledProtocols = proto;
   auth.dwFlags = (SCH_CRED_USE_DEFAULT_CREDS | SCH_CRED_MANUAL_CRED_VALIDATION);
-  _ok(AcquireCredentialsHandle(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND,
-			       NULL, &auth, NULL, NULL, &_cred, NULL));
+  _ok(AcquireCredentialsHandle(NULL, const_cast<SEC_CHAR*>(UNISP_NAME_A),
+			       SECPKG_CRED_OUTBOUND, NULL, &auth, NULL, NULL, &_cred, NULL));
 }
 
 winsock::tlsclient::~tlsclient()

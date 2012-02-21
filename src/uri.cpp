@@ -1,11 +1,13 @@
 /*
- * Copyright (C) 2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
 #include "mailbox.h"
 #include <cassert>
+#include <cstdlib>
+#include <cstring>
 
 #ifdef _DEBUG
 #include <iostream>

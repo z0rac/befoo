@@ -1,18 +1,19 @@
 #
-# Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+# Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
 #
 # This software comes with ABSOLUTELY NO WARRANTY; for details of
 # the license terms, see the LICENSE.txt file included with the program.
 #
 DLL = extend.dll
 
-CC = gcc-3
-CXX = g++-3
+BINPREFIX = i686-pc-mingw32-
+CC = $(BINPREFIX)gcc
+CXX = $(BINPREFIX)g++
 
-OPTS = -mwin32 -m32 -mno-cygwin
+OPTS = -mwin32 -m32
 LIBDIR = ../src
 CFLAGS = $(OPTS) -D_USRDLL -DISOLATION_AWARE_ENABLED=1 -I$(LIBDIR)
-LDFLAGS = $(OPTS) -mwindows --target=i386-mingw32 --driver-name=gcc-3
+LDFLAGS = $(OPTS) -mwindows -mdll --no-export-all-symbols -static
 
 ifdef USE_REG # use registory instead of .INI file.
 CFLAGS += -DUSE_REG=$(USE_REG)
@@ -33,12 +34,12 @@ LIBS = -lstdc++ -lshlwapi -lcomctl32 -lwinmm
 RSRC = ja.rc
 
 .SUFFIXES: .rc .res
-.rc.res:	; windres -O coff -i $< -o $@
+.rc.res:	; $(BINPREFIX)windres -O coff -i $< -o $@
 
 all: $(DLL)
 
 $(DLL): $(OBJS)
-	dllwrap $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(BINPREFIX)dllwrap $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
 $(LOBJS): %.o: $(LIBDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c -o $@ $<
