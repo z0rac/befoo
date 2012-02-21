@@ -1,4 +1,4 @@
-Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
 
 Befoo may be redistributed under the terms of the GNU General
 Public License Version 3 or later. Please read through the file
@@ -9,5 +9,3 @@ Some files are taken and modified from other projects:
    <http://gnubiff.sourceforge.net/>
  - icons/simple/*.ico from the Human-O2 IconsSet, GNU GPL
    <http://schollidesign.deviantart.com/art/Human-O2-Iconset-105344123>
- - src/mingw/mthr.c from the MinGW project, public domain
-   <http://www.mingw.org/>

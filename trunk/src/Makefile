@@ -1,17 +1,18 @@
 #
-# Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+# Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
 #
 # This software comes with ABSOLUTELY NO WARRANTY; for details of
 # the license terms, see the LICENSE.txt file included with the program.
 #
 PROG = befoo.exe
 
-CC = gcc-3
-CXX = g++-3
+BINPREFIX = i686-pc-mingw32-
+CC = $(BINPREFIX)gcc
+CXX = $(BINPREFIX)g++
 
-OPTS = -mwin32 -m32 -mthreads -mno-cygwin
+OPTS = -mwin32 -m32 -mthreads
 CFLAGS = $(OPTS)
-LDFLAGS = $(OPTS) -mwindows
+LDFLAGS = $(OPTS) -mwindows -static
 
 ifdef USE_OPENSSL # use OpenSSL instead of SSPI SChannel.
 CFLAGS += -DUSE_OPENSSL=$(USE_OPENSSL)
@@ -36,7 +37,7 @@ endif
 CXXFLAGS = $(CFLAGS)
 
 OBJS = main.o imap4.o pop3.o mail.o codepage.o mailbox.o uri.o
-OBJS += mascot.o icon.o summary.o setting.o window.o win32.o winsock.o mingw/mthr.o
+OBJS += mascot.o icon.o summary.o setting.o window.o win32.o winsock.o
 OBJS += befoo.res
 LIBS = -lstdc++ -lshlwapi -limagehlp -lws2_32 -lsecur32 -lcrypt32 -lcomctl32 -lwinmm
 
@@ -46,7 +47,7 @@ RSRC = $(PROG).manifest $(ICONSDIR)/default.rc ja.rc
 MAKECP = codepage.exe
 
 .SUFFIXES: .rc .res
-.rc.res:	; windres -I$(ICONSDIR) -O coff -i $< -o $@
+.rc.res:	; $(BINPREFIX)windres -I$(ICONSDIR) -O coff -i $< -o $@
 
 all: $(PROG)
 
