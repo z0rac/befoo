@@ -10,7 +10,7 @@ BINPREFIX = i686-pc-mingw32-
 CC = $(BINPREFIX)gcc
 CXX = $(BINPREFIX)g++
 
-OPTS = -mwin32 -m32 -mthreads
+OPTS = -mthreads
 CFLAGS = $(OPTS)
 LDFLAGS = $(OPTS) -mwindows -static
 
