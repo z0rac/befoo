@@ -10,7 +10,7 @@ BINPREFIX = i686-pc-mingw32-
 CC = $(BINPREFIX)gcc
 CXX = $(BINPREFIX)g++
 
-OPTS = -mwin32 -m32
+OPTS =
 LIBDIR = ../src
 CFLAGS = $(OPTS) -D_USRDLL -DISOLATION_AWARE_ENABLED=1 -I$(LIBDIR)
 LDFLAGS = $(OPTS) -mwindows -mdll --no-export-all-symbols -static
