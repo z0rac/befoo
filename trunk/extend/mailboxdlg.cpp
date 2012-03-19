@@ -160,7 +160,9 @@ mailboxdlg::initialize()
   static const char* const mua[] = {
     "https://www.gmail.com/",
     "http://mail.live.com/",
-    "\"%ProgramFiles%\\Outlook Express\\msimn.exe\" /mail",
+    "\"%ProgramFiles%\\Windows Live\\Mail\\wlmail.exe\"",
+    "\"%ProgramFiles%\\Outlook Express\\msimn.exe\"",
+    "emacsclientw.exe -e (wl) -e \"(wl-folder-goto-folder-subr \\\"%inbox\\\")\"",
     "gnudoitw.exe (wl)(wl-folder-goto-folder-subr \\\"%inbox\\\")"
   };
   for (int i = 0; i < int(sizeof(mua) / sizeof(mua[0])); ++i) {
