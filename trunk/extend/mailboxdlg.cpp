@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -272,7 +272,7 @@ mailboxdlg::_env(const string& path)
       const char* p = sp;
       do {
 	p = StrChrI(p, ev[0]);
-      } while (p && StrCmpNI(p, ev.c_str(), ev.size()) && *++p);
+      } while (p && StrCmpNI(p, ev.c_str(), static_cast<int>(ev.size())) && *++p);
       string::size_type n = p ? p - sp : s.size() - t;
       d += s.substr(t, n), t += n;
       if (t < s.size()) d += vars[i], t += ev.size();

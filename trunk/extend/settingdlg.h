@@ -1,6 +1,6 @@
 #ifndef H_SETTINGDLG /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -21,7 +21,7 @@ class dialog {
   HWND _hwnd;
   mutable HWND _tips;
   mutable bool _balloon;
-  static BOOL CALLBACK _dlgproc(HWND h, UINT m, WPARAM w, LPARAM l);
+  static INT_PTR CALLBACK _dlgproc(HWND h, UINT m, WPARAM w, LPARAM l);
 protected:
   virtual void initialize() {}
   virtual void done(bool ok);

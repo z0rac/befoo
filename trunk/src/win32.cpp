@@ -65,7 +65,7 @@ win32::profile(LPCSTR section, LPCSTR key, LPCSTR value, LPCSTR file)
 string
 win32::xenv(const string& s)
 {
-  size_t n = s.size() + 1;
+  DWORD n = static_cast<DWORD>(s.size() + 1);
   textbuf buf(n);
   n = ExpandEnvironmentStrings(s.c_str(), buf.data, n);
   if (n > s.size() + 1) ExpandEnvironmentStrings(s.c_str(), buf(n), n);

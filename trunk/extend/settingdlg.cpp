@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -29,7 +29,7 @@ namespace {
 /*
  * Functions of the class dialog
  */
-BOOL CALLBACK
+INT_PTR CALLBACK
 dialog::_dlgproc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
   try {
@@ -47,7 +47,7 @@ dialog::_dlgproc(HWND h, UINT m, WPARAM w, LPARAM l)
 	dp->clearballoon();
 	return dp->action(GET_WM_COMMAND_ID(w, l), GET_WM_COMMAND_CMD(w, l));
       case WM_DRAWITEM:
-	return dp->drawitem(w, LPDRAWITEMSTRUCT(l));
+	return dp->drawitem(static_cast<int>(w), LPDRAWITEMSTRUCT(l));
       }
     }
   } catch (...) {}
@@ -209,8 +209,8 @@ dialog::error(int id, const string& msg, int start, int end) const
 int
 dialog::modal(int id, HWND parent)
 {
-  return DialogBoxParam(extend::dll, MAKEINTRESOURCE(id),
-			parent, &_dlgproc, LPARAM(this));
+  return static_cast<int>(DialogBoxParam(extend::dll, MAKEINTRESOURCE(id),
+					 parent, &_dlgproc, LPARAM(this)));
 }
 
 /** iconlist - list of icons

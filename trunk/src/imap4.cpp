@@ -55,7 +55,7 @@ public:
   imap4() : _seq(_seqinit()) {}
   void login(const uri& uri, const string& passwd);
   void logout();
-  int fetch(mailbox& mbox, const uri& uri);
+  size_t fetch(mailbox& mbox, const uri& uri);
 };
 
 void
@@ -99,7 +99,7 @@ imap4::logout()
   _command("LOGOUT");
 }
 
-int
+size_t
 imap4::fetch(mailbox& mbox, const uri& uri)
 {
   const string& path = uri[uri::path];
@@ -130,7 +130,7 @@ imap4::fetch(mailbox& mbox, const uri& uri)
       }
     }
   }
-  int count = recents.size();
+  size_t count = recents.size();
   mails.splice(mails.end(), recents);
   mbox.mails(mails);
   return count;

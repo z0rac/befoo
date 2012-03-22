@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -225,7 +225,7 @@ namespace {
     void release() { _trayicon(false); }
     void draw(HDC hDC);
     void raised(bool topmost) { _tips.topmost(topmost); }
-    bool popup(const menu& menu, DWORD pt);
+    bool popup(const menu& menu, LPARAM pt);
     void wakeup(window& source);
     void reset(int type);
     void status(const string& text);
@@ -300,16 +300,16 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     _tips.reset(hascursor());
     break;
   case WM_USER: // from tray icon
-    switch (l) {
-    case WM_CONTEXTMENU: break;
-    case NIN_SELECT: l = WM_LBUTTONDOWN; break;
-    case NIN_KEYSELECT: l = WM_LBUTTONDBLCLK; break;
+    switch (UINT(l)) {
+    case WM_CONTEXTMENU: m = WM_CONTEXTMENU; break;
+    case NIN_SELECT: m = WM_LBUTTONDOWN; break;
+    case NIN_KEYSELECT: m = WM_LBUTTONDBLCLK; break;
     default: return 0;
     }
     POINT pt;
     GetCursorPos(&pt);
     foreground();
-    PostMessage(hwnd(), l, 0, MAKELPARAM(pt.x, pt.y));
+    PostMessage(hwnd(), m, 0, MAKELPARAM(pt.x, pt.y));
     return 0;
   default:
     if (m == _tbcmsg && intray()) _trayicon(true);
@@ -329,7 +329,7 @@ iconwindow::draw(HDC hDC)
 }
 
 bool
-iconwindow::popup(const menu& menu, DWORD pt)
+iconwindow::popup(const menu& menu, LPARAM pt)
 {
   bool t = appwindow::popup(menu, pt);
   if (!t && intray()) {
