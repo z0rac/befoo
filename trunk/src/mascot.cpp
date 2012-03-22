@@ -369,7 +369,7 @@ iconwindow::balloon(LPCWSTR text, unsigned sec,
     NOTIFYICONDATAW ni = { sizeof(NOTIFYICONDATAW), hwnd() };
     ni.uFlags = NIF_INFO;
     int n = lstrlenW(text);
-    if (n >= sizeof(ni.szInfo) / sizeof(ni.szInfo[0])) {
+    if (n >= int(sizeof(ni.szInfo) / sizeof(ni.szInfo[0]))) {
       n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]);
       while (n-- && text[n] != L'\n') continue;
       if (n < 0) n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]) - 1;

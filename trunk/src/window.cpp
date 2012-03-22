@@ -164,7 +164,7 @@ window::hascursor(bool child) const
   POINT pt;
   if (!GetCursorPos(&pt)) return false;
   HWND h = WindowFromPoint(pt);
-  return h == _hwnd || child && IsChild(_hwnd, h);
+  return h == _hwnd || (child && IsChild(_hwnd, h));
 }
 
 POINT

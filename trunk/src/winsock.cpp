@@ -303,7 +303,7 @@ size_t
 winsock::tlsclient::_copyextra(size_t i, size_t size)
 {
   size_t n = min<size_t>(_extra.size(), size - i);
-  memcpy(_buf.data + i, _extra.data(), n);
+  CopyMemory(_buf.data + i, _extra.data(), n);
   _extra.erase(0, n);
   return n;
 }
@@ -352,9 +352,9 @@ winsock::tlsclient::shutdown()
   if (_avail) {
     _recvq.clear(), _extra.clear();
     try {
-#if defined(__MINGW32__) // for MinGWs bug.
+#if __MINGW32__ && defined(ApplyControlToken) // for MinGWs bug.
       win32::dll secur32("secur32.dll");
-      typedef SECURITY_STATUS (WINAPI* act)(PCtxtHandle,PSecBufferDesc);
+      typedef SECURITY_STATUS (WINAPI* act)(PCtxtHandle, PSecBufferDesc);
       act ApplyControlTokenA = act(secur32("ApplyControlToken"));
 #endif
       DWORD value = SCHANNEL_SHUTDOWN;
@@ -389,7 +389,9 @@ winsock::tlsclient::verify(const string& cn, DWORD ignore)
   CERT_CHAIN_POLICY_STATUS status = { sizeof(CERT_CHAIN_POLICY_STATUS) };
   {
     CERT_CHAIN_POLICY_PARA policy = { sizeof(CERT_CHAIN_POLICY_PARA) };
-    SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl = { sizeof(SSL_EXTRA_CERT_CHAIN_POLICY_PARA) };
+    SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl;
+    ZeroMemory(&ssl, sizeof(ssl));
+    ssl.cbStruct = sizeof(ssl);
     ssl.dwAuthType = AUTHTYPE_SERVER;
     ssl.fdwChecks = ignore;
     ssl.pwszServerName = const_cast<LPWSTR>(LPCWSTR(name));
@@ -409,7 +411,7 @@ winsock::tlsclient::recv(char* buf, size_t size)
   assert(_avail);
   if (!_recvq.empty()) {
     size_t n = min<size_t>(size, _recvq.size() - _rest);
-    memcpy(buf, _recvq.data() + _rest, n);
+    CopyMemory(buf, _recvq.data() + _rest, n);
     _rest += n;
     if (_rest == _recvq.size()) _recvq.clear();
     return n;
@@ -434,7 +436,7 @@ winsock::tlsclient::recv(char* buf, size_t size)
 	  size_t n = 0;
 	  if (done < size) {
 	    n = min<size_t>(size - done, dec[i].cbBuffer);
-	    memcpy(buf + done, dec[i].pvBuffer, n);
+	    CopyMemory(buf + done, dec[i].pvBuffer, n);
 	    done += n;
 	  }
 	  _recvq.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
@@ -469,7 +471,7 @@ winsock::tlsclient::send(const char* data, size_t size)
 	_buf.data + _sizes.cbHeader + size }
     };
     SecBufferDesc encb = { SECBUFFER_VERSION, 4, enc };
-    memcpy(_buf.data + _sizes.cbHeader, data, size);
+    CopyMemory(_buf.data + _sizes.cbHeader, data, size);
     _ok(EncryptMessage(&_ctx, 0, &encb, 0));
     _sendtoken(_buf.data, enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
   }

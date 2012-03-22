@@ -55,7 +55,7 @@ setting::mailboxes()
   list<string> st(_rep->storages());
   for (list<string>::iterator p = st.begin(); p != st.end();) {
     // skip sections matched with the pattern "(.*)".
-    p =  p->empty() || (*p)[0] == '(' && *p->rbegin() == ')' ? st.erase(p) : ++p;
+    p =  p->empty() || ((*p)[0] == '(' && *p->rbegin() == ')') ? st.erase(p) : ++p;
   }
   return st;
 }
@@ -155,7 +155,7 @@ setting::cipher(_str key)
 	for (int h = 0; h < 2; ++h) {
 	  const char* pos = strchr(code64, p[h]);
 	  if (!pos) return string();
-	  c = (c << 4) | (unsigned(pos - code64) - i) & 15;
+	  c = (c << 4) | ((unsigned(pos - code64) - i) & 15);
 	  i += 5 + h;
 	}
 	e += char(c);
@@ -173,7 +173,7 @@ setting&
 setting::cipher(_str key, const string& value)
 {
   union { char s[2]; short r; } seed;
-  seed.r = short(unsigned(value.data()) + time(NULL));
+  seed.r = short(unsigned(ptrdiff_t(value.data())) + time(NULL));
   string e = string(seed.s, 2) + value;
   for (string::size_type i = e.size(); i-- > 2;) e[i] ^= e[i & 1];
   string s(e.size() * 2 + 1, '\x7f');

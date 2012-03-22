@@ -41,7 +41,7 @@ class imap4 : public mailbox::backend {
   { return _command(cmd.c_str(), res); }
   response _response();
   string _read();
-  unsigned _seqinit() const { return unsigned(this) + unsigned(time(NULL)); }
+  unsigned _seqinit() const { return unsigned(ptrdiff_t(this)) + unsigned(time(NULL)); }
 #ifdef _DEBUG
   using backend::read;
   string read()
@@ -64,7 +64,7 @@ imap4::login(const uri& uri, const string& passwd)
   static const char notimap[] = "server not IMAP4 compliant";
   response resp = _response();
   bool preauth = resp.type == "PREAUTH";
-  if (resp.tag != "*" || !preauth && resp.type != "OK") {
+  if (resp.tag != "*" || (!preauth && resp.type != "OK")) {
     throw mailbox::error(notimap);
   }
   bool imap = false;
@@ -308,7 +308,7 @@ imap4::parser::token(bool open)
       if (result.size() > 1) {
 	switch (result[0]) {
 	default:
-	  if (!open || result[0] != '(' && result[0] != '[') break;
+	  if (!open || (result[0] != '(' && result[0] != '[')) break;
 	case '"':
 	  result.assign(result, 1, result.size() - 2);
 	  break;

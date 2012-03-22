@@ -300,10 +300,10 @@ repository::_prepare()
 {
   char path[MAX_PATH];
   if (appendix(INI_FILE, path) ||
-      SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
-		      NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
-      PathAppend(path, APP_NAME "\\" INI_FILE) &&
-      MakeSureDirectoryPathExists(path)) {
+      (SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
+		       NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
+       PathAppend(path, APP_NAME "\\" INI_FILE) &&
+       MakeSureDirectoryPathExists(path))) {
     LOG("Using the setting file: " << path << endl);
     _path = path;
     HANDLE h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, 0,

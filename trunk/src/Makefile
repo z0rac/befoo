@@ -6,7 +6,11 @@
 #
 PROG = befoo.exe
 
-BINPREFIX = i686-pc-mingw32-
+ifeq ($(x64), 1)
+BINPREFIX = x86_64-w64-mingw32-
+else
+BINPREFIX = i686-w64-mingw32-
+endif
 CC = $(BINPREFIX)gcc
 CXX = $(BINPREFIX)g++
 
@@ -69,6 +73,7 @@ mascot.o: icon.h
 codepage.o icon.o mailbox.o setting.o window.o win32.o winsock.o: %.o: %.h
 befoo.res: $(RSRC) define.h
 
+.PHONY: clean distclean mostlyclean
 clean: mostlyclean	; @$(RM) $(PROG)
 distclean: clean	; @$(RM) $(MAKECP) *~
 mostlyclean:		; @$(RM) $(OBJS)

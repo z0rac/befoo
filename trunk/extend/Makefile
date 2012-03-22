@@ -6,7 +6,11 @@
 #
 DLL = extend.dll
 
-BINPREFIX = i686-pc-mingw32-
+ifeq ($(x64), 1)
+BINPREFIX = x86_64-w64-mingw32-
+else
+BINPREFIX = i686-w64-mingw32-
+endif
 CC = $(BINPREFIX)gcc
 CXX = $(BINPREFIX)g++
 
@@ -52,6 +56,7 @@ mailboxdlg.o uri.o: $(LIBDIR)/mailbox.h
 setting.o icon.o win32.o: %.o: $(LIBDIR)/%.h
 extend.res: $(RSRC) define.h
 
+.PHONY: clean distclean mostlyclean
 clean: mostlyclean	; @$(RM) $(DLL)
 distclean: clean	; @$(RM) *~
 mostlyclean:		; @$(RM) $(OBJS)
