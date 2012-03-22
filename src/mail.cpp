@@ -354,7 +354,7 @@ mail::decoder::eword(const string& text,
       i = p;
     }
     int c = toupper(text[q[1]]);
-    if (q[2] - q[1] != 2 || c != 'B' && c != 'Q') continue;
+    if (q[2] - q[1] != 2 || (c != 'B' && c != 'Q')) continue;
     if (text.find_first_not_of(" \t", pos) < q[0] - 2) {
       result.append(text, pos, q[0] - pos - 2), pos = q[0] - 2;
       conv.reset();
@@ -433,7 +433,7 @@ mail::decoder::token(bool comment)
       break;
     }
     string::size_type n = findf(" \t\"(),.:;<>@[\\]", i);
-    if (n == i || n != string::npos && _s[n] == '.') {
+    if (n == i || (n != string::npos && _s[n] == '.')) {
       switch (_s[n]) {
       case '"': // quoted-text
 	n = findq("\"", n + 1);

@@ -65,7 +65,7 @@ summary::summary(const window& parent)
 {
   static commctrl listview(ICC_LISTVIEW_CLASSES);
   style(LVS_REPORT | LVS_SINGLESEL);
-  ListView_SetExtendedListViewStyle
+  (void)ListView_SetExtendedListViewStyle
     (hwnd(), LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_LABELTIP);
   setting::preferences("summary")["sort"](_column)(_order);
   show();
@@ -137,7 +137,7 @@ summary::_initialize()
     col.cx = (wp != width.end() ? *wp++ :
 	      col.iSubItem ? (ex - cx) / (n - col.iSubItem) : ex / 2);
     col.pszText = LPSTR(p->c_str());
-    ListView_InsertColumn(hwnd(), col.iSubItem, &col);
+    (void)ListView_InsertColumn(hwnd(), col.iSubItem, &col);
     cx += col.cx;
     ++col.iSubItem;
   }
@@ -149,14 +149,14 @@ summary::_sort(int column, int order)
   HWND hdr = ListView_GetHeader(hwnd());
   HDITEM hdi = { HDI_FORMAT };
   if (column != _column) {
-    Header_GetItem(hdr, _column, &hdi);
+    (void)Header_GetItem(hdr, _column, &hdi);
     hdi.fmt &= ~(HDF_SORTDOWN | HDF_SORTUP);
-    Header_SetItem(hdr, _column, &hdi);
+    (void)Header_SetItem(hdr, _column, &hdi);
   }
-  Header_GetItem(hdr, column, &hdi);
+  (void)Header_GetItem(hdr, column, &hdi);
   hdi.fmt &= ~(HDF_SORTDOWN | HDF_SORTUP);
   hdi.fmt |= order > 0 ? HDF_SORTUP : HDF_SORTDOWN;
-  Header_SetItem(hdr, column, &hdi);
+  (void)Header_SetItem(hdr, column, &hdi);
   _column = column, _order = order;
   SendMessage(hwnd(), column < DATE ? LVM_SORTITEMSEX : LVM_SORTITEMS,
 	      WPARAM(this), LPARAM(&compare));
@@ -266,7 +266,7 @@ summary::item::item(const window& w)
   ZeroMemory(this, sizeof(LVITEMA));
   mask = LVIF_PARAM;
   lParam = iItem = ListView_GetItemCount(_h);
-  ListView_InsertItem(_h, this);
+  (void)ListView_InsertItem(_h, this);
   mask = LVIF_TEXT;
 }
 
