@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -128,7 +128,7 @@ void
 summary::_initialize()
 {
   list<string> column = win32::exe.texts(ID_TEXT_SUMMARY_COLUMN);
-  const int n = column.size();
+  const int n = static_cast<int>(column.size());
   list<int> width = setting::preferences("summary")["columns"].split<int>();
   list<int>::iterator wp = width.begin();
   LVCOLUMN col = { LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM };
@@ -192,12 +192,12 @@ summary::_compare(LPARAM s1, LPARAM s2) const
       return data = new WCHAR[n];
     }
   } tb[2];
-  int si[] = { s1, s2 };
+  WPARAM si[] = { s1, s2 };
   for (int i = 0; i < 2; ++i) {
     LVITEMW lv = { LVIF_TEXT };
     lv.iSubItem = _column;
     lv.cchTextMax = 256;
-    int n;
+    LRESULT n;
     do {
       lv.pszText = tb[i](lv.cchTextMax <<= 1);
       n = SendMessage(hwnd(), LVM_GETITEMTEXTW, si[i], LPARAM(&lv));
@@ -215,7 +215,7 @@ summary::compare(LPARAM l1, LPARAM l2, LPARAM lsort)
 void
 summary::_open()
 {
-  int item = ListView_GetNextItem(hwnd(), WPARAM(-1), LVNI_SELECTED);
+  int item = ListView_GetNextItem(hwnd(), -1, LVNI_SELECTED);
   if (item < 0) return;
   LVITEM lv = { LVIF_PARAM, item };
   if (!ListView_GetItem(hwnd(), &lv)) return;
@@ -265,7 +265,7 @@ summary::item::item(const window& w)
 {
   ZeroMemory(this, sizeof(LVITEMA));
   mask = LVIF_PARAM;
-  iItem = lParam = ListView_GetItemCount(_h);
+  lParam = iItem = ListView_GetItemCount(_h);
   ListView_InsertItem(_h, this);
   mask = LVIF_TEXT;
 }

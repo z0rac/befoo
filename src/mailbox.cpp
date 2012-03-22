@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -568,6 +568,6 @@ mailbox::fetchmail()
   auto_ptr<backend> be(backends[i].make());
   ((*be).*backends[i].stream)(u[uri::host], u[uri::port], _domain, _verify);
   be->login(u, pw);
-  _recent = be->fetch(*this, u);
+  _recent = static_cast<int>(be->fetch(*this, u));
   be->logout();
 }

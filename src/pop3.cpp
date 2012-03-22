@@ -37,7 +37,7 @@ class pop3 : public mailbox::backend {
 public:
   void login(const uri& uri, const string& passwd);
   void logout();
-  int fetch(mailbox& mbox, const uri& uri);
+  size_t fetch(mailbox& mbox, const uri& uri);
 };
 
 void
@@ -74,7 +74,7 @@ pop3::logout()
   _command("QUIT");
 }
 
-int
+size_t
 pop3::fetch(mailbox& mbox, const uri& uri)
 {
   const list<string>& ignore = mbox.ignore();
@@ -105,7 +105,7 @@ pop3::fetch(mailbox& mbox, const uri& uri)
       (mbox.find(uid) ? &mails : &recents)->push_back(m);
     }
   }
-  int count = recents.size();
+  size_t count = recents.size();
   mails.splice(mails.end(), recents);
   mbox.mails(mails);
   mbox.ignore(ignored);

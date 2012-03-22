@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -322,7 +322,7 @@ window::execute(const menu& menu)
 }
 
 bool
-window::popup(const menu& menu, DWORD pt)
+window::popup(const menu& menu, LPARAM pt)
 {
   _updatemenu(menu);
   UINT cmd = UINT(TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -176,8 +176,8 @@ model::_done(mbox& mb)
   if (--_fetching) return;
 
   LOG("Done all fetching." << endl);
-  int recent = 0;
-  int unseen = 0;
+  size_t recent = 0;
+  size_t unseen = 0;
   for (const mailbox* p = _mailboxes; p; p = p->next()) {
     int n = p->recent();
     if (n > 0) recent += n;
