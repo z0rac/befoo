@@ -319,27 +319,11 @@ window::dispatch(UINT m, WPARAM w, LPARAM l)
     if (!GET_WM_COMMAND_HWND(w, l)) execute(GET_WM_COMMAND_CMD(w,l));
     break;
   case WM_MEASUREITEM:
-    {
-      LPMEASUREITEMSTRUCT misp = LPMEASUREITEMSTRUCT(l);
-      if (misp->CtlType != ODT_MENU || !_cmd(misp->itemID)) break;
-      misp->itemWidth += 2;
-      if (misp->itemHeight < UINT(smicon.y)) misp->itemHeight = smicon.y;
-    }
-    return TRUE;
+    if (callback(LPMEASUREITEMSTRUCT(l))) return TRUE;
+    break;
   case WM_DRAWITEM:
-    {
-      LPDRAWITEMSTRUCT disp = LPDRAWITEMSTRUCT(l);
-      if (disp->CtlType != ODT_MENU) break;
-      command* p = _cmd(disp->itemID);
-      if (!p || !p->icon) break;
-      HICON h = iconload(p->icon);
-      if (!h) break;
-      DrawIconEx(disp->hDC, disp->rcItem.left - smicon.x - 2,
-		 (disp->rcItem.top + disp->rcItem.bottom - smicon.y) / 2,
-		 h, smicon.x, smicon.y, 0, NULL, DI_NORMAL);
-      DestroyIcon(h);
-    }
-    return TRUE;
+    if (callback(LPDRAWITEMSTRUCT(l))) return TRUE;
+    break;
   }
   return CallWindowProc(_callback, _hwnd, m, w, l);
 }
@@ -348,6 +332,30 @@ LRESULT
 window::notify(WPARAM w, LPARAM l)
 {
   return CallWindowProc(_callback, _hwnd, WM_NOTIFY, w, l);
+}
+
+bool
+window::callback(LPMEASUREITEMSTRUCT misp)
+{
+  if (misp->CtlType != ODT_MENU || !_cmd(misp->itemID)) return false;
+  misp->itemWidth += 2;
+  if (misp->itemHeight < UINT(smicon.y)) misp->itemHeight = smicon.y;
+  return true;
+}
+
+bool
+window::callback(LPDRAWITEMSTRUCT disp)
+{
+  if (disp->CtlType != ODT_MENU) return false;
+  command* p = _cmd(disp->itemID);
+  if (!p || !p->icon) return false;
+  HICON h = iconload(p->icon);
+  if (!h) return false;
+  DrawIconEx(disp->hDC, disp->rcItem.left - smicon.x - 2,
+	     (disp->rcItem.top + disp->rcItem.bottom - smicon.y) / 2,
+	     h, smicon.x, smicon.y, 0, NULL, DI_NORMAL);
+  DestroyIcon(h);
+  return true;
 }
 
 void
