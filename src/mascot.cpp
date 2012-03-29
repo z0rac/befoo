@@ -565,14 +565,14 @@ mascotwindow::mascotwindow()
 }
 
 namespace cmd {
-  class trayicon : public window::command {
+  struct trayicon : public window::command {
     void execute(window& source)
     { ((mascotwindow&)source).trayicon(!((mascotwindow&)source).intray()); }
     UINT state(window& source)
     { return ((mascotwindow&)source).intray() ? MFS_CHECKED : 0; }
   };
 
-  class alwaysontop : public window::command {
+  struct alwaysontop : public window::command {
     void execute(window& source) { source.topmost(!source.topmost()); }
     UINT state(window& source)
     {
@@ -581,7 +581,8 @@ namespace cmd {
     }
   };
 
-  class about : public window::command {
+  struct about : public window::command {
+    about() : window::command(-1001) {}
     void execute(window& source)
     {
       ((mascotwindow&)source).balloon(win32::wstr(win32::exe.text(ID_TEXT_ABOUT)), 10,

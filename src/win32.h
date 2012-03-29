@@ -56,7 +56,8 @@ public:
   class dll : public module {
     dll(const dll&); void operator=(const dll&); // disable to copy
   public:
-    dll(LPCSTR file) : module(LoadLibrary(file)) {}
+    dll(LPCSTR file, DWORD flags = 0)
+      : module(LoadLibraryEx(file, NULL, flags)) {}
     ~dll() { *this && FreeLibrary(*this); }
   };
 

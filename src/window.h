@@ -71,7 +71,8 @@ public:
   class command {
     command(const command&); void operator=(const command&); // disable to copy
   public:
-    command() {}
+    const int icon;
+    command(int icon = 0) : icon(icon) {}
     virtual ~command() {}
     virtual void execute(window& source) = 0;
     virtual UINT state(window&) { return 0; }
@@ -88,6 +89,7 @@ public:
 private:
   typedef list< pair<int, cmdp> > cmdmap;
   cmdmap _cmdmap;
+  command* _cmd(int id);
 public:
   class timer {
     UINT _elapse;
