@@ -31,6 +31,8 @@ protected:
   virtual void release() {}
   virtual void resize(int, int) {}
   virtual LRESULT notify(WPARAM w, LPARAM l);
+  virtual bool callback(LPMEASUREITEMSTRUCT misp);
+  virtual bool callback(LPDRAWITEMSTRUCT disp);
 
   struct commctrl {
     commctrl(DWORD icc);
