@@ -340,7 +340,7 @@ repository::edit()
 namespace cmd {
   struct fetch : public window::command {
     model& _model;
-    fetch(model& model) : _model(model) {}
+    fetch(model& model) : window::command(-265), _model(model) {}
     void execute(window& source) { _model.fetch(source); }
     UINT state(window&) { return _model.fetching() ? MFS_DISABLED : 0; }
   };
@@ -348,7 +348,7 @@ namespace cmd {
   struct summary : public window::command {
     model& _model;
     auto_ptr<window> _summary;
-    summary(model& model) : _model(model) {}
+    summary(model& model) : window::command(-281), _model(model) {}
     void execute(window&)
     {
       LOG("Open the summary window." << endl);
@@ -362,7 +362,8 @@ namespace cmd {
     repository& _rep;
     DWORD _tid;
     HANDLE _thread;
-    setting(repository& rep) : _rep(rep), _tid(GetCurrentThreadId()), _thread(NULL) {}
+    setting(repository& rep) : window::command(-274),
+			       _rep(rep), _tid(GetCurrentThreadId()), _thread(NULL) {}
     ~setting() { _thread && WaitForSingleObject(_thread, INFINITE); }
     void execute(window&) { if (!busy()) _thread = win32::thread(edit, (void*)this); }
     UINT state(window&) { return busy() ? MFS_DISABLED : 0; }
@@ -382,6 +383,7 @@ namespace cmd {
   };
 
   struct exit : public window::command {
+    exit() : window::command(-28) {}
     void execute(window&) { LOG("Exit." << endl); PostQuitMessage(0); }
   };
 

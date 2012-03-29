@@ -239,19 +239,55 @@ window::_wndproc(HWND h, UINT m, WPARAM w, LPARAM l)
   return rc;
 }
 
+namespace {
+  static const POINT smicon =
+    { GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON) };
+
+  HICON iconload(int id)
+  {
+    static const win32::dll shell32("shell32.dll", LOAD_LIBRARY_AS_DATAFILE);
+    HMODULE mod = id >= 0 ? win32::exe : (id = -id, shell32);
+    return HICON(LoadImage(mod, MAKEINTRESOURCE(id), IMAGE_ICON,
+			   smicon.x, smicon.y, LR_DEFAULTCOLOR));
+  }
+
+  HBITMAP iconbmp(int id)
+  {
+    static bool xp = (GetVersion() & 255) <= 5;
+    if (xp) return HBMMENU_CALLBACK;
+    HICON h = iconload(id);
+    if (!h) return NULL;
+    BITMAPINFOHEADER bmi = { sizeof(BITMAPINFOHEADER) };
+    bmi.biWidth = smicon.x, bmi.biHeight = smicon.y;
+    bmi.biPlanes = 1, bmi.biBitCount = 32;
+    LPVOID bits;
+    HBITMAP bmp = CreateDIBSection(NULL, LPBITMAPINFO(&bmi),
+				   DIB_RGB_COLORS, &bits, NULL, 0);
+    if (bmp) {
+      HDC hDC = CreateCompatibleDC(NULL);
+      HGDIOBJ save = SelectObject(hDC, bmp);
+      DrawIconEx(hDC, 0, 0, h, smicon.x, smicon.y, 0, NULL, DI_NORMAL);
+      SelectObject(hDC, save);
+      DeleteDC(hDC);
+    }
+    DestroyIcon(h);
+    return bmp;
+  }
+}
+
 void
 window::_updatemenu(HMENU h)
 {
 #define STATUS (MFS_DISABLED | MFS_CHECKED | MFS_HILITE)
   for (int i = GetMenuItemCount(h); --i >= 0;) {
     MENUITEMINFO info = { sizeof(MENUITEMINFO) };
-    info.fMask = MIIM_STATE | MIIM_ID;
+    info.fMask = MIIM_STATE | MIIM_ID | MIIM_BITMAP;
     if (!GetMenuItemInfo(h, i, TRUE, &info)) continue;
-    cmdmap::const_iterator p = _cmdmap.begin();
-    while (p != _cmdmap.end() && p->first != int(info.wID)) ++p;
-    if (p == _cmdmap.end()) continue;
+    command* p = _cmd(info.wID);
+    if (!p) continue;
+    if (!info.hbmpItem && p->icon) info.hbmpItem = iconbmp(p->icon);
     info.fState &= ~STATUS;
-    info.fState |= p->second->state(*this) & STATUS;
+    info.fState |= p->state(*this) & STATUS;
     SetMenuItemInfo(h, i, TRUE, &info);
   }
 #undef STATUS
@@ -282,6 +318,28 @@ window::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_COMMAND:
     if (!GET_WM_COMMAND_HWND(w, l)) execute(GET_WM_COMMAND_CMD(w,l));
     break;
+  case WM_MEASUREITEM:
+    {
+      LPMEASUREITEMSTRUCT misp = LPMEASUREITEMSTRUCT(l);
+      if (misp->CtlType != ODT_MENU || !_cmd(misp->itemID)) break;
+      misp->itemWidth += 2;
+      if (misp->itemHeight < UINT(smicon.y)) misp->itemHeight = smicon.y;
+    }
+    return TRUE;
+  case WM_DRAWITEM:
+    {
+      LPDRAWITEMSTRUCT disp = LPDRAWITEMSTRUCT(l);
+      if (disp->CtlType != ODT_MENU) break;
+      command* p = _cmd(disp->itemID);
+      if (!p || !p->icon) break;
+      HICON h = iconload(p->icon);
+      if (!h) break;
+      DrawIconEx(disp->hDC, disp->rcItem.left - smicon.x - 2,
+		 (disp->rcItem.top + disp->rcItem.bottom - smicon.y) / 2,
+		 h, smicon.x, smicon.y, 0, NULL, DI_NORMAL);
+      DestroyIcon(h);
+    }
+    return TRUE;
   }
   return CallWindowProc(_callback, _hwnd, m, w, l);
 }
@@ -295,20 +353,28 @@ window::notify(WPARAM w, LPARAM l)
 void
 window::execute(int id)
 {
-  cmdmap::const_iterator p = _cmdmap.begin();
-  while (p != _cmdmap.end() && p->first != id) ++p;
-  if (p != _cmdmap.end() && !(p->second->state(*this) & MFS_DISABLED)) {
-    p->second->execute(*this);
+  command* p = _cmd(id);
+  if (p && !(p->state(*this) & MFS_DISABLED)) p->execute(*this);
+}
+
+window::command*
+window::_cmd(int id)
+{
+  for (cmdmap::iterator p = _cmdmap.begin(); p != _cmdmap.end(); ++p) {
+    if (p->first == id) return p->second.get();
   }
+  return NULL;
 }
 
 void
 window::addcmd(int id, cmdp cmd)
 {
-  cmdmap::iterator p = _cmdmap.begin();
-  while (p != _cmdmap.end() && p->first != id) ++p;
-  if (p != _cmdmap.end()) p->second = cmd;
-  else _cmdmap.push_back(pair<int, cmdp>(id, cmd));
+  for (cmdmap::iterator p = _cmdmap.begin(); p != _cmdmap.end(); ++p) {
+    if (p->first != id) continue;
+    p->second = cmd;
+    return;
+  }
+  _cmdmap.push_back(pair<int, cmdp>(id, cmd));
 }
 
 void
