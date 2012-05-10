@@ -195,9 +195,14 @@
     <None Include="..\icons\default\sleep2.ico" />
     <None Include="..\icons\default\sleep3.ico" />
     <None Include="..\icons\default\sleep4.ico" />
+    <None Include="..\icons\simple\empty.ico" />
+    <None Include="..\icons\simple\exist.ico" />
+    <None Include="..\icons\simple\fetch.ico" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\src\befoo.rc" />
+    <ResourceCompile Include="..\src\en.rc" />
+    <ResourceCompile Include="..\src\ja.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

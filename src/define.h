@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -8,8 +8,7 @@
 #define _WIN32_IE 0x0500
 #define WINVER _WIN32_WINNT
 
-#define APP_NAME               "befoo"
-#define APP_VERSION            "1.3"
+#include "version.h"
 
 #define ID_MENU_FETCH          1
 #define ID_MENU_SUMMARY        2
