@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -12,10 +12,8 @@
 #define IDC_STATIC (-1)
 #endif
 
-LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
-#pragma code_page(1252)
-
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
 
 IDD_SETTING DIALOGEX 0, 0, 225, 271
 STYLE DS_3DLOOK | DS_CENTER | DS_MODALFRAME | DS_SHELLFONT | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
@@ -138,6 +136,30 @@ BEGIN
     IDS_LIST_VERIFY		"Don't verify/Only server name/Allow self certification/Full verify/"
 END
 
-LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
-#pragma code_page(932)
-#include "ja.rc"
+1 VERSIONINFO
+FILEVERSION     DLL_VERSION_BINARY
+PRODUCTVERSION  APP_VERSION_BINARY
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_DLL
+FILESUBTYPE     VFT2_UNKNOWN
+FILEFLAGSMASK   0x0000003F
+FILEFLAGS       0x00000000
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", APP_NAME " extend module"
+            VALUE "FileVersion", DLL_VERSION
+            VALUE "InternalName", DLL_NAME
+            VALUE "LegalCopyright", APP_COPYRIGHT
+            VALUE "OriginalFilename", DLL_NAME ".dll"
+            VALUE "ProductName", APP_NAME
+            VALUE "ProductVersion", APP_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

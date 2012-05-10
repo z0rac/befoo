@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -7,6 +7,12 @@
 #define _WIN32_WINNT 0x0500
 #define _WIN32_IE 0x0500
 #define WINVER _WIN32_WINNT
+
+#include "version.h"
+
+#define DLL_NAME                                "extend"
+#define DLL_VERSION                             "1.3"
+#define DLL_VERSION_BINARY                      1,3,0,9
 
 #define IDD_SETTING				100
 #define IDC_LIST_MAILBOX			1000
