@@ -183,6 +183,7 @@ sslstream::_want(int rc)
   switch (SSL(SSL_get_error)(_ssl, rc)) {
   case 2: /* SSL_ERROR_WANT_READ */ return rc;
   case 3: /* SSL_ERROR_WANT_WRITE */ return rc;
+  case 6: /* SSL_ERROR_ZERO_RETURN */ return 0;
   }
   throw error();
 }
@@ -310,20 +311,18 @@ size_t
 sslstream::read(char* buf, size_t size)
 {
   assert(_ssl);
-  for (;;) {
-    int n = _want(_read(_ssl, buf, size));
-    if (n > 0) return size_t(n);
-  }
+  int n = -1;
+  while (n < 0) n = _want(_read(_ssl, buf, size));
+  return size_t(n);
 }
 
 size_t
 sslstream::write(const char* data, size_t size)
 {
   assert(_ssl);
-  for (;;) {
-    int n = _want(_write(_ssl, data, size));
-    if (n > 0) return size_t(n);
-  }
+  int n = -1;
+  while (n < 0) n = _want(_write(_ssl, data, size));
+  return size_t(n);
 }
 
 int
@@ -365,22 +364,14 @@ size_t
 sslstream::tls::_recv(char* buf, size_t size)
 {
   assert(socket != INVALID_SOCKET);
-  for (;;) {
-    size_t n = socket.recv(buf, size);
-    if (n) return n;
-    socket.wait(0, TCP_TIMEOUT);
-  }
+  return socket.recv(buf, size);
 }
 
 size_t
 sslstream::tls::_send(const char* data, size_t size)
 {
   assert(socket != INVALID_SOCKET);
-  for (;;) {
-    size_t n = socket.send(data, size);
-    if (n) return n;
-    socket.wait(1, TCP_TIMEOUT);
-  }
+  return socket.send(data, size);
 }
 
 void
@@ -403,7 +394,7 @@ void
 sslstream::connect(SOCKET socket, const string& host)
 {
   assert(_tls.socket == INVALID_SOCKET);
-  _tls.socket(socket).timeout(-1); // non-blocking
+  _tls.socket(socket).timeout(TCP_TIMEOUT);
   _connect(host);
 }
 
@@ -411,7 +402,7 @@ void
 sslstream::connect(const string& host, const string& port, int domain)
 {
   assert(_tls.socket == INVALID_SOCKET);
-  _tls.socket.connect(host, port, domain).timeout(-1); // non-blocking
+  _tls.socket.connect(host, port, domain).timeout(TCP_TIMEOUT);
   _connect(host);
 }
 
@@ -476,6 +467,7 @@ mailbox::backend::read(size_t size)
   while (size) {
     char buf[1024];
     size_t n = _st->read(buf, min(size, sizeof(buf)));
+    if (!n) throw mailbox::error("connection reset");
     result.append(buf, n);
     size -= n;
   }
@@ -486,11 +478,11 @@ string
 mailbox::backend::read()
 {
   char c;
-  _st->read(&c, 1);
+  if (!_st->read(&c, 1)) throw mailbox::error("connection reset");
   string result(1, c);
   do {
     do {
-      _st->read(&c, 1);
+      if (!_st->read(&c, 1)) throw mailbox::error("connection reset");
       result.push_back(c);
     } while (c != '\012');
   } while (result[result.size() - 2] != '\015');
