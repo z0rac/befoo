@@ -168,33 +168,19 @@ winsock::tcpclient::shutdown()
 size_t
 winsock::tcpclient::recv(char* buf, size_t size)
 {
-  size_t done = 0;
-  int n;
-  do {
-    n = ::recv(_socket, buf + done, int(min<size_t>(size - done, INT_MAX)), 0);
-    if (n < 0) {
-      if (WSAGetLastError() != WSAEWOULDBLOCK) throw error();
-      break;
-    }
-    done += n;
-  } while (n == INT_MAX && done < size);
-  return done;
+  int n = ::recv(_socket, buf, int(min<size_t>(size, INT_MAX)), 0);
+  if (n >= 0) return n;
+  if (WSAGetLastError() != WSAEWOULDBLOCK) throw error();
+  return 0;
 }
 
 size_t
 winsock::tcpclient::send(const char* data, size_t size)
 {
-  size_t done = 0;
-  int n;
-  do {
-    n = ::send(_socket, data + done, int(min<size_t>(size - done, INT_MAX)), 0);
-    if (n < 0) {
-      if (WSAGetLastError() != WSAEWOULDBLOCK) throw error();
-      break;
-    }
-    done += n;
-  } while (n == INT_MAX && done < size);
-  return done;
+  int n = ::send(_socket, data, int(min<size_t>(size, INT_MAX)), 0);
+  if (n >= 0) return n;
+  if (WSAGetLastError() != WSAEWOULDBLOCK) throw error();
+  return 0;
 }
 
 winsock::tcpclient&
@@ -317,16 +303,16 @@ winsock::tlsclient::connect()
     _buf(buflen);
     size_t n = 0;
     while (ss == SEC_I_CONTINUE_NEEDED) {
-      n += _copyextra(n, buflen);
-      if (n == 0) n = _recv(_buf.data, buflen);
+      size_t t = !_extra.empty() ?
+	_copyextra(n, buflen) :
+	_recv(_buf.data + n, buflen - n);
+      if (t == 0) throw error(_emsg(SEC_E_INCOMPLETE_MESSAGE));
+      n += t;
       SecBuffer in[2] = { { DWORD(n), SECBUFFER_TOKEN, _buf.data } };
       SecBufferDesc inb = { SECBUFFER_VERSION, 2, in };
       ss = _token(&inb);
       if (ss == SEC_E_INCOMPLETE_MESSAGE) {
-	if (n < buflen) {
-	  n += _recv(_buf.data + n, buflen - n);
-	  ss = SEC_I_CONTINUE_NEEDED;
-	}
+	if (n < buflen) ss = SEC_I_CONTINUE_NEEDED;
       } else {
 	n = 0;
 	if (in[1].BufferType == SECBUFFER_EXTRA) {
@@ -420,13 +406,18 @@ winsock::tlsclient::recv(char* buf, size_t size)
   size_t done = 0;
   size_t n = 0;
   while (size && !done) {
-    n += !_extra.empty() ? _copyextra(n, _sizes.cbMaximumMessage) :
+    size_t t = !_extra.empty() ?
+      _copyextra(n, _sizes.cbMaximumMessage) :
       _recv(_buf.data + n, _sizes.cbMaximumMessage - n);
+    if (t == 0) {
+      if (n == 0) break;
+      throw error(_emsg(SEC_E_INCOMPLETE_MESSAGE));
+    }
+    n += t;
     SecBuffer dec[4] = { { DWORD(n), SECBUFFER_DATA, _buf.data } };
     SecBufferDesc decb = { SECBUFFER_VERSION, 4, dec };
     SECURITY_STATUS ss = DecryptMessage(&_ctx, &decb, 0, NULL);
-    if (ss == SEC_E_INCOMPLETE_MESSAGE &&
-	n < _sizes.cbMaximumMessage) continue;
+    if (ss == SEC_E_INCOMPLETE_MESSAGE && n < _sizes.cbMaximumMessage) continue;
     _ok(ss), n = 0;
     string extra;
     for (int i = 0; i < 4; ++i) {
