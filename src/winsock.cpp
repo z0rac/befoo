@@ -31,8 +31,8 @@ namespace {
   _getaddrinfo(const char* node, const char* service,
 	       const struct addrinfo* hints, struct addrinfo** res)
   {
-    assert(node && service && hints);
-    assert(hints->ai_flags == 0 && hints->ai_socktype == SOCK_STREAM && hints->ai_protocol == 0);
+    assert(hints && hints->ai_flags == 0 &&
+	   hints->ai_socktype == SOCK_STREAM && hints->ai_protocol == 0);
 
     LOG("Call _getaddrinfo()" << endl);
 
@@ -42,7 +42,7 @@ namespace {
     };
     if (ai.ai_family != AF_INET) return EAI_FAMILY;
 
-    { // service to port number
+    if (service) { // service to port number
       char* end;
       unsigned n = strtoul(service, &end, 10);
       if (*end || n > 65535) {
@@ -54,7 +54,7 @@ namespace {
       }
     }
 
-    if (!*node) node = NULL;
+    if (node && !*node) node = NULL;
     sa.sin_addr.s_addr = inet_addr(node);
     if (sa.sin_addr.s_addr == INADDR_NONE) {
       struct hostent* ent = gethostbyname(node);
