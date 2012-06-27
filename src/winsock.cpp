@@ -60,7 +60,7 @@ namespace {
       struct hostent* ent = gethostbyname(node);
       if (!ent) return h_errno;
       if (ent->h_addrtype != AF_INET ||
-	  ent->h_length != sizeof(sa.sin_addr.s_addr)) return EAI_FAMILY;
+	  ent->h_length != sizeof(sa.sin_addr)) return EAI_FAMILY;
       char** hal = ent->h_addr_list;
       int n = 0;
       while (hal && hal[n]) ++n;
