@@ -1,4 +1,4 @@
-Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
 
 Befoo may be redistributed under the terms of the GNU General
 Public License Version 3 or later. Please read through the file

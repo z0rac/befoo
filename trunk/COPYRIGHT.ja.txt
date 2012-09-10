@@ -1,4 +1,4 @@
-Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
 
 befooはGNU一般公衆利用許諾書(GNU General Public License)
 バージョン3以降の同意に基づいて再頒布できます。このライセンスに
