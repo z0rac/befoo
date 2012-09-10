@@ -1,5 +1,5 @@
 @ECHO OFF
-REM Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+REM Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
 REM
 REM This software comes with ABSOLUTELY NO WARRANTY; for details of
 REM the license terms, see the LICENSE.txt file included with the program.
