@@ -558,7 +558,7 @@ mailbox::fetchmail()
     if (pw.empty()) pw = "befoo@";
   }
   auto_ptr<backend> be(backends[i].make());
-  ((*be).*backends[i].stream)(u[uri::host], u[uri::port], _domain, _verify);
+  ((*be).*backends[i].stream)(u.encoded(uri::host), u[uri::port], _domain, _verify);
   be->login(u, pw);
   _recent = static_cast<int>(be->fetch(*this, u));
   be->logout();

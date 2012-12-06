@@ -81,14 +81,13 @@ public:
 
 class uri {
   string _part[6];
-  static string _encode(const string& s, const char* ex = "");
-  static string _decode(const string& s);
 public:
   uri() {}
   explicit uri(const string& uri);
   operator string() const;
   string& operator[](int i) { return _part[i]; }
   const string& operator[](int i) const { return _part[i]; }
+  string encoded(int i) const;
   enum { scheme, user, host, port, path, fragment };
 };
 
