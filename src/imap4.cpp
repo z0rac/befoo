@@ -81,7 +81,7 @@ imap4::login(const uri& uri, const string& passwd)
   if (!preauth) {
     if (stls && !tls()) {
       _command(STARTTLS);
-      starttls(uri.encoded(uri::host));
+      starttls(uri.hostname());
       cap = _command(CAPABILITY, CAPABILITY);
     }
     for (parser caps(cap); caps;) {
@@ -102,7 +102,7 @@ imap4::logout()
 size_t
 imap4::fetch(mailbox& mbox, const uri& uri)
 {
-  _command("EXAMINE" + _arg(uri[uri::path].empty() ? "INBOX" : uri.encoded(uri::path)));
+  _command("EXAMINE" + _arg(uri[uri::path].empty() ? "INBOX" : uri.mailbox()));
   list<mail> mails;
   list<mail> recents;
   for (parser ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
