@@ -88,9 +88,6 @@ public:
   string& operator[](int i) { return _part[i]; }
   const string& operator[](int i) const { return _part[i]; }
   enum { scheme, user, host, port, path, fragment };
-public:
-  string hostname() const;
-  string mailbox() const;
 };
 
 class mailbox {

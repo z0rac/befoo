@@ -167,22 +167,21 @@ win32::cheapsize()
 size_t
 win32::heapsize()
 {
-  size_t size = 0;
   HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPHEAPLIST, 0);
-  if (h != HANDLE(-1)) {
-    HEAPLIST32 hl = { sizeof(HEAPLIST32) };
-    if (Heap32ListFirst(h, &hl)) {
-      do {
-	HEAPENTRY32 he = { sizeof(HEAPENTRY32) };
-	if (Heap32First(&he, hl.th32ProcessID, hl.th32HeapID)) {
-	  do {
-	    if (!(he.dwFlags & LF32_FREE)) size += he.dwBlockSize;
-	  } while (Heap32Next(&he));
-	}
-      } while (Heap32ListNext(h, &hl));
-    }
-    CloseHandle(h);
+  if (h == HANDLE(-1)) return 0;
+  size_t size = 0;
+  HEAPLIST32 hl = { sizeof(HEAPLIST32) };
+  if (Heap32ListFirst(h, &hl)) {
+    do {
+      HEAPENTRY32 he = { sizeof(HEAPENTRY32) };
+      if (Heap32First(&he, hl.th32ProcessID, hl.th32HeapID)) {
+	do {
+	  if (!(he.dwFlags & LF32_FREE)) size += he.dwBlockSize;
+	} while (Heap32Next(&he));
+      }
+    } while (Heap32ListNext(h, &hl));
   }
+  CloseHandle(h);
   return size;
 }
 #endif
@@ -259,14 +258,14 @@ const win32::module win32::exe(GetModuleHandle(NULL));
 /*
  * Functions of the class win32::wstr
  */
-win32::wstr::wstr(const string& s, UINT cp)
-  : _data(NULL)
+LPWSTR
+win32::wstr::_new(LPCSTR s, UINT cp)
 {
-  int size = MultiByteToWideChar(cp, 0, s.c_str(), -1, NULL, 0);
-  if (size) {
-    _data = new WCHAR[size];
-    MultiByteToWideChar(cp, 0, s.c_str(), -1, _data, size);
-  }
+  int size = MultiByteToWideChar(cp, 0, s, -1, NULL, 0);
+  if (!size) return NULL;
+  LPWSTR ws = new WCHAR[size];
+  MultiByteToWideChar(cp, 0, s, -1, ws, size);
+  return ws;
 }
 
 win32::wstr&
@@ -282,29 +281,25 @@ win32::wstr&
 win32::wstr::operator+=(LPCWSTR ws)
 {
   size_t n = ws ? lstrlenW(ws) : 0;
-  if (n) {
-    size_t l = _data ? lstrlenW(_data) : 0;
-    LPWSTR data = new WCHAR[l + n + 1];
-    if (l) lstrcpyW(data, _data);
-    lstrcpyW(data + l, ws);
-    delete [] _data;
-    _data = data;
-  }
+  if (!n) return *this;
+  size_t l = _data ? lstrlenW(_data) : 0;
+  LPWSTR data = new WCHAR[l + n + 1];
+  if (l) lstrcpyW(data, _data);
+  lstrcpyW(data + l, ws);
+  delete [] _data;
+  _data = data;
   return *this;
 }
 
 string
 win32::wstr::mbstr(LPCWSTR ws, UINT cp)
 {
-  if (ws) {
-    int size = WideCharToMultiByte(cp, 0, ws, -1, NULL, 0, NULL, NULL);
-    if (size) {
-      textbuf buf(size);
-      WideCharToMultiByte(cp, 0, ws, -1, buf.data, size, NULL, NULL);
-      return string(buf.data, size - 1);
-    }
-  }
-  return string();
+  if (!ws) return string();
+  int size = WideCharToMultiByte(cp, 0, ws, -1, NULL, 0, NULL, NULL);
+  if (!size) return string();
+  textbuf buf(size);
+  WideCharToMultiByte(cp, 0, ws, -1, buf.data, size, NULL, NULL);
+  return string(buf.data, size - 1);
 }
 
 /*

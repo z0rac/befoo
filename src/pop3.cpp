@@ -55,7 +55,7 @@ pop3::login(const uri& uri, const string& passwd)
     if (!uidl) throw mailbox::error("server not support UIDL command");
     if (stls && !tls()) {
       _command("STLS");
-      starttls(uri.hostname());
+      starttls(uri[uri::host]);
       _command("CAPA");
       cap = _plist(true);
     }
