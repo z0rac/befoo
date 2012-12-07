@@ -92,11 +92,13 @@ public:
   // wstr - wide character string
   class wstr {
     LPWSTR _data;
+    static LPWSTR _new(LPCSTR s, UINT cp);
   public:
     wstr() : _data(NULL) {}
     wstr(LPCWSTR ws) : _data(NULL) { *this = ws; }
     wstr(const wstr& ws) : _data(NULL) { *this = ws; }
-    wstr(const string& s, UINT cp = CP_ACP);
+    wstr(LPCSTR s, UINT cp = CP_ACP) : _data(_new(s, cp)) {}
+    wstr(const string& s, UINT cp = CP_ACP) : _data(_new(s.c_str(), cp)) {}
     ~wstr() { delete [] _data; }
     wstr& operator=(LPCWSTR ws);
     wstr& operator=(const wstr& ws) { return operator=(LPCWSTR(ws)); }

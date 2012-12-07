@@ -5,6 +5,7 @@
  * the license terms, see the LICENSE.txt file included with the program.
  */
 #include "mailbox.h"
+#include "win32.h"
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
@@ -34,6 +35,7 @@ class imap4 : public mailbox::backend {
   // response - imap4 response type.
   struct response { string tag, type, data; };
 
+  static string _utf7m(const string& s);
   string _tag();
   static string _arg(const string& arg);
   string _command(const char* cmd, const char* res = NULL);
@@ -81,7 +83,7 @@ imap4::login(const uri& uri, const string& passwd)
   if (!preauth) {
     if (stls && !tls()) {
       _command(STARTTLS);
-      starttls(uri.hostname());
+      starttls(uri[uri::host]);
       cap = _command(CAPABILITY, CAPABILITY);
     }
     for (parser caps(cap); caps;) {
@@ -102,7 +104,8 @@ imap4::logout()
 size_t
 imap4::fetch(mailbox& mbox, const uri& uri)
 {
-  _command("EXAMINE" + _arg(uri[uri::path].empty() ? "INBOX" : uri.mailbox()));
+  const string& path = uri[uri::path];
+  _command("EXAMINE" + _arg(!path.empty() ? _utf7m(path) : "INBOX"));
   list<mail> mails;
   list<mail> recents;
   for (parser ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
@@ -133,6 +136,37 @@ imap4::fetch(mailbox& mbox, const uri& uri)
   mails.splice(mails.end(), recents);
   mbox.mails(mails);
   return count;
+}
+
+string
+imap4::_utf7m(const string& s)
+{
+  string::size_type i = 0;
+  while (i < s.size() && s[i] >= ' ' && s[i] <= '~' && s[i] != '&') ++i;
+  if (i == s.size()) return s;
+
+  // encode path by modified UTF-7.
+  string result = s.substr(0, i);
+  win32::wstr ws = s.c_str() + i;
+  for (LPCWSTR p = ws; *p;) {
+    result += '&';
+    if (*p != L'&') {
+      static const char b64[] =
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
+      unsigned wc = 0;
+      int n = 0;
+      while (*p && (*p < L' ' || *p > L'~')) {
+	wc = (wc << 16) + *p++, n += 16;
+	for (; n >= 6; n -= 6) result += b64[(wc >> (n - 6)) & 63];
+      }
+      if (n) result += b64[(wc << (6 - n)) & 63];
+    } else ++p;
+    result += '-';
+    for (; *p && *p >= L' ' && *p <= L'~' && *p != L'&'; ++p) {
+      result += static_cast<string::value_type>(*p);
+    }
+  }
+  return result;
 }
 
 string
