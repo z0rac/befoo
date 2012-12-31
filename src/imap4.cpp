@@ -150,19 +150,19 @@ imap4::_utf7m(const string& s)
   win32::wstr ws = s.c_str() + i;
   for (LPCWSTR p = ws; *p;) {
     result += '&';
-    if (*p != L'&') {
+    if (*p != '&') {
       static const char b64[] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
       unsigned wc = 0;
       int n = 0;
-      while (*p && (*p < L' ' || *p > L'~')) {
+      while (*p && (*p < ' ' || *p > '~')) {
 	wc = (wc << 16) + *p++, n += 16;
 	for (; n >= 6; n -= 6) result += b64[(wc >> (n - 6)) & 63];
       }
       if (n) result += b64[(wc << (6 - n)) & 63];
     } else ++p;
     result += '-';
-    for (; *p && *p >= L' ' && *p <= L'~' && *p != L'&'; ++p) {
+    for (; *p && *p >= ' ' && *p <= '~' && *p != '&'; ++p) {
       result += static_cast<string::value_type>(*p);
     }
   }

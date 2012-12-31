@@ -113,7 +113,7 @@ winsock::getaddrinfo(const string& host, const string& port, int domain)
 {
   struct addrinfo hints = { 0, domain, SOCK_STREAM };
   struct addrinfo* res;
-  int err = _get(host.c_str(), port.c_str(), &hints, &res);
+  int err = _get(punycode(host).c_str(), port.c_str(), &hints, &res);
   if (err == 0) return res;
   WSASetLastError(err);
   throw error();
@@ -133,7 +133,7 @@ winsock::tcpclient&
 winsock::tcpclient::connect(const string& host, const string& port, int domain)
 {
   shutdown();
-  LOG("Connect: " << host << ":" << port << endl);
+  LOG("Connect: " << host << "(" << punycode(host) << "):" << port << endl);
   struct addrinfo* ai = getaddrinfo(host, port, domain);
   for (struct addrinfo* p = ai; p; p = p->ai_next) {
     SOCKET s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
@@ -357,8 +357,8 @@ winsock::tlsclient::shutdown()
 bool
 winsock::tlsclient::verify(const string& cn, DWORD ignore)
 {
-  LOG("Auth: " << cn << " ... ");
-  win32::wstr name(cn);
+  LOG("Auth: " << cn << "(" << punycode(cn) << ")... ");
+  win32::wstr name(punycode(cn));
   PCCERT_CHAIN_CONTEXT chain;
   {
     PCCERT_CONTEXT context;
@@ -464,4 +464,79 @@ winsock::tlsclient::send(const char* data, size_t size)
     _sendtoken(_buf.data, enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
   }
   return size;
+}
+
+/*
+ * Functions of punycode
+ */
+string
+winsock::punycode(const string& host)
+{
+  string::size_type i = 0;
+  while (i < host.size() && BYTE(host[i]) < 0x80) ++i;
+  return i == host.size() ? host : punycode(win32::wstr(host));
+}
+
+string
+winsock::punycode(LPCWSTR host)
+{
+  struct lambda {
+    static string encode(LPCWSTR input, size_t length, size_t n) {
+      string output;
+      size_t delta = 0, bias = 72, damp = 700;
+      WCHAR code = 0x80;
+      while (n < length) {
+	WCHAR next = WCHAR(-1);
+	for (size_t i = 0; i < length; ++i) {
+	  if (input[i] >= code && input[i] < next) next = input[i];
+	}
+	size_t t = delta + (next - code) * (n + 1);
+	if (t < delta) throw error("punycode overflow");
+	delta = t, code = next;
+	for (size_t i = 0; i < length; ++i) {
+	  if (input[i] != code) {
+	    if (input[i] < code && ++delta == 0) throw error("punycode overflow");
+	  } else {
+	    static const char b36[] = {
+	      'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
+	      'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
+	      'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+	    };
+	    size_t q = delta;
+	    for (size_t k = sizeof(b36);; k += sizeof(b36)) {
+	      size_t t = k > bias ? min<size_t>(k - bias, 26) : 1;
+	      if (q < t) break;
+	      output += b36[t + (q - t) % (sizeof(b36) - t)];
+	      q = (q - t) / (sizeof(b36) - t);
+	    }
+	    output += b36[q];
+	    size_t k = 0;
+	    q = delta / damp, q += q / ++n;
+	    for (; q > (sizeof(b36) - 1) * 26 / 2; q /= sizeof(b36) - 1) k += sizeof(b36);
+	    bias = k + q * sizeof(b36) / (q + 38);
+	    delta = 0, damp = 2;
+	  }
+	}
+	++delta, ++code;
+      }
+      return output;
+    }
+  };
+
+  string result;
+  for (LPCWSTR p = host; *p; ++p) {
+    string asc;
+    LPCWSTR t = p;
+    for (; *p && *p != '.'; ++p) {
+      if (*p < 0x80) asc += static_cast<string::value_type>(*p);
+    }
+    if (asc.size() < static_cast<string::size_type>(p - t)) {
+      result += "xn--";
+      if (!asc.empty()) result += asc, result += '-';
+      result += lambda::encode(t, p - t, asc.size());
+    } else result += asc;
+    if (!*p) break;
+    result += static_cast<string::value_type>(*p);
+  }
+  return result;
 }
