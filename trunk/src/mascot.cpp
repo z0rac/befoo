@@ -201,7 +201,7 @@ tooltips::ellipsis::operator()(LPCWSTR ws) const
     ~buf() { delete [] data; }
   } buf(ws);
   for (LPWSTR p = buf.data; *++p;) {
-    if (*p == L'\t') *p = L' ';
+    if (*p == '\t') *p = ' ';
   }
   static RECT r = { 0, 0, 300, 300 };
   DrawTextW(hDC, buf.data, -1, &r,
@@ -371,7 +371,7 @@ iconwindow::balloon(LPCWSTR text, unsigned sec,
     int n = lstrlenW(text);
     if (n >= int(sizeof(ni.szInfo) / sizeof(ni.szInfo[0]))) {
       n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]);
-      while (n-- && text[n] != L'\n') continue;
+      while (n-- && text[n] != '\n') continue;
       if (n < 0) n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]) - 1;
     }
     lstrcpynW(ni.szInfo, text, n + 1);

@@ -31,6 +31,8 @@ public:
   static struct addrinfo* getaddrinfo(const string& host, const string& port,
 				      int domain = AF_UNSPEC);
   static void freeaddrinfo(struct addrinfo* info) { _free(info); }
+  static string punycode(const string& host);
+  static string punycode(LPCWSTR host);
 public:
   // tcpclient - TCP client socket
   class tcpclient {
