@@ -181,17 +181,7 @@ summary::_compare(LPARAM s1, LPARAM s2) const
     }
   }
 
-  struct textbuf {
-    LPWSTR data;
-    textbuf() : data(NULL) {}
-    ~textbuf() { delete [] data; }
-    LPWSTR operator()(size_t n)
-    {
-      assert(n);
-      delete [] data, data = NULL;
-      return data = new WCHAR[n];
-    }
-  } tb[2];
+  win32::textbuf<WCHAR> tb[2];
   WPARAM si[] = { s1, s2 };
   for (int i = 0; i < 2; ++i) {
     LVITEMW lv = { LVIF_TEXT };

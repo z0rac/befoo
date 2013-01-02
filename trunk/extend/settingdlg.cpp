@@ -10,22 +10,6 @@
 #include <vector>
 #include <shlwapi.h>
 
-/** textbuf - temporary text buffer
- */
-namespace {
-  struct textbuf {
-    char* data;
-    textbuf() : data(NULL) {}
-    ~textbuf() { delete [] data; }
-    char* operator()(size_t n)
-    {
-      assert(n);
-      delete [] data, data = NULL;
-      return data = new char[n];
-    }
-  };
-}
-
 /*
  * Functions of the class dialog
  */
@@ -92,7 +76,7 @@ dialog::seticon(int id, HICON icon)
 string
 dialog::gettext(int id) const
 {
-  textbuf buf;
+  win32::textbuf<char> buf;
   int size = 0;
   for (int n = 0; n <= size + 1;) {
     n += 256;
@@ -134,7 +118,7 @@ dialog::listitem(int id) const
   HWND h = item(id);
   int i = ListBox_GetCurSel(h);
   int n = ListBox_GetTextLen(h, i);
-  textbuf buf;
+  win32::textbuf<char> buf;
   return n > 0 && ListBox_GetText(h, i, buf(n + 1)) == n ?
     string(buf.data, n) : string();
 }

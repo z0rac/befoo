@@ -145,11 +145,7 @@ u8conv::operator()(const string& text)
   }
   int n = 0;
   if (_mb2u(&_mode, _codepage, text.c_str(), NULL, NULL, &n) != S_OK) throw text;
-  struct buf {
-    LPWSTR data;
-    buf(int size) : data(new WCHAR[size]) {}
-    ~buf() { delete [] data; }
-  } buf(n + 1);
+  win32::textbuf<WCHAR> buf(n + 1);
   _mb2u(&_mode, _codepage, text.c_str(), NULL, buf.data, &n);
   buf.data[n] = 0;
   return win32::wstr::mbstr(buf.data, CP_UTF8);

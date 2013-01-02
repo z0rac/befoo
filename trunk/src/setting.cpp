@@ -259,12 +259,6 @@ namespace {
     void put(const char* key, const char* value);
     void erase(const char* key);
     list<string> keys() const;
-  public:
-    struct buf {
-      char* data;
-      buf(DWORD size) : data(new char[size]) {}
-      ~buf() { delete [] data; }
-    };
   };
 }
 
@@ -288,7 +282,7 @@ regkey::get(const char* key) const
   if (_key &&
       RegQueryValueEx(_key, key, NULL, &type, NULL, &size) == ERROR_SUCCESS &&
       type == REG_SZ) {
-    regkey::buf buf(size);
+    win32::textbuf<char> buf(size);
     if (RegQueryValueEx(_key, key, NULL, NULL, LPBYTE(buf.data), &size) == ERROR_SUCCESS) {
       return buf.data;
     }
@@ -315,7 +309,7 @@ regkey::keys() const
   DWORD size;
   if (_key && RegQueryInfoKey(_key, NULL, NULL, NULL, NULL, NULL,
 			      NULL, NULL, &size, NULL, NULL, NULL) == ERROR_SUCCESS) {
-    regkey::buf buf(++size);
+    win32::textbuf<char> buf(++size);
     DWORD i = 0, n;
     while (n = size, RegEnumValue(_key, i++, buf.data, &n,
 				  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
@@ -353,7 +347,7 @@ registory::storages() const
   DWORD size;
   if (_key && RegQueryInfoKey(HKEY(_key), NULL, NULL, NULL, NULL, &size,
 			      NULL, NULL, NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
-    regkey::buf buf(++size);
+    win32::textbuf<char> buf(++size);
     DWORD i = 0, n;
     while (n = size, RegEnumKeyEx(HKEY(_key), i++, buf.data, &n,
 				  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
