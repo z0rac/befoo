@@ -28,25 +28,11 @@ win32::win32(LPCSTR mutex)
        GetLastError() == ERROR_ALREADY_EXISTS)) throw error();
 }
 
-namespace {
-  struct textbuf {
-    char* data;
-    textbuf() : data(NULL) {}
-    textbuf(size_t n) : data(new char[n]) {}
-    ~textbuf() { delete [] data; }
-    char* operator()(size_t n)
-    {
-      delete [] data, data = NULL;
-      return data = new char[n];
-    }
-  };
-}
-
 string
 win32::profile(LPCSTR section, LPCSTR key, LPCSTR file)
 {
   if (!file) return string();
-  textbuf buf;
+  textbuf<char> buf;
   DWORD size = 0;
   for (DWORD n = 0; n <= size + 2;) {
     n += 256;
@@ -65,9 +51,9 @@ win32::profile(LPCSTR section, LPCSTR key, LPCSTR value, LPCSTR file)
 string
 win32::xenv(const string& s)
 {
+  textbuf<char> buf;
   DWORD n = static_cast<DWORD>(s.size() + 1);
-  textbuf buf(n);
-  n = ExpandEnvironmentStrings(s.c_str(), buf.data, n);
+  n = ExpandEnvironmentStrings(s.c_str(), buf(n), n);
   if (n > s.size() + 1) ExpandEnvironmentStrings(s.c_str(), buf(n), n);
   return buf.data;
 }
@@ -82,12 +68,10 @@ win32::_datetime(time_t utc, DWORD flags, _dtfn fn)
     FileTimeToLocalFileTime(&ft, &lt);
     FileTimeToSystemTime(&lt, &st);
   }
+  textbuf<char> buf;
   int n = fn(LOCALE_USER_DEFAULT, flags, &st, NULL, NULL, 0);
-  textbuf buf(n);
-  if (n && fn(LOCALE_USER_DEFAULT, flags, &st, NULL, buf.data, n)) {
-    return buf.data;
-  }
-  return string();
+  return n && fn(LOCALE_USER_DEFAULT, flags, &st, NULL, buf(n), n) ?
+    string(buf.data, n - 1) : string();
 }
 
 HANDLE
@@ -95,7 +79,7 @@ win32::shell(const string& cmd, unsigned flags)
 {
   assert(!(flags & ~(SEE_MASK_CONNECTNETDRV | SEE_MASK_FLAG_DDEWAIT |
 		     SEE_MASK_FLAG_NO_UI | SEE_MASK_NOCLOSEPROCESS)));
-  textbuf tmp(cmd.size() + 1);
+  textbuf<char> tmp(cmd.size() + 1);
   lstrcpyA(tmp.data, cmd.c_str());
   PathRemoveArgs(tmp.data);
   string::size_type i = lstrlen(tmp.data);
@@ -205,7 +189,7 @@ win32::module::operator()(LPCSTR name, FARPROC def) const
 string
 win32::module::text(UINT id) const
 {
-  textbuf buf;
+  textbuf<char> buf;
   int size = 0;
   for (int n = 0; n <= size + 1;) {
     n += 256;
@@ -218,7 +202,7 @@ string
 win32::module::textf(UINT id, ...) const
 {
   string s = text(id);
-  textbuf buf;
+  textbuf<char> buf;
   int size = 0;
   for (int n = 0; n <= size + 1;) {
     n += 512;
@@ -295,11 +279,10 @@ string
 win32::wstr::mbstr(LPCWSTR ws, UINT cp)
 {
   if (!ws) return string();
-  int size = WideCharToMultiByte(cp, 0, ws, -1, NULL, 0, NULL, NULL);
-  if (!size) return string();
-  textbuf buf(size);
-  WideCharToMultiByte(cp, 0, ws, -1, buf.data, size, NULL, NULL);
-  return string(buf.data, size - 1);
+  textbuf<char> buf;
+  int n = WideCharToMultiByte(cp, 0, ws, -1, NULL, 0, NULL, NULL);
+  return n && WideCharToMultiByte(cp, 0, ws, -1, buf(n), n, NULL, NULL) ?
+    string(buf.data, n - 1) : string();
 }
 
 /*

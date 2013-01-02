@@ -89,6 +89,17 @@ public:
     friend class trylock;
   };
 
+  // textbuf - text buffer template
+  template<typename _Ty>
+  struct textbuf {
+    _Ty* data;
+    textbuf() : data(NULL) {}
+    textbuf(size_t n) : data(new _Ty[n]) {}
+    ~textbuf() { delete [] data; }
+    _Ty* operator()(size_t n)
+    { delete [] data, data = NULL; return data = new _Ty[n]; }
+  };
+
   // wstr - wide character string
   class wstr {
     LPWSTR _data;
