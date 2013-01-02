@@ -1,6 +1,6 @@
 #ifndef H_WINSOCK /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -31,8 +31,8 @@ public:
   static struct addrinfo* getaddrinfo(const string& host, const string& port,
 				      int domain = AF_UNSPEC);
   static void freeaddrinfo(struct addrinfo* info) { _free(info); }
-  static string punycode(const string& host);
-  static string punycode(LPCWSTR host);
+  static string idn(const string& host);
+  static string idn(LPCWSTR host);
 public:
   // tcpclient - TCP client socket
   class tcpclient {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -113,7 +113,7 @@ winsock::getaddrinfo(const string& host, const string& port, int domain)
 {
   struct addrinfo hints = { 0, domain, SOCK_STREAM };
   struct addrinfo* res;
-  int err = _get(punycode(host).c_str(), port.c_str(), &hints, &res);
+  int err = _get(idn(host).c_str(), port.c_str(), &hints, &res);
   if (err == 0) return res;
   WSASetLastError(err);
   throw error();
@@ -133,7 +133,7 @@ winsock::tcpclient&
 winsock::tcpclient::connect(const string& host, const string& port, int domain)
 {
   shutdown();
-  LOG("Connect: " << host << "(" << punycode(host) << "):" << port << endl);
+  LOG("Connect: " << host << "(" << idn(host) << "):" << port << endl);
   struct addrinfo* ai = getaddrinfo(host, port, domain);
   for (struct addrinfo* p = ai; p; p = p->ai_next) {
     SOCKET s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
@@ -357,8 +357,8 @@ winsock::tlsclient::shutdown()
 bool
 winsock::tlsclient::verify(const string& cn, DWORD ignore)
 {
-  LOG("Auth: " << cn << "(" << punycode(cn) << ")... ");
-  win32::wstr name(punycode(cn));
+  LOG("Auth: " << cn << "(" << idn(cn) << ")... ");
+  win32::wstr name(idn(cn));
   PCCERT_CHAIN_CONTEXT chain;
   {
     PCCERT_CONTEXT context;
@@ -467,57 +467,54 @@ winsock::tlsclient::send(const char* data, size_t size)
 }
 
 /*
- * Functions of punycode
+ * Functions of IDN
  */
 string
-winsock::punycode(const string& host)
+winsock::idn(const string& host)
 {
   string::size_type i = 0;
   while (i < host.size() && BYTE(host[i]) < 0x80) ++i;
-  return i == host.size() ? host : punycode(win32::wstr(host));
+  return i == host.size() ? host : idn(win32::wstr(host));
 }
 
 string
-winsock::punycode(LPCWSTR host)
+winsock::idn(LPCWSTR host)
 {
   struct lambda {
     static string encode(LPCWSTR input, size_t length, size_t n) {
+      static const error overflow("punycode overflow");
       string output;
       size_t delta = 0, bias = 72, damp = 700;
-      WCHAR code = 0x80;
-      while (n < length) {
+      for (WCHAR code = 0x80; n < length; ++code) {
 	WCHAR next = WCHAR(-1);
 	for (size_t i = 0; i < length; ++i) {
 	  if (input[i] >= code && input[i] < next) next = input[i];
 	}
 	size_t t = delta + (next - code) * (n + 1);
-	if (t < delta) throw error("punycode overflow");
+	if (t < delta) throw overflow;
 	delta = t, code = next;
 	for (size_t i = 0; i < length; ++i) {
 	  if (input[i] != code) {
-	    if (input[i] < code && ++delta == 0) throw error("punycode overflow");
+	    if (input[i] < code && ++delta == 0) throw overflow;
 	  } else {
-	    static const char b36[] = {
-	      'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
-	      'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
-	      'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-	    };
+	    enum { base = 36, tmin = 1, tmax = 26, skew = 38 };
+	    static const char b36[] = "abcdefghijklmnopqrstuvwxyz0123456789";
 	    size_t q = delta;
-	    for (size_t k = sizeof(b36);; k += sizeof(b36)) {
-	      size_t t = k > bias ? min<size_t>(k - bias, 26) : 1;
+	    for (size_t k = base;; k += base) {
+	      size_t t = k > bias ? min<size_t>(k - bias, tmax) : tmin;
 	      if (q < t) break;
-	      output += b36[t + (q - t) % (sizeof(b36) - t)];
-	      q = (q - t) / (sizeof(b36) - t);
+	      output += b36[t + (q - t) % (base - t)];
+	      q = (q - t) / (base - t);
 	    }
 	    output += b36[q];
 	    size_t k = 0;
 	    q = delta / damp, q += q / ++n;
-	    for (; q > (sizeof(b36) - 1) * 26 / 2; q /= sizeof(b36) - 1) k += sizeof(b36);
-	    bias = k + q * sizeof(b36) / (q + 38);
+	    for (; q > (base - tmin) * tmax / 2; q /= base - tmin) k += base;
+	    bias = k + (base - tmin + 1) * q / (q + skew);
 	    delta = 0, damp = 2;
 	  }
 	}
-	++delta, ++code;
+	if (++delta == 0) throw overflow;
       }
       return output;
     }
