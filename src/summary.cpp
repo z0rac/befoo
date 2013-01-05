@@ -193,7 +193,7 @@ summary::_compare(LPARAM s1, LPARAM s2) const
       n = SendMessage(hwnd(), LVM_GETITEMTEXTW, si[i], LPARAM(&lv));
     } while (n == lv.cchTextMax - 1);
   }
-  return _wcsicmp(tb[0].data, tb[1].data) * _order;
+  return lstrcmpiW(tb[0].data, tb[1].data) * _order;
 }
 
 int CALLBACK

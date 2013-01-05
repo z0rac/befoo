@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2010-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -326,9 +326,21 @@ mailboxdlg::_sound(const string& snd)
   return disp;
 }
 
-string
-editmailbox(const string& name, HWND parent)
+/** Functions of the class main dialog
+ */
+void
+maindlg::mailbox(bool edit)
 {
+  string name;
+  if (edit) {
+    name = listitem(IDC_LIST_MAILBOX);
+    if (name.empty()) return;
+  }
   mailboxdlg dlg(name);
-  return dlg.modal(IDD_MAILBOX, parent) ? dlg.name() : string();
+  if (!dlg.modal(IDD_MAILBOX, hwnd()) || dlg.name() == name) return;
+  HWND h = item(IDC_LIST_MAILBOX);
+  if (!name.empty()) ListBox_DeleteString(h, ListBox_GetCurSel(h));
+  ListBox_AddString(h, dlg.name().c_str());
+  ListBox_SetCurSel(h, ListBox_GetCount(h) - 1);
+  _enablebuttons();
 }

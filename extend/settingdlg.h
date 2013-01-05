@@ -1,6 +1,6 @@
 #ifndef H_SETTINGDLG /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2010-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -48,6 +48,35 @@ public:
   void clearballoon() const;
   void error(int id, const string& msg, int start = 0, int end = -1) const;
   int modal(int id, HWND parent);
+};
+
+/** iconspec - icon spec
+ */
+struct iconspec {
+  string setting;
+  int size;
+  HICON symbol;
+public:
+  iconspec() : symbol(NULL) {}
+  iconspec(const string& setting, int size, HICON symbol)
+    : setting(setting), size(size), symbol(symbol) {}
+  iconspec(const string& setting, int width);
+};
+
+/** maindlg - main dialog
+ */
+class maindlg : public dialog {
+  string _icon;
+  void _delete();
+  void _enablebuttons();
+  int _iconwidth() const;
+  void _enableicon(bool en);
+protected:
+  void initialize();
+  void done(bool ok);
+  bool action(int id, int cmd);
+  void mailbox(bool edit = false);
+  void icon();
 };
 
 #endif
