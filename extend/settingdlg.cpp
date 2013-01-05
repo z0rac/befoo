@@ -226,13 +226,13 @@ namespace {
     };
     string _exe, _link;
   public:
-    startup();
+    startup(bool update = false);
     bool exists() const { return !_link.empty(); }
     bool update(bool add);
   };
 }
 
-startup::startup()
+startup::startup(bool update)
 {
   win32::textbuf<char> dir(MAX_PATH), path(MAX_PATH);
   if (!GetModuleFileName(NULL, path.data, MAX_PATH)) return;
@@ -240,25 +240,25 @@ startup::startup()
   if (!SHGetSpecialFolderPath(NULL, dir.data, CSIDL_STARTUP, FALSE) ||
       !PathCombine(path.data, dir.data, "*")) return;
   for (win32::find fd(path.data); fd; fd.next()) {
-    com<IShellLink> sl;
-    com<IPersistFile> pf;
     if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
 	lstrcmpi(PathFindExtension(fd.cFileName), ".lnk") != 0 ||
-	!PathCombine(path.data, dir.data, fd.cFileName) ||
-	FAILED(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+	!PathCombine(path.data, dir.data, fd.cFileName)) continue;
+    string link = path.data;
+    com<IShellLink> sl;
+    com<IPersistFile> pf;
+    if (FAILED(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
 				IID_IShellLink, (PVOID*)&sl)) ||
 	FAILED(sl->QueryInterface(IID_IPersistFile, (PVOID*)&pf)) ||
-	FAILED(pf->Load(win32::wstr(path.data), STGM_READ)) ||
+	FAILED(pf->Load(win32::wstr(link), STGM_READ)) ||
 	FAILED(sl->GetPath(path.data, MAX_PATH, NULL, 0))) continue;
     if (lstrcmpi(path.data, _exe.c_str()) != 0) {
-      if (lstrcmpi(PathFindFileName(path.data),
-		   PathFindFileName(LPSTR(_exe.c_str()))) != 0 ||
-	  FAILED(sl->Resolve(NULL, SLR_NO_UI)) ||
+      if (!*path.data || PathFileExists(path.data) ||
+	  FAILED(sl->Resolve(NULL, SLR_NO_UI | SLR_NOSEARCH)) ||
 	  FAILED(sl->GetPath(path.data, MAX_PATH, NULL, 0)) ||
 	  lstrcmpi(path.data, _exe.c_str()) != 0) continue;
-      pf->Save(NULL, TRUE);
+      if (update && SUCCEEDED(pf->Save(NULL, TRUE))) pf->SaveCompleted(NULL);
     }
-    _link = PathCombine(path.data, dir.data, fd.cFileName);
+    _link = link;
     break;
   }
 }
@@ -340,7 +340,8 @@ maindlg::done(bool ok)
 	 (Button_GetCheck(item(IDC_CHECKBOX_SUMMARY)))
 	 (getint(IDC_EDIT_SUMMARYTRANS)));
     pref("delay", setting::tuple(getint(IDC_EDIT_STARTUP)));
-    startup().update(Button_GetCheck(item(IDC_CHECKBOX_STARTUP)) != 0);
+    bool add = Button_GetCheck(item(IDC_CHECKBOX_STARTUP)) != 0;
+    startup(add).update(add);
   }
   dialog::done(ok);
 }
