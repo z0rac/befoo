@@ -165,6 +165,7 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\extend\icondlg.cpp" />
     <ClCompile Include="..\src\icon.cpp" />
     <ClCompile Include="..\extend\mailboxdlg.cpp" />
     <ClCompile Include="..\extend\main.cpp" />

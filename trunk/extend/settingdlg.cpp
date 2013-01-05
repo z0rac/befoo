@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -7,8 +7,8 @@
 #include "settingdlg.h"
 #include "icon.h"
 #include <cassert>
-#include <vector>
 #include <shlwapi.h>
+#include <shlobj.h>
 
 /*
  * Functions of the class dialog
@@ -175,11 +175,10 @@ dialog::balloon(int id, const string& msg) const
 void
 dialog::clearballoon() const
 {
-  if (_balloon) {
-    TOOLINFO ti = { sizeof(TOOLINFO), 0, _hwnd };
-    SendMessage(_tips, TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
-    _balloon = false;
-  }
+  if (!_balloon) return;
+  TOOLINFO ti = { sizeof(TOOLINFO), 0, _hwnd };
+  SendMessage(_tips, TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
+  _balloon = false;
 }
 
 void
@@ -197,36 +196,8 @@ dialog::modal(int id, HWND parent)
 					 parent, &_dlgproc, LPARAM(this)));
 }
 
-/** iconlist - list of icons
+/** Functions of the class icon spec
  */
-namespace {
-  struct iconspec {
-    string setting;
-    int size;
-    HICON symbol;
-  public:
-    iconspec() : symbol(NULL) {}
-    iconspec(int id, const icon& icon, int width);
-    iconspec(const string& setting, int width);
-  };
-
-  class iconlist : vector<iconspec>, iconmodule::accept {
-    void operator()(int id, const icon& icon);
-  public:
-    iconlist() {}
-    ~iconlist() { clear(); }
-    using vector<iconspec>::size_type;
-    using vector<iconspec>::size;
-    using vector<iconspec>::operator[];
-  public:
-    void load();
-    void clear();
-  };
-}
-
-iconspec::iconspec(int id, const icon& icon, int size)
-  : setting(setting::tuple(id)), size(size), symbol(icon.read(size)) {}
-
 iconspec::iconspec(const string& setting, int width)
   : setting(setting), size(64)
 {
@@ -241,124 +212,82 @@ iconspec::iconspec(const string& setting, int width)
   }
 }
 
-void
-iconlist::operator()(int id, const icon& icon)
-{
-  struct spec : public iconspec {
-    spec(const iconspec& spec) : iconspec(spec) {}
-    ~spec() { symbol && DestroyIcon(symbol); }
-  } spec(iconspec(id, icon, min(icon.size(), 64)));
-  push_back(spec);
-  spec.symbol = NULL;
-}
-
-void
-iconlist::load()
-{
-  iconmodule().collect(*this);
-  for (vector<iconspec>::iterator p = begin(); p != end(); ++p) {
-    if (p->setting == "1") p->setting.clear();
-  }
-  for (const char* p = "*.dll\0*.ico\0"; *p; p += strlen(p) + 1) {
-    for (win32::find f(iconmodule::path(p)); f; f.next()) {
-      iconlist::size_type i = size();
-      iconmodule(f.cFileName).collect(*this);
-      if (i == size()) continue;
-      string suffix = string(",") + PathFindFileName(f.cFileName);
-      vector<iconspec>::iterator p = begin() + i;
-      for (; p != end(); ++p) p->setting += suffix;
-    }
-  }
-}
-
-void
-iconlist::clear()
-{
-  vector<iconspec>::iterator p = begin();
-  for (; p != end(); ++p) DestroyIcon(p->symbol);
-  vector<iconspec>::clear();
-}
-
-/** icondlg - icon dialog
+/** startup - startup item
  */
 namespace {
-  class icondlg : public dialog {
-    string _setting;
-    iconlist _list;
-    void initialize();
-    void done(bool ok);
-    bool action(int id, int cmd);
-    bool drawitem(int id, LPDRAWITEMSTRUCT ctx);
+  class startup {
+    template<typename Ty> class com {
+      Ty* _p;
+    public:
+      com() : _p(NULL) {}
+      ~com() { _p && _p->Release(); }
+      Ty** operator&() { assert(!_p); return &_p; }
+      Ty* operator->() const { return _p; }
+    };
+    string _exe, _link;
   public:
-    icondlg(const string& setting) : _setting(setting) { _list.load(); }
-    const string& setting() const { return _setting; }
+    startup();
+    bool exists() const { return !_link.empty(); }
+    bool update(bool add);
   };
 }
 
-void
-icondlg::initialize()
+startup::startup()
 {
-  HWND h = item(IDC_LIST_ICON);
-  RECT rc;
-  GetClientRect(h, &rc);
-  ListBox_SetItemHeight(h, 0, rc.bottom / max(int(rc.bottom / 66), 1));
-  ListBox_SetColumnWidth(h, 66);
-  for (iconlist::size_type i = 0; i < _list.size(); ++i) {
-    ListBox_AddItemData(h, NULL);
-    if (_list[i].setting == _setting) ListBox_SetCurSel(h, i);
+  win32::textbuf<char> dir(MAX_PATH), path(MAX_PATH);
+  if (!GetModuleFileName(NULL, path.data, MAX_PATH)) return;
+  _exe = path.data;
+  if (!SHGetSpecialFolderPath(NULL, dir.data, CSIDL_STARTUP, FALSE) ||
+      !PathCombine(path.data, dir.data, "*")) return;
+  for (win32::find fd(path.data); fd; fd.next()) {
+    com<IShellLink> sl;
+    com<IPersistFile> pf;
+    if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+	lstrcmpi(PathFindExtension(fd.cFileName), ".lnk") != 0 ||
+	!PathCombine(path.data, dir.data, fd.cFileName) ||
+	FAILED(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+				IID_IShellLink, (PVOID*)&sl)) ||
+	FAILED(sl->QueryInterface(IID_IPersistFile, (PVOID*)&pf)) ||
+	FAILED(pf->Load(win32::wstr(path.data), STGM_READ)) ||
+	FAILED(sl->GetPath(path.data, MAX_PATH, NULL, 0))) continue;
+    if (lstrcmpi(path.data, _exe.c_str()) != 0) {
+      if (lstrcmpi(PathFindFileName(path.data),
+		   PathFindFileName(LPSTR(_exe.c_str()))) != 0 ||
+	  FAILED(sl->Resolve(NULL, SLR_NO_UI)) ||
+	  FAILED(sl->GetPath(path.data, MAX_PATH, NULL, 0)) ||
+	  lstrcmpi(path.data, _exe.c_str()) != 0) continue;
+      pf->Save(NULL, TRUE);
+    }
+    _link = PathCombine(path.data, dir.data, fd.cFileName);
+    break;
   }
-}
-
-void
-icondlg::done(bool ok)
-{
-  if (ok) {
-    unsigned i = ListBox_GetCurSel(item(IDC_LIST_ICON));
-    if (i >= _list.size()) error(IDC_LIST_ICON, extend::dll.text(IDS_MSG_ITEM_REQUIRED));
-    _setting = _list[i].setting;
-  }
-  dialog::done(ok);
 }
 
 bool
-icondlg::action(int id, int cmd)
+startup::update(bool add)
 {
-  if (id == IDC_LIST_ICON && cmd == LBN_DBLCLK) id = IDOK;
-  return dialog::action(id, cmd);
-}
-
-bool
-icondlg::drawitem(int, LPDRAWITEMSTRUCT ctx)
-{
-  if (ctx->itemID != UINT(-1)) {
-    const iconspec& spec = _list[ctx->itemID];
-    int x = (ctx->rcItem.left + ctx->rcItem.right - spec.size) >> 1;
-    int y = (ctx->rcItem.top + ctx->rcItem.bottom - spec.size) >> 1;
-    HBRUSH br = GetSysColorBrush(ctx->itemState & ODS_SELECTED ?
-				 COLOR_HIGHLIGHT : COLOR_WINDOW);
-    FillRect(ctx->hDC, &ctx->rcItem, br);
-    DrawIconEx(ctx->hDC, x, y, spec.symbol, 0, 0, 0, br, DI_NORMAL);
-  }
+  if (!_link.empty() == add) return true;
+  if (!add) return DeleteFile(_link.c_str()) != 0;
+  com<IShellLink> sl;
+  com<IPersistFile> pf;
+  if (_exe.empty() ||
+      FAILED(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+			      IID_IShellLink, (PVOID*)&sl)) ||
+      FAILED(sl->QueryInterface(IID_IPersistFile, (PVOID*)&pf)) ||
+      FAILED(sl->SetPath(_exe.c_str()))) return false;
+  win32::textbuf<char> name(MAX_PATH);
+  lstrcpy(name.data, PathFindFileName(LPSTR(_exe.c_str())));
+  lstrcpy(PathFindExtension(name.data), ".lnk");
+  win32::textbuf<WCHAR> path(MAX_PATH);
+  if (!SHGetSpecialFolderPathW(NULL, path.data, CSIDL_STARTUP, TRUE) ||
+      !PathAppendW(path.data, win32::wstr(name.data)) ||
+      FAILED(pf->Save(path.data, TRUE))) return false;
+  pf->SaveCompleted(path.data);
   return true;
 }
 
-/** maindlg - main dialog
+/** Functions of the class main dialog
  */
-namespace {
-  class maindlg : public dialog {
-    string _icon;
-    void initialize();
-    void done(bool ok);
-    bool action(int id, int cmd);
-    void _mailbox(bool edit = false);
-    void _delete();
-    void _enablebuttons();
-    void _changeicon();
-    int _iconwidth() const;
-    void _enableicon(bool en);
-  };
-}
-
 void
 maindlg::initialize()
 {
@@ -392,6 +321,7 @@ maindlg::initialize()
   setspin(IDC_SPIN_SUMMARYTRANS, t, 0, 100);
   pref["delay"](n = 0);
   setspin(IDC_SPIN_STARTUP, n);
+  Button_SetCheck(item(IDC_CHECKBOX_STARTUP), startup().exists());
 }
 
 void
@@ -410,6 +340,7 @@ maindlg::done(bool ok)
 	 (Button_GetCheck(item(IDC_CHECKBOX_SUMMARY)))
 	 (getint(IDC_EDIT_SUMMARYTRANS)));
     pref("delay", setting::tuple(getint(IDC_EDIT_STARTUP)));
+    startup().update(Button_GetCheck(item(IDC_CHECKBOX_STARTUP)) != 0);
   }
   dialog::done(ok);
 }
@@ -420,19 +351,19 @@ maindlg::action(int id, int cmd)
   switch (id) {
   case IDC_BUTTON_NEW:
   case IDC_BUTTON_EDIT:
-    _mailbox(id != IDC_BUTTON_NEW);
+    mailbox(id != IDC_BUTTON_NEW);
     return true;
   case IDC_BUTTON_DELETE:
     _delete();
     return true;
   case IDC_LIST_MAILBOX:
     switch (cmd) {
-    case LBN_DBLCLK: _mailbox(true); break;
+    case LBN_DBLCLK: mailbox(true); break;
     case LBN_SELCHANGE: _enablebuttons(); break;
     }
     return true;
   case IDC_BUTTON_ICON:
-    _changeicon();
+    icon();
     return true;
   case IDC_CHECKBOX_ICON:
     _enableicon(Button_GetCheck(item(IDC_CHECKBOX_ICON)) != 0);
@@ -442,36 +373,16 @@ maindlg::action(int id, int cmd)
 }
 
 void
-maindlg::_mailbox(bool edit)
-{
-  string name;
-  if (edit) {
-    name = listitem(IDC_LIST_MAILBOX);
-    if (name.empty()) return;
-  }
-  extern string editmailbox(const string&, HWND);
-  string n = editmailbox(name, hwnd());
-  if (!n.empty() && n != name) {
-    HWND h = item(IDC_LIST_MAILBOX);
-    if (!name.empty()) ListBox_DeleteString(h, ListBox_GetCurSel(h));
-    ListBox_AddString(h, n.c_str());
-    ListBox_SetCurSel(h, ListBox_GetCount(h) - 1);
-    _enablebuttons();
-  }
-}
-
-void
 maindlg::_delete()
 {
   string name = listitem(IDC_LIST_MAILBOX);
-  if (!name.empty() &&
+  if (name.empty() ||
       msgbox(extend::dll.textf(IDS_MSGBOX_DELETE, name.c_str()),
-	     MB_ICONQUESTION | MB_YESNO) == IDYES) {
-    setting::mailboxclear(name);
-    HWND h = item(IDC_LIST_MAILBOX);
-    ListBox_DeleteString(h, ListBox_GetCurSel(h));
-    _enablebuttons();
-  }
+	     MB_ICONQUESTION | MB_YESNO) != IDYES) return;
+  setting::mailboxclear(name);
+  HWND h = item(IDC_LIST_MAILBOX);
+  ListBox_DeleteString(h, ListBox_GetCurSel(h));
+  _enablebuttons();
 }
 
 void
@@ -480,20 +391,6 @@ maindlg::_enablebuttons()
   bool en = ListBox_GetCurSel(item(IDC_LIST_MAILBOX)) != LB_ERR;
   enable(IDC_BUTTON_EDIT, en);
   enable(IDC_BUTTON_DELETE, en);
-}
-
-void
-maindlg::_changeicon()
-{
-  icondlg dlg(_icon);
-  if (dlg.modal(IDD_ICON, hwnd())) {
-    _icon = dlg.setting();
-    iconspec icon(_icon, _iconwidth());
-    seticon(IDC_BUTTON_ICON, icon.symbol);
-    if (!Button_GetCheck(item(IDC_CHECKBOX_ICON))) {
-      setspin(IDC_SPIN_ICON, icon.size, 0, 256);
-    }
-  }
 }
 
 int
@@ -509,21 +406,4 @@ maindlg::_enableicon(bool en)
 {
   enable(IDC_EDIT_ICON, en);
   enable(IDC_SPIN_ICON, en);
-}
-
-extern "C" __declspec(dllexport) void
-settingdlg(HWND hwnd, HINSTANCE, LPSTR cmdln, int)
-{
-  try {
-    INITCOMMONCONTROLSEX icce = {
-      sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES
-    };
-    InitCommonControlsEx(&icce);
-#if USE_REG
-    registory rep(cmdln);
-#else
-    profile rep(cmdln);
-#endif
-    maindlg().modal(IDD_SETTING, hwnd);
-  } catch (...) {}
 }

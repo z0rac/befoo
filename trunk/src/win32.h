@@ -126,6 +126,7 @@ public:
     WIN32_FIND_DATA* _fd() { return this; }
     void _close() { FindClose(_h), _h = INVALID_HANDLE_VALUE; }
   public:
+    find(LPCSTR path) : _h(FindFirstFile(path, _fd())) {}
     find(const string& path) : _h(FindFirstFile(path.c_str(), _fd())) {}
     ~find() { if (_h != INVALID_HANDLE_VALUE) _close(); }
     operator bool() const { return _h != INVALID_HANDLE_VALUE; }
