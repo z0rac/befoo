@@ -1,0 +1,58 @@
+/*
+ * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
+ *
+ * This software comes with ABSOLUTELY NO WARRANTY; for details of
+ * the license terms, see the LICENSE.txt file included with the program.
+ */
+#include "define.h"
+#include <winresrc.h>
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+#pragma code_page(1252)
+
+0 ICON DISCARDABLE "../icons/default/app.ico"
+#include "../icons/default.rc"
+#include "../icons/simple.rc"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "befoo.exe.manifest"
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+1 MENUEX DISCARDABLE
+BEGIN
+    POPUP ""
+    BEGIN
+	MENUITEM "&Fetch", ID_MENU_FETCH
+	MENUITEM "&Show Summary", ID_MENU_SUMMARY, MFT_STRING, MFS_DEFAULT
+	MENUITEM "", 0, MFT_SEPARATOR
+	MENUITEM "&Tray Icon", ID_MENU_TRAYICON
+	MENUITEM "Always on Top", ID_MENU_ALWAYSONTOP
+	MENUITEM "Settings...", ID_MENU_SETTINGS
+	MENUITEM "", 0, MFT_SEPARATOR
+	MENUITEM "&About befoo", ID_MENU_ABOUT
+	MENUITEM "E&xit", ID_MENU_EXIT
+    END
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    ID_TEXT_FETCHING		"Now fetching"
+    ID_TEXT_FETCHED_MAIL	"%d recent(s), %d unseen(s)"
+    ID_TEXT_FETCH_ERROR		"A fetch error occurred."
+    ID_TEXT_BALLOON_TITLE	"You've got mail."
+    ID_TEXT_BALLOON_ERROR	"Mail fetch failed."
+    ID_TEXT_SUMMARY_TITLE	"Summary - " APP_NAME
+    ID_TEXT_SUMMARY_COLUMN	"Subject/Sender/Date/Mailbox/"
+    ID_TEXT_ABOUT		"\
+(C) 2009-2011 TSUBAKIMOTO Hiroya\n\
+License GPLv3+: GNU GPL version 3 or later\
+ <http://gnu.org/licenses/gpl.html>\n\
+This is free software; you are free to change and redistribute it.\
+There is NO WARRANTY, to the extent permitted by law.\
+"
+    ID_TEXT_VERSION             APP_NAME " version " APP_VERSION
+END
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+#pragma code_page(932)
+#include "ja.rc"

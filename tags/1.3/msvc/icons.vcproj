@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="shift_jis"?>
+<VisualStudioProject
+	ProjectType="Visual C++"
+	Version="9.00"
+	Name="icons"
+	ProjectGUID="{7200AD75-CA09-46D9-B54C-AE7C542986D5}"
+	RootNamespace="icons"
+	Keyword="MakeFileProj"
+	TargetFrameworkVersion="196613"
+	>
+	<Platforms>
+		<Platform
+			Name="Win32"
+		/>
+	</Platforms>
+	<ToolFiles>
+	</ToolFiles>
+	<Configurations>
+		<Configuration
+			Name="Icons|Win32"
+			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
+			IntermediateDirectory="$(ConfigurationName)"
+			ConfigurationType="0"
+			>
+			<Tool
+				Name="VCNMakeTool"
+				BuildCommandLine="icons.bat $(ConfigurationName) build $(TargetName)"
+				ReBuildCommandLine="icons.bat $(ConfigurationName) build $(TargetName)"
+				CleanCommandLine="icons.bat $(ConfigurationName) clean $(TargetName)"
+				Output="simple"
+				PreprocessorDefinitions="WIN32;NDEBUG"
+				IncludeSearchPath=""
+				ForcedIncludes=""
+				AssemblySearchPath=""
+				ForcedUsingAssemblies=""
+				CompileAsManaged=""
+			/>
+		</Configuration>
+	</Configurations>
+	<References>
+	</References>
+	<Files>
+		<Filter
+			Name="simple.ico"
+			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
+			>
+			<File
+				RelativePath="..\icons\simple\empty.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\simple\exist.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\simple\fetch.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\icons\simple.rc"
+				>
+			</File>
+		</Filter>
+	</Files>
+	<Globals>
+	</Globals>
+</VisualStudioProject>
