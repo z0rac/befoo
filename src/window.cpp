@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -83,10 +83,10 @@ window::child() const
 }
 
 void
-window::close(bool root) const
+window::close() const
 {
-  assert(_hwnd);
-  PostMessage(root ? GetAncestor(_hwnd, GA_ROOT) : _hwnd, WM_CLOSE, 0, 0);
+  assert(_hwnd && !child());
+  PostMessage(_hwnd, WM_CLOSE, 0, 0);
 }
 
 void
@@ -164,7 +164,7 @@ window::hascursor(bool child) const
   POINT pt;
   if (!GetCursorPos(&pt)) return false;
   HWND h = WindowFromPoint(pt);
-  return h == _hwnd || (child && IsChild(_hwnd, h));
+  return h == _hwnd || child && IsChild(_hwnd, h);
 }
 
 POINT
@@ -239,55 +239,19 @@ window::_wndproc(HWND h, UINT m, WPARAM w, LPARAM l)
   return rc;
 }
 
-namespace {
-  static const POINT smicon =
-    { GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON) };
-
-  HICON iconload(int id)
-  {
-    static const win32::dll shell32("shell32.dll", LOAD_LIBRARY_AS_DATAFILE);
-    HMODULE mod = id >= 0 ? win32::exe : (id = -id, shell32);
-    return HICON(LoadImage(mod, MAKEINTRESOURCE(id), IMAGE_ICON,
-			   smicon.x, smicon.y, LR_DEFAULTCOLOR));
-  }
-
-  HBITMAP iconbmp(int id)
-  {
-    static bool xp = (GetVersion() & 255) <= 5;
-    if (xp) return HBMMENU_CALLBACK;
-    HICON h = iconload(id);
-    if (!h) return NULL;
-    BITMAPINFOHEADER bmi = { sizeof(BITMAPINFOHEADER) };
-    bmi.biWidth = smicon.x, bmi.biHeight = smicon.y;
-    bmi.biPlanes = 1, bmi.biBitCount = 32;
-    LPVOID bits;
-    HBITMAP bmp = CreateDIBSection(NULL, LPBITMAPINFO(&bmi),
-				   DIB_RGB_COLORS, &bits, NULL, 0);
-    if (bmp) {
-      HDC hDC = CreateCompatibleDC(NULL);
-      HGDIOBJ save = SelectObject(hDC, bmp);
-      DrawIconEx(hDC, 0, 0, h, smicon.x, smicon.y, 0, NULL, DI_NORMAL);
-      SelectObject(hDC, save);
-      DeleteDC(hDC);
-    }
-    DestroyIcon(h);
-    return bmp;
-  }
-}
-
 void
 window::_updatemenu(HMENU h)
 {
 #define STATUS (MFS_DISABLED | MFS_CHECKED | MFS_HILITE)
   for (int i = GetMenuItemCount(h); --i >= 0;) {
     MENUITEMINFO info = { sizeof(MENUITEMINFO) };
-    info.fMask = MIIM_STATE | MIIM_ID | MIIM_BITMAP;
+    info.fMask = MIIM_STATE | MIIM_ID;
     if (!GetMenuItemInfo(h, i, TRUE, &info)) continue;
-    command* p = _cmd(info.wID);
-    if (!p) continue;
-    if (!info.hbmpItem && p->icon) info.hbmpItem = iconbmp(p->icon);
+    cmdmap::const_iterator p = _cmdmap.begin();
+    while (p != _cmdmap.end() && p->first != int(info.wID)) ++p;
+    if (p == _cmdmap.end()) continue;
     info.fState &= ~STATUS;
-    info.fState |= p->state(*this) & STATUS;
+    info.fState |= p->second->state(*this) & STATUS;
     SetMenuItemInfo(h, i, TRUE, &info);
   }
 #undef STATUS
@@ -318,12 +282,6 @@ window::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_COMMAND:
     if (!GET_WM_COMMAND_HWND(w, l)) execute(GET_WM_COMMAND_CMD(w,l));
     break;
-  case WM_MEASUREITEM:
-    if (callback(LPMEASUREITEMSTRUCT(l))) return TRUE;
-    break;
-  case WM_DRAWITEM:
-    if (callback(LPDRAWITEMSTRUCT(l))) return TRUE;
-    break;
   }
   return CallWindowProc(_callback, _hwnd, m, w, l);
 }
@@ -334,55 +292,23 @@ window::notify(WPARAM w, LPARAM l)
   return CallWindowProc(_callback, _hwnd, WM_NOTIFY, w, l);
 }
 
-bool
-window::callback(LPMEASUREITEMSTRUCT misp)
-{
-  if (misp->CtlType != ODT_MENU || !_cmd(misp->itemID)) return false;
-  misp->itemWidth += 2;
-  if (misp->itemHeight < UINT(smicon.y)) misp->itemHeight = smicon.y;
-  return true;
-}
-
-bool
-window::callback(LPDRAWITEMSTRUCT disp)
-{
-  if (disp->CtlType != ODT_MENU) return false;
-  command* p = _cmd(disp->itemID);
-  if (!p || !p->icon) return false;
-  HICON h = iconload(p->icon);
-  if (!h) return false;
-  DrawIconEx(disp->hDC, disp->rcItem.left - smicon.x - 2,
-	     (disp->rcItem.top + disp->rcItem.bottom - smicon.y) / 2,
-	     h, smicon.x, smicon.y, 0, NULL, DI_NORMAL);
-  DestroyIcon(h);
-  return true;
-}
-
 void
 window::execute(int id)
 {
-  command* p = _cmd(id);
-  if (p && !(p->state(*this) & MFS_DISABLED)) p->execute(*this);
-}
-
-window::command*
-window::_cmd(int id)
-{
-  for (cmdmap::iterator p = _cmdmap.begin(); p != _cmdmap.end(); ++p) {
-    if (p->first == id) return p->second.get();
+  cmdmap::const_iterator p = _cmdmap.begin();
+  while (p != _cmdmap.end() && p->first != id) ++p;
+  if (p != _cmdmap.end() && !(p->second->state(*this) & MFS_DISABLED)) {
+    p->second->execute(*this);
   }
-  return NULL;
 }
 
 void
 window::addcmd(int id, cmdp cmd)
 {
-  for (cmdmap::iterator p = _cmdmap.begin(); p != _cmdmap.end(); ++p) {
-    if (p->first != id) continue;
-    p->second = cmd;
-    return;
-  }
-  _cmdmap.push_back(pair<int, cmdp>(id, cmd));
+  cmdmap::iterator p = _cmdmap.begin();
+  while (p != _cmdmap.end() && p->first != id) ++p;
+  if (p != _cmdmap.end()) p->second = cmd;
+  else _cmdmap.push_back(pair<int, cmdp>(id, cmd));
 }
 
 void
@@ -396,7 +322,7 @@ window::execute(const menu& menu)
 }
 
 bool
-window::popup(const menu& menu, LPARAM pt)
+window::popup(const menu& menu, DWORD pt)
 {
   _updatemenu(menu);
   UINT cmd = UINT(TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD,

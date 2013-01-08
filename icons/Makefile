@@ -1,18 +1,16 @@
 #
-# Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+# Copyright (C) 2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
 #
 # This software comes with ABSOLUTELY NO WARRANTY; for details of
 # the license terms, see the LICENSE.txt file included with the program.
 #
 TARGETS = simple.ico
-
-BINPREFIX = i686-pc-mingw32-
-LDFLAGS = -mwindows -mdll --no-export-all-symbols
-LDFLAGS += -Wl,--strip-all -Wl,-O1 -Wl,--as-needed
+LDFLAGS = -mno-cygwin --target=i386-mingw32
+LDFLAGS += -Wl,--strip-all -Wl,--as-needed
 
 .SUFFIXES: .rc .res .ico
-.rc.res:	; $(BINPREFIX)windres -O coff -i $< -o $@
-.res.ico:	; $(BINPREFIX)dllwrap $(LDFLAGS) -o $@ $<
+.rc.res:	; windres -O coff -i $< -o $@
+.res.ico:	; dllwrap $(LDFLAGS) -o $@ $<
 
 all: $(TARGETS)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -145,7 +145,11 @@ u8conv::operator()(const string& text)
   }
   int n = 0;
   if (_mb2u(&_mode, _codepage, text.c_str(), NULL, NULL, &n) != S_OK) throw text;
-  win32::textbuf<WCHAR> buf(n + 1);
+  struct buf {
+    LPWSTR data;
+    buf(int size) : data(new WCHAR[size]) {}
+    ~buf() { delete [] data; }
+  } buf(n + 1);
   _mb2u(&_mode, _codepage, text.c_str(), NULL, buf.data, &n);
   buf.data[n] = 0;
   return win32::wstr::mbstr(buf.data, CP_UTF8);
@@ -350,7 +354,7 @@ mail::decoder::eword(const string& text,
       i = p;
     }
     int c = toupper(text[q[1]]);
-    if (q[2] - q[1] != 2 || (c != 'B' && c != 'Q')) continue;
+    if (q[2] - q[1] != 2 || c != 'B' && c != 'Q') continue;
     if (text.find_first_not_of(" \t", pos) < q[0] - 2) {
       result.append(text, pos, q[0] - pos - 2), pos = q[0] - 2;
       conv.reset();
@@ -429,7 +433,7 @@ mail::decoder::token(bool comment)
       break;
     }
     string::size_type n = findf(" \t\"(),.:;<>@[\\]", i);
-    if (n == i || (n != string::npos && _s[n] == '.')) {
+    if (n == i || n != string::npos && _s[n] == '.') {
       switch (_s[n]) {
       case '"': // quoted-text
 	n = findq("\"", n + 1);

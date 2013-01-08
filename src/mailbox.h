@@ -1,6 +1,6 @@
 #ifndef H_MAILBOX /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -81,6 +81,8 @@ public:
 
 class uri {
   string _part[6];
+  static string _encode(const string& s, const char* ex = "");
+  static string _decode(const string& s);
 public:
   uri() {}
   explicit uri(const string& uri);
@@ -146,7 +148,7 @@ public:
     void ssl(const string& host, const string& port, int domain, int verify);
     virtual void login(const uri& uri, const string& passwd) = 0;
     virtual void logout() = 0;
-    virtual size_t fetch(mailbox& mbox, const uri& uri) = 0;
+    virtual int fetch(mailbox& mbox, const uri& uri) = 0;
   };
 public:
   class error : public exception {

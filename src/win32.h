@@ -1,6 +1,6 @@
 #ifndef H_WIN32 /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -56,8 +56,7 @@ public:
   class dll : public module {
     dll(const dll&); void operator=(const dll&); // disable to copy
   public:
-    dll(LPCSTR file, DWORD flags = 0)
-      : module(LoadLibraryEx(file, NULL, flags)) {}
+    dll(LPCSTR file) : module(LoadLibrary(file)) {}
     ~dll() { *this && FreeLibrary(*this); }
   };
 
@@ -89,27 +88,14 @@ public:
     friend class trylock;
   };
 
-  // textbuf - text buffer template
-  template<typename _Ty>
-  struct textbuf {
-    _Ty* data;
-    textbuf() : data(NULL) {}
-    textbuf(size_t n) : data(new _Ty[n]) {}
-    ~textbuf() { delete [] data; }
-    _Ty* operator()(size_t n)
-    { delete [] data, data = NULL; return data = new _Ty[n]; }
-  };
-
   // wstr - wide character string
   class wstr {
     LPWSTR _data;
-    static LPWSTR _new(LPCSTR s, UINT cp);
   public:
     wstr() : _data(NULL) {}
     wstr(LPCWSTR ws) : _data(NULL) { *this = ws; }
     wstr(const wstr& ws) : _data(NULL) { *this = ws; }
-    wstr(LPCSTR s, UINT cp = CP_ACP) : _data(_new(s, cp)) {}
-    wstr(const string& s, UINT cp = CP_ACP) : _data(_new(s.c_str(), cp)) {}
+    wstr(const string& s, UINT cp = CP_ACP);
     ~wstr() { delete [] _data; }
     wstr& operator=(LPCWSTR ws);
     wstr& operator=(const wstr& ws) { return operator=(LPCWSTR(ws)); }
@@ -126,7 +112,6 @@ public:
     WIN32_FIND_DATA* _fd() { return this; }
     void _close() { FindClose(_h), _h = INVALID_HANDLE_VALUE; }
   public:
-    find(LPCSTR path) : _h(FindFirstFile(path, _fd())) {}
     find(const string& path) : _h(FindFirstFile(path.c_str(), _fd())) {}
     ~find() { if (_h != INVALID_HANDLE_VALUE) _close(); }
     operator bool() const { return _h != INVALID_HANDLE_VALUE; }

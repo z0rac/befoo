@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -37,7 +37,7 @@ class pop3 : public mailbox::backend {
 public:
   void login(const uri& uri, const string& passwd);
   void logout();
-  size_t fetch(mailbox& mbox, const uri& uri);
+  int fetch(mailbox& mbox, const uri& uri);
 };
 
 void
@@ -74,7 +74,7 @@ pop3::logout()
   _command("QUIT");
 }
 
-size_t
+int
 pop3::fetch(mailbox& mbox, const uri& uri)
 {
   const list<string>& ignore = mbox.ignore();
@@ -105,7 +105,7 @@ pop3::fetch(mailbox& mbox, const uri& uri)
       (mbox.find(uid) ? &mails : &recents)->push_back(m);
     }
   }
-  size_t count = recents.size();
+  int count = recents.size();
   mails.splice(mails.end(), recents);
   mbox.mails(mails);
   mbox.ignore(ignored);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -160,9 +160,7 @@ mailboxdlg::initialize()
   static const char* const mua[] = {
     "https://www.gmail.com/",
     "http://mail.live.com/",
-    "\"%ProgramFiles%\\Windows Live\\Mail\\wlmail.exe\"",
-    "\"%ProgramFiles%\\Outlook Express\\msimn.exe\"",
-    "emacsclientw.exe -e (wl) -e \"(wl-folder-goto-folder-subr \\\"%inbox\\\")\"",
+    "\"%ProgramFiles%\\Outlook Express\\msimn.exe\" /mail",
     "gnudoitw.exe (wl)(wl-folder-goto-folder-subr \\\"%inbox\\\")"
   };
   for (int i = 0; i < int(sizeof(mua) / sizeof(mua[0])); ++i) {
@@ -272,7 +270,7 @@ mailboxdlg::_env(const string& path)
       const char* p = sp;
       do {
 	p = StrChrI(p, ev[0]);
-      } while (p && StrCmpNI(p, ev.c_str(), static_cast<int>(ev.size())) && *++p);
+      } while (p && StrCmpNI(p, ev.c_str(), ev.size()) && *++p);
       string::size_type n = p ? p - sp : s.size() - t;
       d += s.substr(t, n), t += n;
       if (t < s.size()) d += vars[i], t += ev.size();
@@ -326,21 +324,9 @@ mailboxdlg::_sound(const string& snd)
   return disp;
 }
 
-/** Functions of the class main dialog
- */
-void
-maindlg::mailbox(bool edit)
+string
+editmailbox(const string& name, HWND parent)
 {
-  string name;
-  if (edit) {
-    name = listitem(IDC_LIST_MAILBOX);
-    if (name.empty()) return;
-  }
   mailboxdlg dlg(name);
-  if (!dlg.modal(IDD_MAILBOX, hwnd()) || dlg.name() == name) return;
-  HWND h = item(IDC_LIST_MAILBOX);
-  if (!name.empty()) ListBox_DeleteString(h, ListBox_GetCurSel(h));
-  ListBox_AddString(h, dlg.name().c_str());
-  ListBox_SetCurSel(h, ListBox_GetCount(h) - 1);
-  _enablebuttons();
+  return dlg.modal(IDD_MAILBOX, parent) ? dlg.name() : string();
 }

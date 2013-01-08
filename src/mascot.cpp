@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -201,7 +201,7 @@ tooltips::ellipsis::operator()(LPCWSTR ws) const
     ~buf() { delete [] data; }
   } buf(ws);
   for (LPWSTR p = buf.data; *++p;) {
-    if (*p == '\t') *p = ' ';
+    if (*p == L'\t') *p = L' ';
   }
   static RECT r = { 0, 0, 300, 300 };
   DrawTextW(hDC, buf.data, -1, &r,
@@ -225,7 +225,7 @@ namespace {
     void release() { _trayicon(false); }
     void draw(HDC hDC);
     void raised(bool topmost) { _tips.topmost(topmost); }
-    bool popup(const menu& menu, LPARAM pt);
+    bool popup(const menu& menu, DWORD pt);
     void wakeup(window& source);
     void reset(int type);
     void status(const string& text);
@@ -300,16 +300,16 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     _tips.reset(hascursor());
     break;
   case WM_USER: // from tray icon
-    switch (UINT(l)) {
-    case WM_CONTEXTMENU: m = WM_CONTEXTMENU; break;
-    case NIN_SELECT: m = WM_LBUTTONDOWN; break;
-    case NIN_KEYSELECT: m = WM_LBUTTONDBLCLK; break;
+    switch (l) {
+    case WM_CONTEXTMENU: break;
+    case NIN_SELECT: l = WM_LBUTTONDOWN; break;
+    case NIN_KEYSELECT: l = WM_LBUTTONDBLCLK; break;
     default: return 0;
     }
     POINT pt;
     GetCursorPos(&pt);
     foreground();
-    PostMessage(hwnd(), m, 0, MAKELPARAM(pt.x, pt.y));
+    PostMessage(hwnd(), l, 0, MAKELPARAM(pt.x, pt.y));
     return 0;
   default:
     if (m == _tbcmsg && intray()) _trayicon(true);
@@ -329,7 +329,7 @@ iconwindow::draw(HDC hDC)
 }
 
 bool
-iconwindow::popup(const menu& menu, LPARAM pt)
+iconwindow::popup(const menu& menu, DWORD pt)
 {
   bool t = appwindow::popup(menu, pt);
   if (!t && intray()) {
@@ -369,9 +369,9 @@ iconwindow::balloon(LPCWSTR text, unsigned sec,
     NOTIFYICONDATAW ni = { sizeof(NOTIFYICONDATAW), hwnd() };
     ni.uFlags = NIF_INFO;
     int n = lstrlenW(text);
-    if (n >= int(sizeof(ni.szInfo) / sizeof(ni.szInfo[0]))) {
+    if (n >= sizeof(ni.szInfo) / sizeof(ni.szInfo[0])) {
       n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]);
-      while (n-- && text[n] != '\n') continue;
+      while (n-- && text[n] != L'\n') continue;
       if (n < 0) n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]) - 1;
     }
     lstrcpynW(ni.szInfo, text, n + 1);
@@ -565,14 +565,14 @@ mascotwindow::mascotwindow()
 }
 
 namespace cmd {
-  struct trayicon : public window::command {
+  class trayicon : public window::command {
     void execute(window& source)
     { ((mascotwindow&)source).trayicon(!((mascotwindow&)source).intray()); }
     UINT state(window& source)
     { return ((mascotwindow&)source).intray() ? MFS_CHECKED : 0; }
   };
 
-  struct alwaysontop : public window::command {
+  class alwaysontop : public window::command {
     void execute(window& source) { source.topmost(!source.topmost()); }
     UINT state(window& source)
     {
@@ -581,8 +581,7 @@ namespace cmd {
     }
   };
 
-  struct about : public window::command {
-    about() : window::command(-1001) {}
+  class about : public window::command {
     void execute(window& source)
     {
       ((mascotwindow&)source).balloon(win32::wstr(win32::exe.text(ID_TEXT_ABOUT)), 10,

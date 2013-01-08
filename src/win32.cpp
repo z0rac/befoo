@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -23,16 +23,37 @@
  */
 win32::win32(LPCSTR mutex)
 {
+#if defined(__MINGW32__) && defined(_MT)
+  extern CRITICAL_SECTION __mingwthr_cs;
+  static struct mingwthr_cs {
+    mingwthr_cs() { InitializeCriticalSection(&__mingwthr_cs); }
+    ~mingwthr_cs() { DeleteCriticalSection(&__mingwthr_cs); }
+  } mingwthr_cs;
+#endif
   if (mutex &&
       (!CreateMutex(NULL, TRUE, mutex) ||
        GetLastError() == ERROR_ALREADY_EXISTS)) throw error();
+}
+
+namespace {
+  struct textbuf {
+    char* data;
+    textbuf() : data(NULL) {}
+    textbuf(size_t n) : data(new char[n]) {}
+    ~textbuf() { delete [] data; }
+    char* operator()(size_t n)
+    {
+      delete [] data, data = NULL;
+      return data = new char[n];
+    }
+  };
 }
 
 string
 win32::profile(LPCSTR section, LPCSTR key, LPCSTR file)
 {
   if (!file) return string();
-  textbuf<char> buf;
+  textbuf buf;
   DWORD size = 0;
   for (DWORD n = 0; n <= size + 2;) {
     n += 256;
@@ -51,9 +72,9 @@ win32::profile(LPCSTR section, LPCSTR key, LPCSTR value, LPCSTR file)
 string
 win32::xenv(const string& s)
 {
-  textbuf<char> buf;
-  DWORD n = static_cast<DWORD>(s.size() + 1);
-  n = ExpandEnvironmentStrings(s.c_str(), buf(n), n);
+  size_t n = s.size() + 1;
+  textbuf buf(n);
+  n = ExpandEnvironmentStrings(s.c_str(), buf.data, n);
   if (n > s.size() + 1) ExpandEnvironmentStrings(s.c_str(), buf(n), n);
   return buf.data;
 }
@@ -68,10 +89,12 @@ win32::_datetime(time_t utc, DWORD flags, _dtfn fn)
     FileTimeToLocalFileTime(&ft, &lt);
     FileTimeToSystemTime(&lt, &st);
   }
-  textbuf<char> buf;
   int n = fn(LOCALE_USER_DEFAULT, flags, &st, NULL, NULL, 0);
-  return n && fn(LOCALE_USER_DEFAULT, flags, &st, NULL, buf(n), n) ?
-    string(buf.data, n - 1) : string();
+  textbuf buf(n);
+  if (n && fn(LOCALE_USER_DEFAULT, flags, &st, NULL, buf.data, n)) {
+    return buf.data;
+  }
+  return string();
 }
 
 HANDLE
@@ -79,7 +102,7 @@ win32::shell(const string& cmd, unsigned flags)
 {
   assert(!(flags & ~(SEE_MASK_CONNECTNETDRV | SEE_MASK_FLAG_DDEWAIT |
 		     SEE_MASK_FLAG_NO_UI | SEE_MASK_NOCLOSEPROCESS)));
-  textbuf<char> tmp(cmd.size() + 1);
+  textbuf tmp(cmd.size() + 1);
   lstrcpyA(tmp.data, cmd.c_str());
   PathRemoveArgs(tmp.data);
   string::size_type i = lstrlen(tmp.data);
@@ -93,6 +116,10 @@ win32::shell(const string& cmd, unsigned flags)
 }
 
 #ifdef _MT
+#if defined(__MINGW32__)
+extern "C" void __mingwthr_run_key_dtors(void);
+#endif
+
 HANDLE
 win32::thread(void (*func)(void*), void* param)
 {
@@ -105,6 +132,9 @@ win32::thread(void (*func)(void*), void* param)
       _thread th = *reinterpret_cast<_thread*>(param);
       SetEvent(th._event);
       try { th._func(th._param); } catch (...) {}
+#if defined(__MINGW32__)
+      __mingwthr_run_key_dtors();
+#endif
       return 0;
     }
   public:
@@ -151,21 +181,22 @@ win32::cheapsize()
 size_t
 win32::heapsize()
 {
-  HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPHEAPLIST, 0);
-  if (h == HANDLE(-1)) return 0;
   size_t size = 0;
-  HEAPLIST32 hl = { sizeof(HEAPLIST32) };
-  if (Heap32ListFirst(h, &hl)) {
-    do {
-      HEAPENTRY32 he = { sizeof(HEAPENTRY32) };
-      if (Heap32First(&he, hl.th32ProcessID, hl.th32HeapID)) {
-	do {
-	  if (!(he.dwFlags & LF32_FREE)) size += he.dwBlockSize;
-	} while (Heap32Next(&he));
-      }
-    } while (Heap32ListNext(h, &hl));
+  HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPHEAPLIST, 0);
+  if (h != HANDLE(-1)) {
+    HEAPLIST32 hl = { sizeof(HEAPLIST32) };
+    if (Heap32ListFirst(h, &hl)) {
+      do {
+	HEAPENTRY32 he = { sizeof(HEAPENTRY32) };
+	if (Heap32First(&he, hl.th32ProcessID, hl.th32HeapID)) {
+	  do {
+	    if (!(he.dwFlags & LF32_FREE)) size += he.dwBlockSize;
+	  } while (Heap32Next(&he));
+	}
+      } while (Heap32ListNext(h, &hl));
+    }
+    CloseHandle(h);
   }
-  CloseHandle(h);
   return size;
 }
 #endif
@@ -189,7 +220,7 @@ win32::module::operator()(LPCSTR name, FARPROC def) const
 string
 win32::module::text(UINT id) const
 {
-  textbuf<char> buf;
+  textbuf buf;
   int size = 0;
   for (int n = 0; n <= size + 1;) {
     n += 256;
@@ -202,7 +233,7 @@ string
 win32::module::textf(UINT id, ...) const
 {
   string s = text(id);
-  textbuf<char> buf;
+  textbuf buf;
   int size = 0;
   for (int n = 0; n <= size + 1;) {
     n += 512;
@@ -242,14 +273,14 @@ const win32::module win32::exe(GetModuleHandle(NULL));
 /*
  * Functions of the class win32::wstr
  */
-LPWSTR
-win32::wstr::_new(LPCSTR s, UINT cp)
+win32::wstr::wstr(const string& s, UINT cp)
+  : _data(NULL)
 {
-  int size = MultiByteToWideChar(cp, 0, s, -1, NULL, 0);
-  if (!size) return NULL;
-  LPWSTR ws = new WCHAR[size];
-  MultiByteToWideChar(cp, 0, s, -1, ws, size);
-  return ws;
+  int size = MultiByteToWideChar(cp, 0, s.c_str(), -1, NULL, 0);
+  if (size) {
+    _data = new WCHAR[size];
+    MultiByteToWideChar(cp, 0, s.c_str(), -1, _data, size);
+  }
 }
 
 win32::wstr&
@@ -265,24 +296,29 @@ win32::wstr&
 win32::wstr::operator+=(LPCWSTR ws)
 {
   size_t n = ws ? lstrlenW(ws) : 0;
-  if (!n) return *this;
-  size_t l = _data ? lstrlenW(_data) : 0;
-  LPWSTR data = new WCHAR[l + n + 1];
-  if (l) lstrcpyW(data, _data);
-  lstrcpyW(data + l, ws);
-  delete [] _data;
-  _data = data;
+  if (n) {
+    size_t l = _data ? lstrlenW(_data) : 0;
+    LPWSTR data = new WCHAR[l + n + 1];
+    if (l) lstrcpyW(data, _data);
+    lstrcpyW(data + l, ws);
+    delete [] _data;
+    _data = data;
+  }
   return *this;
 }
 
 string
 win32::wstr::mbstr(LPCWSTR ws, UINT cp)
 {
-  if (!ws) return string();
-  textbuf<char> buf;
-  int n = WideCharToMultiByte(cp, 0, ws, -1, NULL, 0, NULL, NULL);
-  return n && WideCharToMultiByte(cp, 0, ws, -1, buf(n), n, NULL, NULL) ?
-    string(buf.data, n - 1) : string();
+  if (ws) {
+    int size = WideCharToMultiByte(cp, 0, ws, -1, NULL, 0, NULL, NULL);
+    if (size) {
+      textbuf buf(size);
+      WideCharToMultiByte(cp, 0, ws, -1, buf.data, size, NULL, NULL);
+      return string(buf.data, size - 1);
+    }
+  }
+  return string();
 }
 
 /*
