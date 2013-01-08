@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -64,8 +64,8 @@ summary::summary(const window& parent)
     _column(3), _order(1)
 {
   static commctrl listview(ICC_LISTVIEW_CLASSES);
-  style(LVS_REPORT | LVS_SINGLESEL);
-  (void)ListView_SetExtendedListViewStyle
+  style(LVS_REPORT | LVS_SINGLESEL, WS_EX_CLIENTEDGE);
+  ListView_SetExtendedListViewStyle
     (hwnd(), LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_LABELTIP);
   setting::preferences("summary")["sort"](_column)(_order);
   show();
@@ -128,7 +128,7 @@ void
 summary::_initialize()
 {
   list<string> column = win32::exe.texts(ID_TEXT_SUMMARY_COLUMN);
-  const int n = static_cast<int>(column.size());
+  const int n = column.size();
   list<int> width = setting::preferences("summary")["columns"].split<int>();
   list<int>::iterator wp = width.begin();
   LVCOLUMN col = { LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM };
@@ -137,7 +137,7 @@ summary::_initialize()
     col.cx = (wp != width.end() ? *wp++ :
 	      col.iSubItem ? (ex - cx) / (n - col.iSubItem) : ex / 2);
     col.pszText = LPSTR(p->c_str());
-    (void)ListView_InsertColumn(hwnd(), col.iSubItem, &col);
+    ListView_InsertColumn(hwnd(), col.iSubItem, &col);
     cx += col.cx;
     ++col.iSubItem;
   }
@@ -149,14 +149,14 @@ summary::_sort(int column, int order)
   HWND hdr = ListView_GetHeader(hwnd());
   HDITEM hdi = { HDI_FORMAT };
   if (column != _column) {
-    (void)Header_GetItem(hdr, _column, &hdi);
+    Header_GetItem(hdr, _column, &hdi);
     hdi.fmt &= ~(HDF_SORTDOWN | HDF_SORTUP);
-    (void)Header_SetItem(hdr, _column, &hdi);
+    Header_SetItem(hdr, _column, &hdi);
   }
-  (void)Header_GetItem(hdr, column, &hdi);
+  Header_GetItem(hdr, column, &hdi);
   hdi.fmt &= ~(HDF_SORTDOWN | HDF_SORTUP);
   hdi.fmt |= order > 0 ? HDF_SORTUP : HDF_SORTDOWN;
-  (void)Header_SetItem(hdr, column, &hdi);
+  Header_SetItem(hdr, column, &hdi);
   _column = column, _order = order;
   SendMessage(hwnd(), column < DATE ? LVM_SORTITEMSEX : LVM_SORTITEMS,
 	      WPARAM(this), LPARAM(&compare));
@@ -181,19 +181,29 @@ summary::_compare(LPARAM s1, LPARAM s2) const
     }
   }
 
-  win32::textbuf<WCHAR> tb[2];
-  WPARAM si[] = { s1, s2 };
+  struct textbuf {
+    LPWSTR data;
+    textbuf() : data(NULL) {}
+    ~textbuf() { delete [] data; }
+    LPWSTR operator()(size_t n)
+    {
+      assert(n);
+      delete [] data, data = NULL;
+      return data = new WCHAR[n];
+    }
+  } tb[2];
+  int si[] = { s1, s2 };
   for (int i = 0; i < 2; ++i) {
     LVITEMW lv = { LVIF_TEXT };
     lv.iSubItem = _column;
     lv.cchTextMax = 256;
-    LRESULT n;
+    int n;
     do {
       lv.pszText = tb[i](lv.cchTextMax <<= 1);
       n = SendMessage(hwnd(), LVM_GETITEMTEXTW, si[i], LPARAM(&lv));
     } while (n == lv.cchTextMax - 1);
   }
-  return lstrcmpiW(tb[0].data, tb[1].data) * _order;
+  return _wcsicmp(tb[0].data, tb[1].data) * _order;
 }
 
 int CALLBACK
@@ -205,15 +215,17 @@ summary::compare(LPARAM l1, LPARAM l2, LPARAM lsort)
 void
 summary::_open()
 {
-  int item = ListView_GetNextItem(hwnd(), -1, LVNI_SELECTED);
-  if (item < 0) return;
-  LVITEM lv = { LVIF_PARAM, item };
-  if (!ListView_GetItem(hwnd(), &lv)) return;
-  size_t i = 0;
-  while (_mboxes[i].first <= size_t(lv.lParam)) ++i;
-  string mua;
-  setting::mailbox(_mboxes[i].second)["mua"].sep(0)(mua);
-  if (!mua.empty() && win32::shell(mua)) close(true);
+  int item = ListView_GetNextItem(hwnd(), WPARAM(-1), LVNI_SELECTED);
+  if (item >= 0) {
+    LVITEM lv = { LVIF_PARAM, item };
+    if (ListView_GetItem(hwnd(), &lv)) {
+      size_t i = 0;
+      while (_mboxes[i].first <= size_t(lv.lParam)) ++i;
+      string mua;
+      setting::mailbox(_mboxes[i].second)["mua"].sep(0)(mua);
+      if (!mua.empty()) win32::shell(mua);
+    }
+  }
 }
 
 int
@@ -255,8 +267,8 @@ summary::item::item(const window& w)
 {
   ZeroMemory(this, sizeof(LVITEMA));
   mask = LVIF_PARAM;
-  lParam = iItem = ListView_GetItemCount(_h);
-  (void)ListView_InsertItem(_h, this);
+  iItem = lParam = ListView_GetItemCount(_h);
+  ListView_InsertItem(_h, this);
   mask = LVIF_TEXT;
 }
 

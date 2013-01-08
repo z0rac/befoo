@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -87,8 +87,7 @@ model::model()
       s["period"](period = 15);
       s["sound"].sep(0)(mb->sound);
       mb->period = period > 0 ? period * 60000U : 0;
-      list<string> cache = setting::cache(mb->uristr());
-      mb->ignore(cache);
+      mb->ignore(setting::cache(mb->uristr()));
       hold.release();
       last = last ? last->next(mb) : (_mailboxes = mb);
     }
@@ -176,8 +175,8 @@ model::_done(mbox& mb)
   if (--_fetching) return;
 
   LOG("Done all fetching." << endl);
-  size_t recent = 0;
-  size_t unseen = 0;
+  int recent = 0;
+  int unseen = 0;
   for (const mailbox* p = _mailboxes; p; p = p->next()) {
     int n = p->recent();
     if (n > 0) recent += n;
@@ -300,10 +299,10 @@ repository::_prepare()
 {
   char path[MAX_PATH];
   if (appendix(INI_FILE, path) ||
-      (SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
-		       NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
-       PathAppend(path, APP_NAME "\\" INI_FILE) &&
-       MakeSureDirectoryPathExists(path))) {
+      SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
+		      NULL, SHGFP_TYPE_CURRENT, path) == 0 &&
+      PathAppend(path, APP_NAME "\\" INI_FILE) &&
+      MakeSureDirectoryPathExists(path)) {
     LOG("Using the setting file: " << path << endl);
     _path = path;
     HANDLE h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, 0,
@@ -340,7 +339,7 @@ repository::edit()
 namespace cmd {
   struct fetch : public window::command {
     model& _model;
-    fetch(model& model) : window::command(-265), _model(model) {}
+    fetch(model& model) : _model(model) {}
     void execute(window& source) { _model.fetch(source); }
     UINT state(window&) { return _model.fetching() ? MFS_DISABLED : 0; }
   };
@@ -348,7 +347,7 @@ namespace cmd {
   struct summary : public window::command {
     model& _model;
     auto_ptr<window> _summary;
-    summary(model& model) : window::command(-281), _model(model) {}
+    summary(model& model) : _model(model) {}
     void execute(window&)
     {
       LOG("Open the summary window." << endl);
@@ -362,8 +361,7 @@ namespace cmd {
     repository& _rep;
     DWORD _tid;
     HANDLE _thread;
-    setting(repository& rep) : window::command(-274),
-			       _rep(rep), _tid(GetCurrentThreadId()), _thread(NULL) {}
+    setting(repository& rep) : _rep(rep), _tid(GetCurrentThreadId()), _thread(NULL) {}
     ~setting() { _thread && WaitForSingleObject(_thread, INFINITE); }
     void execute(window&) { if (!busy()) _thread = win32::thread(edit, (void*)this); }
     UINT state(window&) { return busy() ? MFS_DISABLED : 0; }
@@ -383,7 +381,6 @@ namespace cmd {
   };
 
   struct exit : public window::command {
-    exit() : window::command(-28) {}
     void execute(window&) { LOG("Exit." << endl); PostQuitMessage(0); }
   };
 

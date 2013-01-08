@@ -1,14 +1,11 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
 #include "mailbox.h"
-#include "win32.h"
 #include <cassert>
-#include <cstdlib>
-#include <cstring>
 
 #if _DEBUG >= 2
 #include <iostream>
@@ -35,7 +32,6 @@ class imap4 : public mailbox::backend {
   // response - imap4 response type.
   struct response { string tag, type, data; };
 
-  static string _utf7m(const string& s);
   string _tag();
   static string _arg(const string& arg);
   string _command(const char* cmd, const char* res = NULL);
@@ -43,7 +39,7 @@ class imap4 : public mailbox::backend {
   { return _command(cmd.c_str(), res); }
   response _response();
   string _read();
-  unsigned _seqinit() const { return unsigned(ptrdiff_t(this)) + unsigned(time(NULL)); }
+  unsigned _seqinit() const { return unsigned(this) + unsigned(time(NULL)); }
 #ifdef _DEBUG
   using backend::read;
   string read()
@@ -57,7 +53,7 @@ public:
   imap4() : _seq(_seqinit()) {}
   void login(const uri& uri, const string& passwd);
   void logout();
-  size_t fetch(mailbox& mbox, const uri& uri);
+  int fetch(mailbox& mbox, const uri& uri);
 };
 
 void
@@ -66,7 +62,7 @@ imap4::login(const uri& uri, const string& passwd)
   static const char notimap[] = "server not IMAP4 compliant";
   response resp = _response();
   bool preauth = resp.type == "PREAUTH";
-  if (resp.tag != "*" || (!preauth && resp.type != "OK")) {
+  if (resp.tag != "*" || !preauth && resp.type != "OK") {
     throw mailbox::error(notimap);
   }
   bool imap = false;
@@ -101,24 +97,25 @@ imap4::logout()
   _command("LOGOUT");
 }
 
-size_t
+int
 imap4::fetch(mailbox& mbox, const uri& uri)
 {
   const string& path = uri[uri::path];
-  _command("EXAMINE" + _arg(!path.empty() ? _utf7m(path) : "INBOX"));
-  list<mail> mails;
-  list<mail> recents;
+  _command("EXAMINE" + _arg(path.empty() ? "INBOX" : path));
+  list<mail> fetched;
+  size_t copies = 0;
   for (parser ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
     string uid = ids.token();
     const mail* p = mbox.find(uid);
     if (p) {
-      mails.push_back(*p);
+      fetched.push_back(*p);
+      ++copies;
       continue;
     }
     LOG("Fetch mail: " << uid << endl);
     parser parse(_command("UID FETCH " + uid +
-			  " BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]",
-			  "FETCH"));
+			   " BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]",
+			   "FETCH"));
     parse.token(); // drop sequence#
     if (parse.peek() != '(') throw mailbox::error(parse.data());
     for (parse = parse.token(true); parse;) {
@@ -127,46 +124,13 @@ imap4::fetch(mailbox& mbox, const uri& uri)
       if (item == "BODY[HEADER.FIELDS (SUBJECT FROM DATE)]") {
 	mail m(uid);
 	m.header(value);
-	recents.push_back(m);
+	fetched.push_back(m);
 	break;
       }
     }
   }
-  size_t count = recents.size();
-  mails.splice(mails.end(), recents);
-  mbox.mails(mails);
-  return count;
-}
-
-string
-imap4::_utf7m(const string& s)
-{
-  string::size_type i = 0;
-  while (i < s.size() && s[i] >= ' ' && s[i] <= '~' && s[i] != '&') ++i;
-  if (i == s.size()) return s;
-
-  // encode path by modified UTF-7.
-  string result = s.substr(0, i);
-  win32::wstr ws = s.c_str() + i;
-  for (LPCWSTR p = ws; *p;) {
-    result += '&';
-    if (*p != '&') {
-      static const char b64[] =
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
-      unsigned wc = 0;
-      int n = 0;
-      while (*p && (*p < ' ' || *p > '~')) {
-	wc = (wc << 16) + *p++, n += 16;
-	for (; n >= 6; n -= 6) result += b64[(wc >> (n - 6)) & 63];
-      }
-      if (n) result += b64[(wc << (6 - n)) & 63];
-    } else ++p;
-    result += '-';
-    for (; *p && *p >= ' ' && *p <= '~' && *p != '&'; ++p) {
-      result += static_cast<string::value_type>(*p);
-    }
-  }
-  return result;
+  mbox.mails(fetched);
+  return int(fetched.size() - copies);
 }
 
 string
@@ -341,7 +305,7 @@ imap4::parser::token(bool open)
       if (result.size() > 1) {
 	switch (result[0]) {
 	default:
-	  if (!open || (result[0] != '(' && result[0] != '[')) break;
+	  if (!open || result[0] != '(' && result[0] != '[') break;
 	case '"':
 	  result.assign(result, 1, result.size() - 2);
 	  break;

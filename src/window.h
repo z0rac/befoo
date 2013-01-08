@@ -1,6 +1,6 @@
 #ifndef H_WINDOW /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -31,8 +31,6 @@ protected:
   virtual void release() {}
   virtual void resize(int, int) {}
   virtual LRESULT notify(WPARAM w, LPARAM l);
-  virtual bool callback(LPMEASUREITEMSTRUCT misp);
-  virtual bool callback(LPDRAWITEMSTRUCT disp);
 
   struct commctrl {
     commctrl(DWORD icc);
@@ -46,7 +44,7 @@ protected:
     operator HMENU() const { return _h; }
   };
   void execute(const menu& menu);
-  virtual bool popup(const menu& menu, LPARAM pt);
+  virtual bool popup(const menu& menu, DWORD pt);
 public:
   window(LPCSTR classname, LPCSTR menu = NULL, HWND owner = NULL);
   window(LPCSTR classname, const window& parent, int id = -1);
@@ -57,7 +55,7 @@ public:
   HWND hwnd() const { return _hwnd; }
   bool visible() const { return IsWindowVisible(_hwnd) != 0; }
   bool child() const;
-  void close(bool root = false) const;
+  void close() const;
   void show(bool show = true, bool active = true) const;
   void foreground(bool force = false) const;
   bool topmost() const;
@@ -73,8 +71,7 @@ public:
   class command {
     command(const command&); void operator=(const command&); // disable to copy
   public:
-    const int icon;
-    command(int icon = 0) : icon(icon) {}
+    command() {}
     virtual ~command() {}
     virtual void execute(window& source) = 0;
     virtual UINT state(window&) { return 0; }
@@ -91,7 +88,6 @@ public:
 private:
   typedef list< pair<int, cmdp> > cmdmap;
   cmdmap _cmdmap;
-  command* _cmd(int id);
 public:
   class timer {
     UINT _elapse;

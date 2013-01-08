@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -7,7 +7,6 @@
 #include "winsock.h"
 #include "win32.h"
 #include <cassert>
-#include <climits>
 
 #ifdef _DEBUG
 #include <iostream>
@@ -27,12 +26,14 @@
  * Functions of the class winsock
  */
 namespace {
+  static win32::mex _key;
+
   int WSAAPI
   _getaddrinfo(const char* node, const char* service,
 	       const struct addrinfo* hints, struct addrinfo** res)
   {
-    assert(hints && hints->ai_flags == 0 &&
-	   hints->ai_socktype == SOCK_STREAM && hints->ai_protocol == 0);
+    assert(node && service && hints);
+    assert(hints->ai_flags == 0 && hints->ai_socktype == SOCK_STREAM && hints->ai_protocol == 0);
 
     LOG("Call _getaddrinfo()" << endl);
 
@@ -42,10 +43,11 @@ namespace {
     };
     if (ai.ai_family != AF_INET) return EAI_FAMILY;
 
-    if (service) { // service to port number
+    { // service to port number
       char* end;
       unsigned n = strtoul(service, &end, 10);
       if (*end || n > 65535) {
+	win32::mex::lock lockup(_key);
 	struct servent* ent = getservbyname(service, "tcp");
 	if (!ent) return h_errno;
 	sa.sin_port = ent->s_port;
@@ -54,13 +56,13 @@ namespace {
       }
     }
 
-    if (node && !*node) node = NULL;
     sa.sin_addr.s_addr = inet_addr(node);
     if (sa.sin_addr.s_addr == INADDR_NONE) {
+      win32::mex::lock lockup(_key);
       struct hostent* ent = gethostbyname(node);
       if (!ent) return h_errno;
       if (ent->h_addrtype != AF_INET ||
-	  ent->h_length != sizeof(sa.sin_addr)) return EAI_FAMILY;
+	  ent->h_length != sizeof(sa.sin_addr.s_addr)) return EAI_FAMILY;
       char** hal = ent->h_addr_list;
       int n = 0;
       while (hal && hal[n]) ++n;
@@ -113,7 +115,7 @@ winsock::getaddrinfo(const string& host, const string& port, int domain)
 {
   struct addrinfo hints = { 0, domain, SOCK_STREAM };
   struct addrinfo* res;
-  int err = _get(idn(host).c_str(), port.c_str(), &hints, &res);
+  int err = _get(host.c_str(), port.c_str(), &hints, &res);
   if (err == 0) return res;
   WSASetLastError(err);
   throw error();
@@ -133,12 +135,12 @@ winsock::tcpclient&
 winsock::tcpclient::connect(const string& host, const string& port, int domain)
 {
   shutdown();
-  LOG("Connect: " << host << "(" << idn(host) << "):" << port << endl);
+  LOG("Connect: " << host << ":" << port << endl);
   struct addrinfo* ai = getaddrinfo(host, port, domain);
   for (struct addrinfo* p = ai; p; p = p->ai_next) {
     SOCKET s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (s == INVALID_SOCKET) continue;
-    if (::connect(s, p->ai_addr, int(p->ai_addrlen)) == 0) {
+    if (::connect(s, p->ai_addr, p->ai_addrlen) == 0) {
       _socket = s;
       break;
     }
@@ -165,18 +167,18 @@ winsock::tcpclient::shutdown()
 size_t
 winsock::tcpclient::recv(char* buf, size_t size)
 {
-  int n = ::recv(_socket, buf, int(min<size_t>(size, INT_MAX)), 0);
-  if (n >= 0) return n;
-  if (WSAGetLastError() != WSAEWOULDBLOCK) throw error();
+  int n = ::recv(_socket, buf, size, 0);
+  if (n > 0) return size_t(n);
+  if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) throw error();
   return 0;
 }
 
 size_t
 winsock::tcpclient::send(const char* data, size_t size)
 {
-  int n = ::send(_socket, data, int(min<size_t>(size, INT_MAX)), 0);
-  if (n >= 0) return n;
-  if (WSAGetLastError() != WSAEWOULDBLOCK) throw error();
+  int n = ::send(_socket, data, size, 0);
+  if (n > 0) return size_t(n);
+  if (n == 0 || WSAGetLastError() != WSAEWOULDBLOCK) throw error();
   return 0;
 }
 
@@ -206,7 +208,7 @@ winsock::tcpclient::wait(int op, int sec)
   fd_set* fdsp[2] = { NULL, NULL };
   fdsp[op != 0] = &fds;
   timeval tv = { sec, 0 };
-  int n = select(0, fdsp[0], fdsp[1], NULL, sec < 0 ? NULL : &tv);
+  int n = select(_socket + 1, fdsp[0], fdsp[1], NULL, sec < 0 ? NULL : &tv);
   if (n == 0 && sec) {
     WSASetLastError(WSAETIMEDOUT);
     n = -1;
@@ -224,8 +226,8 @@ winsock::tlsclient::tlsclient(DWORD proto)
   SCHANNEL_CRED auth = { SCHANNEL_CRED_VERSION };
   auth.grbitEnabledProtocols = proto;
   auth.dwFlags = (SCH_CRED_USE_DEFAULT_CREDS | SCH_CRED_MANUAL_CRED_VALIDATION);
-  _ok(AcquireCredentialsHandle(NULL, const_cast<SEC_CHAR*>(UNISP_NAME_A),
-			       SECPKG_CRED_OUTBOUND, NULL, &auth, NULL, NULL, &_cred, NULL));
+  _ok(AcquireCredentialsHandle(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND,
+			       NULL, &auth, NULL, NULL, &_cred, NULL));
 }
 
 winsock::tlsclient::~tlsclient()
@@ -286,7 +288,7 @@ size_t
 winsock::tlsclient::_copyextra(size_t i, size_t size)
 {
   size_t n = min<size_t>(_extra.size(), size - i);
-  CopyMemory(_buf.data + i, _extra.data(), n);
+  memcpy(_buf.data + i, _extra.data(), n);
   _extra.erase(0, n);
   return n;
 }
@@ -300,16 +302,16 @@ winsock::tlsclient::connect()
     _buf(buflen);
     size_t n = 0;
     while (ss == SEC_I_CONTINUE_NEEDED) {
-      size_t t = !_extra.empty() ?
-	_copyextra(n, buflen) :
-	_recv(_buf.data + n, buflen - n);
-      if (t == 0) throw error(_emsg(SEC_E_INCOMPLETE_MESSAGE));
-      n += t;
-      SecBuffer in[2] = { { DWORD(n), SECBUFFER_TOKEN, _buf.data } };
+      n += _copyextra(n, buflen);
+      if (n == 0) n = _recv(_buf.data, buflen);
+      SecBuffer in[2] = { { n, SECBUFFER_TOKEN, _buf.data } };
       SecBufferDesc inb = { SECBUFFER_VERSION, 2, in };
       ss = _token(&inb);
       if (ss == SEC_E_INCOMPLETE_MESSAGE) {
-	if (n < buflen) ss = SEC_I_CONTINUE_NEEDED;
+	if (n < buflen) {
+	  n += _recv(_buf.data + n, buflen - n);
+	  ss = SEC_I_CONTINUE_NEEDED;
+	}
       } else {
 	n = 0;
 	if (in[1].BufferType == SECBUFFER_EXTRA) {
@@ -335,9 +337,9 @@ winsock::tlsclient::shutdown()
   if (_avail) {
     _recvq.clear(), _extra.clear();
     try {
-#if __MINGW32__ && defined(ApplyControlToken) // for MinGWs bug.
+#if defined(__MINGW32__) // for MinGWs bug.
       win32::dll secur32("secur32.dll");
-      typedef SECURITY_STATUS (WINAPI* act)(PCtxtHandle, PSecBufferDesc);
+      typedef SECURITY_STATUS (WINAPI* act)(PCtxtHandle,PSecBufferDesc);
       act ApplyControlTokenA = act(secur32("ApplyControlToken"));
 #endif
       DWORD value = SCHANNEL_SHUTDOWN;
@@ -357,8 +359,8 @@ winsock::tlsclient::shutdown()
 bool
 winsock::tlsclient::verify(const string& cn, DWORD ignore)
 {
-  LOG("Auth: " << cn << "(" << idn(cn) << ")... ");
-  win32::wstr name(idn(cn));
+  LOG("Auth: " << cn << " ... ");
+  win32::wstr name(cn);
   PCCERT_CHAIN_CONTEXT chain;
   {
     PCCERT_CONTEXT context;
@@ -372,9 +374,7 @@ winsock::tlsclient::verify(const string& cn, DWORD ignore)
   CERT_CHAIN_POLICY_STATUS status = { sizeof(CERT_CHAIN_POLICY_STATUS) };
   {
     CERT_CHAIN_POLICY_PARA policy = { sizeof(CERT_CHAIN_POLICY_PARA) };
-    SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl;
-    ZeroMemory(&ssl, sizeof(ssl));
-    ssl.cbStruct = sizeof(ssl);
+    SSL_EXTRA_CERT_CHAIN_POLICY_PARA ssl = { sizeof(SSL_EXTRA_CERT_CHAIN_POLICY_PARA) };
     ssl.dwAuthType = AUTHTYPE_SERVER;
     ssl.fdwChecks = ignore;
     ssl.pwszServerName = const_cast<LPWSTR>(LPCWSTR(name));
@@ -394,7 +394,7 @@ winsock::tlsclient::recv(char* buf, size_t size)
   assert(_avail);
   if (!_recvq.empty()) {
     size_t n = min<size_t>(size, _recvq.size() - _rest);
-    CopyMemory(buf, _recvq.data() + _rest, n);
+    memcpy(buf, _recvq.data() + _rest, n);
     _rest += n;
     if (_rest == _recvq.size()) _recvq.clear();
     return n;
@@ -403,18 +403,13 @@ winsock::tlsclient::recv(char* buf, size_t size)
   size_t done = 0;
   size_t n = 0;
   while (size && !done) {
-    size_t t = !_extra.empty() ?
-      _copyextra(n, _sizes.cbMaximumMessage) :
+    n += !_extra.empty() ? _copyextra(n, _sizes.cbMaximumMessage) :
       _recv(_buf.data + n, _sizes.cbMaximumMessage - n);
-    if (t == 0) {
-      if (n == 0) break;
-      throw error(_emsg(SEC_E_INCOMPLETE_MESSAGE));
-    }
-    n += t;
-    SecBuffer dec[4] = { { DWORD(n), SECBUFFER_DATA, _buf.data } };
+    SecBuffer dec[4] = { { n, SECBUFFER_DATA, _buf.data } };
     SecBufferDesc decb = { SECBUFFER_VERSION, 4, dec };
     SECURITY_STATUS ss = DecryptMessage(&_ctx, &decb, 0, NULL);
-    if (ss == SEC_E_INCOMPLETE_MESSAGE && n < _sizes.cbMaximumMessage) continue;
+    if (ss == SEC_E_INCOMPLETE_MESSAGE &&
+	n < _sizes.cbMaximumMessage) continue;
     _ok(ss), n = 0;
     string extra;
     for (int i = 0; i < 4; ++i) {
@@ -424,7 +419,7 @@ winsock::tlsclient::recv(char* buf, size_t size)
 	  size_t n = 0;
 	  if (done < size) {
 	    n = min<size_t>(size - done, dec[i].cbBuffer);
-	    CopyMemory(buf + done, dec[i].pvBuffer, n);
+	    memcpy(buf + done, dec[i].pvBuffer, n);
 	    done += n;
 	  }
 	  _recvq.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
@@ -454,86 +449,14 @@ winsock::tlsclient::send(const char* data, size_t size)
     size = min<size_t>(size, _sizes.cbMaximumMessage);
     SecBuffer enc[4] = {
       { _sizes.cbHeader, SECBUFFER_STREAM_HEADER, _buf.data },
-      { DWORD(size), SECBUFFER_DATA, _buf.data + _sizes.cbHeader },
+      { size, SECBUFFER_DATA, _buf.data + _sizes.cbHeader },
       { _sizes.cbTrailer, SECBUFFER_STREAM_TRAILER,
 	_buf.data + _sizes.cbHeader + size }
     };
     SecBufferDesc encb = { SECBUFFER_VERSION, 4, enc };
-    CopyMemory(_buf.data + _sizes.cbHeader, data, size);
+    memcpy(_buf.data + _sizes.cbHeader, data, size);
     _ok(EncryptMessage(&_ctx, 0, &encb, 0));
     _sendtoken(_buf.data, enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
   }
   return size;
-}
-
-/*
- * Functions of IDN
- */
-string
-winsock::idn(const string& host)
-{
-  string::size_type i = 0;
-  while (i < host.size() && BYTE(host[i]) < 0x80) ++i;
-  return i == host.size() ? host : idn(win32::wstr(host));
-}
-
-string
-winsock::idn(LPCWSTR host)
-{
-  struct lambda {
-    static string encode(LPCWSTR input, size_t length, size_t n) {
-      static const error overflow("punycode overflow");
-      string output;
-      size_t delta = 0, bias = 72, damp = 700;
-      for (WCHAR code = 0x80; n < length; ++code) {
-	WCHAR next = WCHAR(-1);
-	for (size_t i = 0; i < length; ++i) {
-	  if (input[i] >= code && input[i] < next) next = input[i];
-	}
-	size_t t = delta + (next - code) * (n + 1);
-	if (t < delta) throw overflow;
-	delta = t, code = next;
-	for (size_t i = 0; i < length; ++i) {
-	  if (input[i] != code) {
-	    if (input[i] < code && ++delta == 0) throw overflow;
-	  } else {
-	    enum { base = 36, tmin = 1, tmax = 26, skew = 38 };
-	    static const char b36[] = "abcdefghijklmnopqrstuvwxyz0123456789";
-	    size_t q = delta;
-	    for (size_t k = base;; k += base) {
-	      size_t t = k > bias ? min<size_t>(k - bias, tmax) : tmin;
-	      if (q < t) break;
-	      output += b36[t + (q - t) % (base - t)];
-	      q = (q - t) / (base - t);
-	    }
-	    output += b36[q];
-	    size_t k = 0;
-	    q = delta / damp, q += q / ++n;
-	    for (; q > (base - tmin) * tmax / 2; q /= base - tmin) k += base;
-	    bias = k + (base - tmin + 1) * q / (q + skew);
-	    delta = 0, damp = 2;
-	  }
-	}
-	if (++delta == 0) throw overflow;
-      }
-      return output;
-    }
-  };
-
-  string result;
-  for (LPCWSTR p = host; *p; ++p) {
-    string asc;
-    LPCWSTR t = p;
-    for (; *p && *p != '.'; ++p) {
-      if (*p < 0x80) asc += static_cast<string::value_type>(*p);
-    }
-    if (asc.size() < static_cast<string::size_type>(p - t)) {
-      result += "xn--";
-      if (!asc.empty()) result += asc, result += '-';
-      result += lambda::encode(t, p - t, asc.size());
-    } else result += asc;
-    if (!*p) break;
-    result += static_cast<string::value_type>(*p);
-  }
-  return result;
 }
