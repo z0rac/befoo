@@ -1,6 +1,6 @@
 #ifndef H_SETTING /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -38,7 +38,7 @@ public:
   typedef _repository repository;
   typedef _repository::_storage storage;
   setting(const setting& s) : _st(const_cast<setting&>(s)._st) {}
-  setting& operator=(const setting& s)
+  const setting& operator=(const setting& s)
   { _st = const_cast<setting&>(s)._st; return *this; }
 public:
   struct _str {

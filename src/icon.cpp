@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -34,7 +34,7 @@ iconmodule::iconmodule(const iconmodule& module)
   ++_rep->count;
 }
 
-iconmodule&
+const iconmodule&
 iconmodule::operator=(const iconmodule& module)
 {
   ++module._rep->count;
@@ -112,7 +112,7 @@ icon::~icon()
   _icon && DestroyIcon(_icon);
 }
 
-icon&
+const icon&
 icon::operator=(const icon& copy)
 {
   if (this != &copy) {

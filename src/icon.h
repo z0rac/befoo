@@ -1,6 +1,6 @@
 #ifndef H_ICON /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2010-2011 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -25,7 +25,7 @@ public:
   iconmodule(const string& fn = string());
   iconmodule(const iconmodule& module);
   ~iconmodule() { _release(); }
-  iconmodule& operator=(const iconmodule& module);
+  const iconmodule& operator=(const iconmodule& module);
   operator HMODULE() const { return _rep->module; }
   static string path(LPCSTR fn = NULL);
 public:
@@ -51,11 +51,10 @@ public:
   icon(int id, const iconmodule& mod = iconmodule());
   icon(const icon& copy) : _icon(NULL) { *this = copy; }
   ~icon();
-  icon& operator=(const icon& copy);
+  const icon& operator=(const icon& copy);
   operator HICON() const { return _icon; }
   int size() const { return _rc[1]; }
   icon& resize(int size);
-  icon& reset() { return _load(_step); }
   icon& reset(int type);
   icon& next();
   UINT delay() const;

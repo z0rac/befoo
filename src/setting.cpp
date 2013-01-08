@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -55,7 +55,7 @@ setting::mailboxes()
   list<string> st(_rep->storages());
   for (list<string>::iterator p = st.begin(); p != st.end();) {
     // skip sections matched with the pattern "(.*)".
-    p =  p->empty() || ((*p)[0] == '(' && *p->rbegin() == ')') ? st.erase(p) : ++p;
+    p =  p->empty() || (*p)[0] == '(' && *p->rbegin() == ')' ? st.erase(p) : ++p;
   }
   return st;
 }
@@ -155,7 +155,7 @@ setting::cipher(_str key)
 	for (int h = 0; h < 2; ++h) {
 	  const char* pos = strchr(code64, p[h]);
 	  if (!pos) return string();
-	  c = (c << 4) | ((unsigned(pos - code64) - i) & 15);
+	  c = (c << 4) | (unsigned(pos - code64) - i) & 15;
 	  i += 5 + h;
 	}
 	e += char(c);
@@ -173,7 +173,7 @@ setting&
 setting::cipher(_str key, const string& value)
 {
   union { char s[2]; short r; } seed;
-  seed.r = short(unsigned(ptrdiff_t(value.data())) + time(NULL));
+  seed.r = short(unsigned(value.data()) + time(NULL));
   string e = string(seed.s, 2) + value;
   for (string::size_type i = e.size(); i-- > 2;) e[i] ^= e[i & 1];
   string s(e.size() * 2 + 1, '\x7f');
@@ -259,6 +259,12 @@ namespace {
     void put(const char* key, const char* value);
     void erase(const char* key);
     list<string> keys() const;
+  public:
+    struct buf {
+      char* data;
+      buf(DWORD size) : data(new char[size]) {}
+      ~buf() { delete [] data; }
+    };
   };
 }
 
@@ -282,7 +288,7 @@ regkey::get(const char* key) const
   if (_key &&
       RegQueryValueEx(_key, key, NULL, &type, NULL, &size) == ERROR_SUCCESS &&
       type == REG_SZ) {
-    win32::textbuf<char> buf(size);
+    regkey::buf buf(size);
     if (RegQueryValueEx(_key, key, NULL, NULL, LPBYTE(buf.data), &size) == ERROR_SUCCESS) {
       return buf.data;
     }
@@ -309,7 +315,7 @@ regkey::keys() const
   DWORD size;
   if (_key && RegQueryInfoKey(_key, NULL, NULL, NULL, NULL, NULL,
 			      NULL, NULL, &size, NULL, NULL, NULL) == ERROR_SUCCESS) {
-    win32::textbuf<char> buf(++size);
+    regkey::buf buf(++size);
     DWORD i = 0, n;
     while (n = size, RegEnumValue(_key, i++, buf.data, &n,
 				  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
@@ -347,7 +353,7 @@ registory::storages() const
   DWORD size;
   if (_key && RegQueryInfoKey(HKEY(_key), NULL, NULL, NULL, NULL, &size,
 			      NULL, NULL, NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
-    win32::textbuf<char> buf(++size);
+    regkey::buf buf(++size);
     DWORD i = 0, n;
     while (n = size, RegEnumKeyEx(HKEY(_key), i++, buf.data, &n,
 				  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {

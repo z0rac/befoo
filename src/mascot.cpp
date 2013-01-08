@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2010 TSUBAKIMOTO Hiroya <zorac@4000do.co.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -51,19 +51,10 @@ namespace {
     tooltips(const window& owner);
     void tip(const string& text) { _status(text); }
     void reset(bool await = true) { _status.reset(await); }
-    void balloon(LPCWSTR text, unsigned sec = 0,
+    void balloon(const string& text, unsigned sec = 0,
 		 const string& title = string(), int icon = 0);
     void clearballoon();
     void topmost(bool owner);
-  public:
-    class ellipsis {
-      HDC hDC;
-      HGDIOBJ hFont;
-    public:
-      ellipsis();
-      ~ellipsis();
-      win32::wstr operator()(LPCWSTR ws) const;
-    };
   };
   window::commctrl tooltips::use(ICC_BAR_CLASSES);
 }
@@ -139,10 +130,9 @@ tooltips::tooltips(const window& owner)
 }
 
 void
-tooltips::balloon(LPCWSTR text, unsigned sec, const string& title, int icon)
+tooltips::balloon(const string& text, unsigned sec, const string& title, int icon)
 {
-  TOOLINFOW ti = { sizeof(TOOLINFOW) };
-  ti.hwnd = GetParent(hwnd());
+  info ti(*this);
   SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
   _status.disable();
   RECT r;
@@ -150,8 +140,8 @@ tooltips::balloon(LPCWSTR text, unsigned sec, const string& title, int icon)
   r.left = r.right / 2, r.top = r.bottom * 9 / 16;
   ClientToScreen(ti.hwnd, LPPOINT(&r));
   SendMessage(hwnd(), TTM_TRACKPOSITION, 0, MAKELPARAM(r.left, r.top));
-  ti.lpszText = LPWSTR(text);
-  SendMessage(hwnd(), TTM_UPDATETIPTEXTW, 0, LPARAM(&ti));
+  ti.lpszText = LPSTR(text.c_str());
+  SendMessage(hwnd(), TTM_UPDATETIPTEXT, 0, LPARAM(&ti));
   SendMessage(hwnd(), TTM_SETTITLEA, WPARAM(icon), LPARAM(title.c_str()));
   SendMessage(hwnd(), TTM_TRACKACTIVATE, TRUE, LPARAM(&ti));
   settimer(*this, sec * 1000);
@@ -178,37 +168,6 @@ tooltips::notify(WPARAM w, LPARAM l)
   return window::notify(w, l);
 }
 
-tooltips::ellipsis::ellipsis()
-  : hDC(CreateCompatibleDC(NULL))
-{
-  NONCLIENTMETRICS ncm = { sizeof(NONCLIENTMETRICS) };
-  SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-  hFont = SelectObject(hDC, CreateFontIndirect(&ncm.lfStatusFont));
-}
-
-tooltips::ellipsis::~ellipsis()
-{
-  DeleteObject(SelectObject(hDC, hFont));
-  DeleteDC(hDC);
-}
-
-win32::wstr
-tooltips::ellipsis::operator()(LPCWSTR ws) const
-{
-  struct buf {
-    LPWSTR data;
-    buf(LPCWSTR ws) : data(lstrcpyW(new WCHAR[lstrlenW(ws) + 5], ws)) {}
-    ~buf() { delete [] data; }
-  } buf(ws);
-  for (LPWSTR p = buf.data; *++p;) {
-    if (*p == '\t') *p = ' ';
-  }
-  static RECT r = { 0, 0, 300, 300 };
-  DrawTextW(hDC, buf.data, -1, &r,
-	    DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS | DT_MODIFYSTRING);
-  return buf.data;
-}
-
 /** iconwindow - icon window with system tray
  */
 namespace {
@@ -225,11 +184,11 @@ namespace {
     void release() { _trayicon(false); }
     void draw(HDC hDC);
     void raised(bool topmost) { _tips.topmost(topmost); }
-    bool popup(const menu& menu, LPARAM pt);
+    bool popup(const menu& menu, DWORD pt);
     void wakeup(window& source);
     void reset(int type);
     void status(const string& text);
-    void balloon(LPCWSTR text, unsigned sec,
+    void balloon(const string& text, unsigned sec,
 		 const string& title = string(), int icon = 0);
     int size() const { return _icon.size(); }
   public:
@@ -300,16 +259,16 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     _tips.reset(hascursor());
     break;
   case WM_USER: // from tray icon
-    switch (UINT(l)) {
-    case WM_CONTEXTMENU: m = WM_CONTEXTMENU; break;
-    case NIN_SELECT: m = WM_LBUTTONDOWN; break;
-    case NIN_KEYSELECT: m = WM_LBUTTONDBLCLK; break;
+    switch (l) {
+    case WM_CONTEXTMENU: break;
+    case NIN_SELECT: l = WM_LBUTTONDOWN; break;
+    case NIN_KEYSELECT: l = WM_LBUTTONDBLCLK; break;
     default: return 0;
     }
     POINT pt;
     GetCursorPos(&pt);
     foreground();
-    PostMessage(hwnd(), m, 0, MAKELPARAM(pt.x, pt.y));
+    PostMessage(hwnd(), l, 0, MAKELPARAM(pt.x, pt.y));
     return 0;
   default:
     if (m == _tbcmsg && intray()) _trayicon(true);
@@ -329,7 +288,7 @@ iconwindow::draw(HDC hDC)
 }
 
 bool
-iconwindow::popup(const menu& menu, LPARAM pt)
+iconwindow::popup(const menu& menu, DWORD pt)
 {
   bool t = appwindow::popup(menu, pt);
   if (!t && intray()) {
@@ -362,24 +321,17 @@ iconwindow::status(const string& text)
 }
 
 void
-iconwindow::balloon(LPCWSTR text, unsigned sec,
+iconwindow::balloon(const string& text, unsigned sec,
 		    const string& title, int icon)
 {
   if (intray()) {
-    NOTIFYICONDATAW ni = { sizeof(NOTIFYICONDATAW), hwnd() };
+    NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
     ni.uFlags = NIF_INFO;
-    int n = lstrlenW(text);
-    if (n >= int(sizeof(ni.szInfo) / sizeof(ni.szInfo[0]))) {
-      n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]);
-      while (n-- && text[n] != '\n') continue;
-      if (n < 0) n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]) - 1;
-    }
-    lstrcpynW(ni.szInfo, text, n + 1);
+    lstrcpyn(ni.szInfo, text.c_str(), sizeof(ni.szInfo));
     ni.uTimeout = sec * 1000;
-    lstrcpynW(ni.szInfoTitle, win32::wstr(title),
-	      sizeof(ni.szInfoTitle) / sizeof(ni.szInfoTitle[0]));
+    lstrcpyn(ni.szInfoTitle, title.c_str(), sizeof(ni.szInfoTitle));
     ni.dwInfoFlags = icon & 3;
-    Shell_NotifyIconW(NIM_MODIFY, &ni);
+    Shell_NotifyIcon(NIM_MODIFY, &ni);
   } else {
     _tips.balloon(text, sec, title, icon);
   }
@@ -389,7 +341,6 @@ iconwindow::iconwindow(const icon& icon)
   : _icon(icon), _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
-  _icon.reset();
 }
 
 void
@@ -410,7 +361,6 @@ namespace {
   class mascotwindow : public iconwindow {
     menu _menu;
     int _balloon;
-    int _subjects;
     void _release();
     static icon _icon();
   protected:
@@ -501,31 +451,23 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 {
   if (mboxes) {
     LOG("Update: " << recent << ", " << unseen << endl);
-    win32::wstr info;
+    string info;
     bool newer = false;
-    tooltips::ellipsis ellips;
     list<mailbox*>::const_iterator p = mboxes->begin();
     for (; p != mboxes->end(); ++p) {
       int n = (*p)->recent();
-      if (n > 0 && _balloon) {
-	const list<mail>& mails = (*p)->mails();
-	info += win32::wstr('\n' + win32::exe.textf(ID_TEXT_FETCHED_MAIL,
-						    n, mails.size()) +
-			    " @ " + (*p)->name());
-	list<mail>::const_iterator p = mails.end();
-	for (int i = min(n, _subjects); i-- > 0;) {
-	  --p, info += ellips(win32::wstr("\n- " + p->subject(), CP_UTF8));
-	}
-      } else if (n < 0) {
-	info += win32::wstr('\n' + win32::exe.text(ID_TEXT_FETCH_ERROR) +
-			    " @ " + (*p)->name());
+      if (n && (_balloon || n < 0)) {
+	info += win32::exe.textf(n < 0 ? ID_TEXT_FETCH_ERROR :
+				 ID_TEXT_FETCHED_MAIL,
+				 n, (*p)->mails().size());
+	info += " @ " + (*p)->name() + "\n";
       }
       newer = newer || n > 0;
     }
     ReplyMessage(0);
     status(win32::exe.textf(ID_TEXT_FETCHED_MAIL, recent, unseen));
-    if (info) {
-      balloon(info + 1, _balloon ? _balloon : 10,
+    if (!info.empty()) {
+      balloon(info.erase(info.size() - 1), _balloon ? _balloon : 10,
 	      win32::exe.text(newer ? ID_TEXT_BALLOON_TITLE :
 			      ID_TEXT_BALLOON_ERROR),
 	      newer ? NIIF_INFO : NIIF_ERROR);
@@ -544,7 +486,7 @@ mascotwindow::mascotwindow()
   int icon, transparency;
   prefs["icon"](icon = size())(transparency = 0);
   if (!icon) icon = GetSystemMetrics(SM_CXICON);
-  prefs["balloon"](_balloon = 10)(_subjects = 0);
+  prefs["balloon"](_balloon = 10);
 
   prefs = setting::preferences("mascot");
   RECT dt;
@@ -565,14 +507,14 @@ mascotwindow::mascotwindow()
 }
 
 namespace cmd {
-  struct trayicon : public window::command {
+  class trayicon : public window::command {
     void execute(window& source)
     { ((mascotwindow&)source).trayicon(!((mascotwindow&)source).intray()); }
     UINT state(window& source)
     { return ((mascotwindow&)source).intray() ? MFS_CHECKED : 0; }
   };
 
-  struct alwaysontop : public window::command {
+  class alwaysontop : public window::command {
     void execute(window& source) { source.topmost(!source.topmost()); }
     UINT state(window& source)
     {
@@ -581,11 +523,10 @@ namespace cmd {
     }
   };
 
-  struct about : public window::command {
-    about() : window::command(-1001) {}
+  class about : public window::command {
     void execute(window& source)
     {
-      ((mascotwindow&)source).balloon(win32::wstr(win32::exe.text(ID_TEXT_ABOUT)), 10,
+      ((mascotwindow&)source).balloon(win32::exe.text(ID_TEXT_ABOUT), 10,
 				      win32::exe.text(ID_TEXT_VERSION));
     }
   };
