@@ -1,4 +1,4 @@
-befoo - IMAP4メールチェッカー <http://sourceforge.jp/projects/befoo/>
+befoo - IMAP4メールチェッカー <http://befoo.sourceforge.jp/>
 
 概要:
 -----

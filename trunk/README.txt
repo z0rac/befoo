@@ -1,4 +1,4 @@
-befoo - IMAP4 mail checker <http://sourceforge.jp/projects/befoo/>
+befoo - IMAP mail checker <http://befoo.sourceforge.jp/>
 
 Introduction:
 -------------
