@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2014 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -554,14 +554,13 @@ mascotwindow::mascotwindow()
   int raise, tray;
   prefs["position"](r.left)(r.top)(r.right)(r.bottom)(raise = 0);
   prefs["tray"](tray = 0);
-  RECT rz = { r.left, r.top, r.left + icon, r.top + icon };
+  RECT rt = { r.left, r.top, r.left + icon, r.top + icon };
   MONITORINFO info = { sizeof(info) };
-  GetMonitorInfo(MonitorFromRect(&rz, MONITOR_DEFAULTTONEAREST), &info);
+  GetMonitorInfo(MonitorFromRect(&rt, MONITOR_DEFAULTTONEAREST), &info);
   dt = info.rcMonitor;
   dt.right -= dt.left, dt.bottom -= dt.top;
-  r.left -= dt.left, r.top -= dt.top;
-  r.left = dt.left + MulDiv(r.left, dt.right, r.right);
-  r.top = dt.top + MulDiv(r.top, dt.bottom, r.bottom);
+  r.left = dt.left + MulDiv(r.left - dt.left, dt.right, r.right);
+  r.top = dt.top + MulDiv(r.top - dt.top, dt.bottom, r.bottom);
   r.right = r.left + icon;
   r.bottom = r.top + icon;
   move(adjust(r, info.rcMonitor, icon / 4));
