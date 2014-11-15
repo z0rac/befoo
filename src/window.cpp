@@ -516,8 +516,15 @@ appwindow::notify(WPARAM w, LPARAM l)
 const RECT&
 appwindow::adjust(RECT& bounds, int border) const
 {
-  RECT r;
-  GetWindowRect(GetDesktopWindow(), &r);
+  MONITORINFO info = { sizeof(info) };
+  GetMonitorInfo(MonitorFromRect(&bounds, MONITOR_DEFAULTTONEAREST), &info);
+  return adjust(bounds, info.rcMonitor, border);
+}
+
+const RECT&
+appwindow::adjust(RECT& bounds, const RECT& monitor, int border) const
+{
+  RECT r = monitor;
   InflateRect(&r, -border, -border);
   int w = bounds.right - bounds.left;
   int h = bounds.bottom - bounds.top;

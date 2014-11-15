@@ -122,11 +122,12 @@ namespace {
 #undef FUNC
 }
 
+extern unsigned codepage(const string&);
+
 u8conv&
 u8conv::charset(const string& charset)
 {
   if (!charset.empty() && charset != _charset) {
-    extern unsigned codepage(const string&);
     _charset = charset;
     _codepage = codepage(charset);
     _mode = 0;
