@@ -67,7 +67,7 @@ delay=30		; 1回目のメール確認までの秒数。(デフォルト: 0)
 ライセンス:
 -----------
 GNU GPLに基づいて頒布されます。詳細はLICENSE.txtをお読みください。
-日本語訳 <http://sourceforge.jp/projects/opensource/wiki/licenses%2F
+日本語訳 <http://sourceforge.jp/projects/opensource/wiki/licenses/
 GNU_General_Public_License_version_3.0>
 
 

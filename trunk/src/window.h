@@ -116,6 +116,7 @@ protected:
   virtual void limit(LPMINMAXINFO) {}
   virtual void raised(bool) {}
   const RECT& adjust(RECT& bounds, int border = 8) const;
+  const RECT& adjust(RECT& bounds, const RECT& monitor, int border = 8) const;
 public:
   appwindow(LPCSTR menu = NULL, HWND owner = NULL)
     : window(_classname(), menu, owner) {}
