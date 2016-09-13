@@ -1,6 +1,6 @@
 #ifndef H_WINDOW /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009-2014 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -79,12 +79,10 @@ public:
     virtual void execute(window& source) = 0;
     virtual UINT state(window&) { return 0; }
   };
-  struct cmdp : public auto_ptr<command> {
-    typedef auto_ptr<command> super;
+  struct cmdp : public shared_ptr<command> {
+    typedef shared_ptr<command> super;
     cmdp(command* cmd = NULL) : super(cmd) {}
-    cmdp(const cmdp& cmd) : super(const_cast<cmdp&>(cmd)) {}
-    cmdp& operator=(const cmdp& cmd)
-    { super::operator=(const_cast<cmdp&>(cmd)); return *this; }
+    cmdp(cmdp const& cmd) : super(cmd) {}
   };
   void addcmd(int id, cmdp cmd);
   virtual void execute(int id);

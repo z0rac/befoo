@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -95,7 +95,7 @@ setting::cache(const string& key)
 {
   assert(_rep);
   list<string> result;
-  auto_ptr<storage> cache(_rep->storage(cachekey(key)));
+  unique_ptr<storage> cache(_rep->storage(cachekey(key)));
   list<string> keys(cache->keys());
   for (list<string>::iterator p = keys.begin(); p != keys.end(); ++p) {
     result.push_back(cache->get(p->c_str()));
@@ -110,7 +110,7 @@ setting::cache(const string& key, const list<string>& data)
   string id = cachekey(key);
   _rep->erase(id);
   if (!data.empty()) {
-    auto_ptr<storage> cache(_rep->storage(id));
+    unique_ptr<storage> cache(_rep->storage(id));
     long i = 0;
     for (list<string>::const_iterator p = data.begin(); p != data.end(); ++p) {
       char s[35];
@@ -160,7 +160,7 @@ setting::cipher(_str key)
 	}
 	e += char(c);
       }
-      for (string::size_type i = e.size(); i-- > 2;) e[i] ^= e[i & 1];
+      for (string::size_type j = e.size(); j-- > 2;) e[j] ^= e[j & 1];
       s = e.substr(2);
     } else {
       cipher(key, s);

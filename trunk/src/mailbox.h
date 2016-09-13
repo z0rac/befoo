@@ -1,6 +1,6 @@
 #ifndef H_MAILBOX /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -131,7 +131,7 @@ public:
       virtual int tls() const = 0;
       virtual _stream* starttls(const string& host) = 0;
     };
-    auto_ptr<_stream> _st;
+    unique_ptr<_stream> _st;
   protected:
     int tls() const { return _st->tls(); }
     void starttls(const string& host);

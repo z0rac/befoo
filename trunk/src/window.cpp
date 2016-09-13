@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2014 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -112,7 +112,7 @@ window::foreground(bool force) const
       SystemParametersInfo(SPI_GETFOREGROUNDLOCKTIMEOUT, 0, &save, 0);
       SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, NULL, 0);
       SetForegroundWindow(_hwnd);
-      SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, LPVOID(save), 0);
+      SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, PVOID(ULONG_PTR(save)), 0);
       AttachThreadInput(tid, fore, FALSE);
       return;
     }
@@ -198,8 +198,8 @@ window::_new(LPCSTR classname, LPCSTR menu, HWND owner)
 HWND
 window::_new(LPCSTR classname, const window& parent, int id)
 {
-  return win32::valid(CreateWindow(classname, NULL, WS_CHILD,
-				   0, 0, 1, 1, parent.hwnd(), HMENU(id),
+  return win32::valid(CreateWindow(classname, NULL, WS_CHILD, 0, 0, 1, 1,
+				   parent.hwnd(), HMENU(LONG_PTR(id)),
 				   win32::exe, NULL));
 }
 

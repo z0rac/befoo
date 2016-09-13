@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+# Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
 #
 # This software comes with ABSOLUTELY NO WARRANTY; for details of
 # the license terms, see the LICENSE.txt file included with the program.
@@ -40,13 +40,13 @@ RSRCS = en.rc ja.rc
 all: $(NAME).dll
 
 $(NAME).dll: $(OBJS)
-	$(BINPREFIX)dllwrap $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+	dllwrap $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
 $(LOBJS): %.o: $(LIBDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 $(NAME).res: $(RSRCS)
-	cat $(RSRCS) | $(BINPREFIX)windres -I$(LIBDIR) -O coff -o $@
+	cat $(RSRCS) | windres -I$(LIBDIR) -O coff -o $@
 
 $(OBJS): Makefile
 main.o settingdlg.o mailboxdlg.o icondlg.o: settingdlg.h define.h

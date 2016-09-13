@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -429,7 +429,7 @@ mailbox::backend::stream*
 tcpstream::starttls(const string& host)
 {
   assert(_socket != INVALID_SOCKET);
-  auto_ptr<sslstream> st(new sslstream(_verifylevel));
+  unique_ptr<sslstream> st(new sslstream(_verifylevel));
   st->connect(_socket.release(), host);
   return st.release();
 }
@@ -440,17 +440,17 @@ tcpstream::starttls(const string& host)
 void
 mailbox::backend::tcp(const string& host, const string& port, int domain, int verify)
 {
-  auto_ptr<tcpstream> st(new tcpstream(verify));
+  unique_ptr<tcpstream> st(new tcpstream(verify));
   st->connect(host, port, domain);
-  _st = st;
+  _st.reset(st.release());
 }
 
 void
 mailbox::backend::ssl(const string& host, const string& port, int domain, int verify)
 {
-  auto_ptr<sslstream> st(new sslstream(verify));
+  unique_ptr<sslstream> st(new sslstream(verify));
   st->connect(host, port, domain);
-  _st = st;
+  _st.reset(st.release());
 }
 
 void
@@ -557,7 +557,7 @@ mailbox::fetchmail()
     u[uri::user] = "ANONYMOUS";
     if (pw.empty()) pw = "befoo@";
   }
-  auto_ptr<backend> be(backends[i].make());
+  unique_ptr<backend> be(backends[i].make());
   ((*be).*backends[i].stream)(u[uri::host], u[uri::port], _domain, _verify);
   be->login(u, pw);
   _recent = static_cast<int>(be->fetch(*this, u));
