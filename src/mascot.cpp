@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2014 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -512,9 +512,9 @@ mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
 	info += win32::wstr('\n' + win32::exe.textf(ID_TEXT_FETCHED_MAIL,
 						    n, mails.size()) +
 			    " @ " + (*p)->name());
-	list<mail>::const_iterator p = mails.end();
+	list<mail>::const_iterator it = mails.end();
 	for (int i = min(n, _subjects); i-- > 0;) {
-	  --p, info += ellips(win32::wstr("\n- " + p->subject(), CP_UTF8));
+	  --it, info += ellips(win32::wstr("\n- " + it->subject(), CP_UTF8));
 	}
       } else if (n < 0) {
 	info += win32::wstr('\n' + win32::exe.text(ID_TEXT_FETCH_ERROR) +
@@ -599,7 +599,7 @@ namespace cmd {
 window*
 mascot()
 {
-  auto_ptr<mascotwindow> w(new mascotwindow);
+  unique_ptr<mascotwindow> w(new mascotwindow);
   w->addcmd(ID_MENU_TRAYICON, new cmd::trayicon);
   w->addcmd(ID_MENU_ALWAYSONTOP, new cmd::alwaysontop);
   w->addcmd(ID_MENU_ABOUT, new cmd::about);

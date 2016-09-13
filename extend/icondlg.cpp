@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -52,8 +52,8 @@ iconlist::load()
       iconmodule(f.cFileName).collect(*this);
       if (i == size()) continue;
       string suffix = string(",") + PathFindFileName(f.cFileName);
-      vector<iconspec>::iterator p = begin() + i;
-      for (; p != end(); ++p) p->setting += suffix;
+      vector<iconspec>::iterator it = begin() + i;
+      for (; it != end(); ++it) it->setting += suffix;
     }
   }
 }

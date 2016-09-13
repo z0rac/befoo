@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+# Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
 #
 # This software comes with ABSOLUTELY NO WARRANTY; for details of
 # the license terms, see the LICENSE.txt file included with the program.
@@ -56,7 +56,7 @@ $(NAME).exe: $(OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
 $(NAME).res: $(RSRCS)
-	cat $(RSRCS) | $(BINPREFIX)windres -I$(ICONSDIR) -O coff -o $@
+	cat $(RSRCS) | windres -I$(ICONSDIR) -O coff -o $@
 
 codepage.h: codepage.txt $(MAKECP)
 	./$(MAKECP) < codepage.txt > $@

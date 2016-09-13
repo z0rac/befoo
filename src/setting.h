@@ -1,6 +1,6 @@
 #ifndef H_SETTING /* -*- mode: c++ -*- */
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -32,14 +32,12 @@ class setting {
     virtual void erase(const string& name) = 0;
     virtual const char* invalidchars() const = 0;
   };
-  auto_ptr<_repository::_storage> _st;
+  shared_ptr<_repository::_storage> _st;
   setting(_repository::_storage* st) : _st(st) {}
 public:
   typedef _repository repository;
   typedef _repository::_storage storage;
-  setting(const setting& s) : _st(const_cast<setting&>(s)._st) {}
-  setting& operator=(const setting& s)
-  { _st = const_cast<setting&>(s)._st; return *this; }
+  setting(setting const& s) : _st(s._st) {}
 public:
   struct _str {
     const char* c_str;

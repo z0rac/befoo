@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -182,7 +182,7 @@ summary::_compare(LPARAM s1, LPARAM s2) const
   }
 
   win32::textbuf<WCHAR> tb[2];
-  WPARAM si[] = { s1, s2 };
+  LPARAM si[] = { s1, s2 };
   for (int i = 0; i < 2; ++i) {
     LVITEMW lv = { LVIF_TEXT };
     lv.iSubItem = _column;

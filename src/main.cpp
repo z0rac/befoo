@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -76,7 +76,7 @@ model::model()
       LOG("Load mailbox [" << name << "]" << endl);
       setting s = setting::mailbox(name);
       mbox* mb = new mbox(name);
-      auto_ptr<mbox> hold(mb);
+      unique_ptr<mbox> hold(mb);
       int ip, verify;
       s["ip"](ip = 0);
       s["verify"](verify = 3);
@@ -347,7 +347,7 @@ namespace cmd {
 
   struct summary : public window::command {
     model& _model;
-    auto_ptr<window> _summary;
+    unique_ptr<window> _summary;
     summary(model& model) : window::command(-281), _model(model) {}
     void execute(window&)
     {
@@ -410,8 +410,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     int delay;
     setting::preferences()["delay"](delay = 0);
     for (int qc = 1; qc > 0; delay = 0) {
-      auto_ptr<window> w(mascot());
-      auto_ptr<model> m(new model);
+      unique_ptr<window> w(mascot());
+      unique_ptr<model> m(new model);
       w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
       w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
       w->addcmd(ID_MENU_SETTINGS, new cmd::setting(rep));
