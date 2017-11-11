@@ -5,6 +5,6 @@
  * the license terms, see the LICENSE.txt file included with the program.
  */
 #define APP_NAME               "befoo"
-#define APP_VERSION            "1.4.1"
-#define APP_VERSION_BINARY     1,4,1,0
-#define APP_COPYRIGHT          "(C) 2009-2014 TSUBAKIMOTO Hiroya"
+#define APP_VERSION            "1.4.2"
+#define APP_VERSION_BINARY     1,4,2,0
+#define APP_COPYRIGHT          "(C) 2009-2017 TSUBAKIMOTO Hiroya"
