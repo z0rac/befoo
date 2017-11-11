@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2017 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -124,7 +124,7 @@ imap4::fetch(mailbox& mbox, const uri& uri)
     for (parse = parse.token(true); parse;) {
       string item = parse.token();
       string value = parse.token();
-      if (item == "BODY[HEADER.FIELDS (SUBJECT FROM DATE)]") {
+      if (item.size() > 20 && item.substr(0, 20) == "BODY[HEADER.FIELDS (") {
 	mail m(uid);
 	m.header(value);
 	recents.push_back(m);
