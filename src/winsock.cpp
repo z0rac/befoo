@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -7,7 +7,6 @@
 #include "winsock.h"
 #include "win32.h"
 #include <cassert>
-#include <algorithm>
 #include <climits>
 
 #ifdef _DEBUG
@@ -422,13 +421,13 @@ winsock::tlsclient::recv(char* buf, size_t size)
       switch(dec[i].BufferType) {
       case SECBUFFER_DATA:
 	if (dec[i].cbBuffer) {
-	  size_t m = 0;
+	  size_t n = 0;
 	  if (done < size) {
-	    m = min<size_t>(size - done, dec[i].cbBuffer);
-	    CopyMemory(buf + done, dec[i].pvBuffer, m);
-	    done += m;
+	    n = min<size_t>(size - done, dec[i].cbBuffer);
+	    CopyMemory(buf + done, dec[i].pvBuffer, n);
+	    done += n;
 	  }
-	  _recvq.append((char*)dec[i].pvBuffer + m, dec[i].cbBuffer - m);
+	  _recvq.append((char*)dec[i].pvBuffer + n, dec[i].cbBuffer - n);
 	} else if (ss == SEC_E_OK && _buf.data[0] == 0x15) {
 	  ss = SEC_I_CONTEXT_EXPIRED; // for Win2kPro
 	}
@@ -502,10 +501,10 @@ winsock::idn(LPCWSTR host)
 	    static const char b36[] = "abcdefghijklmnopqrstuvwxyz0123456789";
 	    size_t q = delta;
 	    for (size_t k = base;; k += base) {
-	      size_t qd = k > bias ? min<size_t>(k - bias, tmax) : tmin;
-	      if (q < qd) break;
-	      output += b36[qd + (q - qd) % (base - qd)];
-	      q = (q - qd) / (base - qd);
+	      size_t t = k > bias ? min<size_t>(k - bias, tmax) : tmin;
+	      if (q < t) break;
+	      output += b36[t + (q - t) % (base - t)];
+	      q = (q - t) / (base - t);
 	    }
 	    output += b36[q];
 	    size_t k = 0;
