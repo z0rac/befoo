@@ -1,0 +1,12 @@
+# -*- mode: org -*-
+#+TITLE: befoo TODOリスト
+#+STARTUP: showall
+#+TODO: TODO(t) | DONE(d) SOMEDAY(s)
+# $Id$
+
+* TODO [#A] C++17対応 [0/2]
+  - [ ] std::thread
+  - [ ] constexpr
+* SOMEDAY [#C] 常時接続
+* SOMEDAY [#B] 新着確認の一時停止
+  チケット #38209
