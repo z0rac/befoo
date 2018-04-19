@@ -2,7 +2,7 @@ befoo - IMAP mail checker <http://befoo.sourceforge.jp/>
 
 Introduction:
 -------------
-Befoo is a simple IMAP4/POP3 client for Windows 2000 or later. It fetches
+Befoo is a simple IMAP4/POP3 client for Windows XP or later. It fetches
 mail from plural mailbox, and shows summary with subject, sender and date.
 
 

@@ -1,12 +1,24 @@
 # -*- mode: org -*-
 #+TITLE: befoo TODOリスト
+# $Id$
 #+STARTUP: showall
 #+TODO: TODO(t) | DONE(d) SOMEDAY(s)
-# $Id$
 
-* TODO [#A] C++17対応 [0/2]
+* TODO [#A] VisualStudioに完全移行 [1/5]
+  CLOCK: [2018-04-20 金 04:31]
+  - [ ] ヘッダファイルの#pagma once
+  - [ ] ライブラリの#pragmaリンク
+  - [ ] コンパイルオプションの見直し
+  - [X] Makefileの削除
+  - [ ] Manifestファイルをプロジェクトでリンク
+
+* TODO [#A] C++17対応 [0/3]
+  - [ ] 書式変更
   - [ ] std::thread
   - [ ] constexpr
+
 * SOMEDAY [#C] 常時接続
 * SOMEDAY [#B] 新着確認の一時停止
   チケット #38209
+
+* SOMEDAY [#C] UNICODE化
