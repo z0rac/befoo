@@ -5,7 +5,7 @@
 #+TODO: TODO(t) | DONE(d) SOMEDAY(s)
 
 * TODO [#A] VisualStudioに完全移行 [1/5]
-  CLOCK: [2018-04-20 金 04:31]
+  CLOCK: [2018-04-20 金 04:31]--[2018-04-20 金 04:54] =>  0:23
   - [ ] ヘッダファイルの#pagma once
   - [ ] ライブラリの#pragmaリンク
   - [ ] コンパイルオプションの見直し
