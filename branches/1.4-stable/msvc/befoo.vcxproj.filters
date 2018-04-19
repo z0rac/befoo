@@ -1,0 +1,142 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="ソース ファイル">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="ヘッダー ファイル">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="リソース ファイル">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav</Extensions>
+    </Filter>
+    <Filter Include="リソース ファイル\default.ico">
+      <UniqueIdentifier>{3acf8dff-6510-43bf-94b9-8f1cb432ad94}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="リソース ファイル\simple.ico">
+      <UniqueIdentifier>{caac295f-f4d8-49db-b802-c7dd8632936c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\codepage.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\icon.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\imap4.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\mail.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\mailbox.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\main.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\mascot.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\pop3.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\setting.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\summary.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\uri.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\win32.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\window.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\winsock.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\src\codepage.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\define.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\icon.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\mailbox.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\setting.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\win32.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\window.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\winsock.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\icons\default\app.ico">
+      <Filter>リソース ファイル</Filter>
+    </None>
+    <None Include="..\icons\default\jump1.ico">
+      <Filter>リソース ファイル\default.ico</Filter>
+    </None>
+    <None Include="..\icons\default\jump2.ico">
+      <Filter>リソース ファイル\default.ico</Filter>
+    </None>
+    <None Include="..\icons\default\jump3.ico">
+      <Filter>リソース ファイル\default.ico</Filter>
+    </None>
+    <None Include="..\icons\default\jump4.ico">
+      <Filter>リソース ファイル\default.ico</Filter>
+    </None>
+    <None Include="..\icons\default\sleep1.ico">
+      <Filter>リソース ファイル\default.ico</Filter>
+    </None>
+    <None Include="..\icons\default\sleep2.ico">
+      <Filter>リソース ファイル\default.ico</Filter>
+    </None>
+    <None Include="..\icons\default\sleep3.ico">
+      <Filter>リソース ファイル\default.ico</Filter>
+    </None>
+    <None Include="..\icons\default\sleep4.ico">
+      <Filter>リソース ファイル\default.ico</Filter>
+    </None>
+    <None Include="..\icons\simple\empty.ico">
+      <Filter>リソース ファイル\simple.ico</Filter>
+    </None>
+    <None Include="..\icons\simple\exist.ico">
+      <Filter>リソース ファイル\simple.ico</Filter>
+    </None>
+    <None Include="..\icons\simple\fetch.ico">
+      <Filter>リソース ファイル\simple.ico</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\src\befoo.rc">
+      <Filter>リソース ファイル</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\src\ja.rc">
+      <Filter>リソース ファイル</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\src\en.rc">
+      <Filter>リソース ファイル</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>
