@@ -19,105 +19,16 @@
 #define LOG(s)
 #endif
 
-#ifndef SEC_E_CONTEXT_EXPIRED
-#define SEC_E_CONTEXT_EXPIRED (-2146893033)
-#define SEC_I_CONTEXT_EXPIRED 590615
-#endif
-
 /*
  * Functions of the class winsock
  */
-namespace {
-  int WSAAPI
-  _getaddrinfo(const char* node, const char* service,
-	       const struct addrinfo* hints, struct addrinfo** res)
-  {
-    assert(hints && hints->ai_flags == 0 &&
-	   hints->ai_socktype == SOCK_STREAM && hints->ai_protocol == 0);
-
-    LOG("Call _getaddrinfo()" << endl);
-
-    struct sockaddr_in sa = { AF_INET };
-    struct addrinfo ai = {
-      0, hints->ai_family != AF_UNSPEC ? hints->ai_family : AF_INET, SOCK_STREAM, IPPROTO_TCP
-    };
-    if (ai.ai_family != AF_INET) return EAI_FAMILY;
-
-    if (service) { // service to port number
-      char* end;
-      unsigned n = strtoul(service, &end, 10);
-      if (*end || n > 65535) {
-	struct servent* ent = getservbyname(service, "tcp");
-	if (!ent) return h_errno;
-	sa.sin_port = ent->s_port;
-      } else {
-	sa.sin_port = htons(static_cast<u_short>(n));
-      }
-    }
-
-    if (node && !*node) node = NULL;
-    sa.sin_addr.s_addr = inet_addr(node);
-    if (sa.sin_addr.s_addr == INADDR_NONE) {
-      struct hostent* ent = gethostbyname(node);
-      if (!ent) return h_errno;
-      if (ent->h_addrtype != AF_INET ||
-	  ent->h_length != sizeof(sa.sin_addr)) return EAI_FAMILY;
-      char** hal = ent->h_addr_list;
-      int n = 0;
-      while (hal && hal[n]) ++n;
-      if (n == 0) return EAI_NONAME;
-
-      *res = reinterpret_cast<struct addrinfo*>(new char[(sizeof(ai) + sizeof(sa)) * n]);
-      struct addrinfo* ail = *res;
-      struct sockaddr_in* sal = reinterpret_cast<struct sockaddr_in*>(*res + n);
-      for (int i = 0; i < n; ++i) {
-	sa.sin_addr = *reinterpret_cast<struct in_addr*>(hal[i]);
-	ai.ai_addr = reinterpret_cast<struct sockaddr*>(&sal[i]);
-	ai.ai_next = i + 1 < n ? &ail[i + 1] : NULL;
-	ail[i] = ai, sal[i] = sa;
-      }
-    } else {
-      *res = reinterpret_cast<struct addrinfo*>(new char[sizeof(ai) + sizeof(sa)]);
-      ai.ai_addr = reinterpret_cast<struct sockaddr*>(*res + 1);
-      **res = ai;
-      *reinterpret_cast<struct sockaddr_in*>(ai.ai_addr) = sa;
-    }
-    return 0;
-  }
-
-  void WSAAPI
-  _freeaddrinfo(struct addrinfo* info)
-  {
-    LOG("Call _freeaddrinfo()" << endl);
-    delete [] reinterpret_cast<char*>(info);
-  }
-}
-
-winsock::_get_t winsock::_get = NULL;
-winsock::_free_t winsock::_free = NULL;
-
 winsock::winsock()
 {
-  static win32::dll ws2("ws2_32.dll");
-  _get = _get_t(ws2("getaddrinfo", FARPROC(_getaddrinfo)));
-  _free = _free_t(ws2("freeaddrinfo", FARPROC(_freeaddrinfo)));
-
   WSADATA wsa;
   if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) throw error();
   LOG("Winsock version: " <<
       int(HIBYTE(wsa.wVersion)) << '.' << int(LOBYTE(wsa.wVersion)) << " <= " <<
       int(HIBYTE(wsa.wHighVersion)) << '.' << int(LOBYTE(wsa.wHighVersion)) << endl);
-}
-
-struct addrinfo*
-winsock::getaddrinfo(const string& host, const string& port, int domain)
-{
-  struct addrinfo hints = { 0, domain, SOCK_STREAM };
-  struct addrinfo* res;
-  int err = _get(idn(host).c_str(), port.c_str(), &hints, &res);
-  if (err == 0) return res;
-  WSASetLastError(err);
-  throw error();
 }
 
 string
@@ -135,9 +46,17 @@ winsock::tcpclient::connect(const string& host, const string& port, int domain)
 {
   shutdown();
   LOG("Connect: " << host << "(" << idn(host) << "):" << port << endl);
-  struct addrinfo* ai = getaddrinfo(host, port, domain);
-  for (struct addrinfo* p = ai; p; p = p->ai_next) {
-    SOCKET s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+  struct addrinfo* ai;
+  {
+    struct addrinfo hints { 0, domain, SOCK_STREAM };
+    auto err = getaddrinfo(idn(host).c_str(), port.c_str(), &hints, &ai);
+    if (err) {
+      WSASetLastError(err);
+      throw error();
+    }
+  }
+  for (auto p = ai; p; p = p->ai_next) {
+    auto s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (s == INVALID_SOCKET) continue;
     if (::connect(s, p->ai_addr, int(p->ai_addrlen)) == 0) {
       _socket = s;
@@ -145,7 +64,7 @@ winsock::tcpclient::connect(const string& host, const string& port, int domain)
     }
     closesocket(s);
   }
-  winsock::freeaddrinfo(ai);
+  freeaddrinfo(ai);
   if (_socket == INVALID_SOCKET) throw error();
   return *this;
 }
@@ -336,11 +255,6 @@ winsock::tlsclient::shutdown()
   if (_avail) {
     _recvq.clear(), _extra.clear();
     try {
-#if __MINGW32__ && defined(ApplyControlToken) // for MinGWs bug.
-      win32::dll secur32("secur32.dll");
-      typedef SECURITY_STATUS (WINAPI* act)(PCtxtHandle, PSecBufferDesc);
-      act ApplyControlTokenA = act(secur32("ApplyControlToken"));
-#endif
       DWORD value = SCHANNEL_SHUTDOWN;
       SecBuffer in = { sizeof(value), SECBUFFER_TOKEN, &value };
       SecBufferDesc inb = { SECBUFFER_VERSION, 1, &in };

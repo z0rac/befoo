@@ -18,82 +18,6 @@
 #define LOG(s)
 #endif
 
-#if USE_ICONV
-/** u8conv - iconv wrapper
- */
-namespace {
-  extern "C" {
-    typedef void* iconv_t;
-    typedef iconv_t (*libiconv_open)(const char*, const char*);
-    typedef size_t (*libiconv)(iconv_t, const char**, size_t*, char**, size_t*);
-    typedef int (*libiconv_close)(iconv_t);
-  }
-#define FUNC(name) name(_dll(#name))
-
-  class u8conv {
-    static win32::dll _dll;
-    iconv_t _cd;
-    string _charset;
-    libiconv_open _open;
-    libiconv_close _close;
-    libiconv _iconv;
-  public:
-    u8conv() : _cd(iconv_t(-1)), _open(NULL) {}
-    ~u8conv() { if (*this) FUNC(libiconv_close)(_cd); }
-    u8conv& charset(const string& charset);
-    u8conv& reset();
-    operator bool() const { return _cd != iconv_t(-1); }
-    string operator()(const string& text);
-  };
-  win32::dll u8conv::_dll("iconv.dll");
-}
-
-u8conv&
-u8conv::charset(const string& charset)
-{
-  if (_dll) {
-    if (!_open) {
-      _iconv = FUNC(libiconv);
-      _close = FUNC(libiconv_close);
-      _open = FUNC(libiconv_open);
-    }
-    if (!charset.empty() && charset != _charset) {
-      if (_cd != iconv_t(-1)) _close(_cd), _cd = iconv_t(-1);
-      _charset = charset;
-      _cd = _open("UTF-8", charset.c_str());
-    }
-  }
-  return *this;
-}
-
-u8conv&
-u8conv::reset()
-{
-  if (_cd != iconv_t(-1)) _iconv(_cd, NULL, NULL, NULL, NULL);
-  return *this;
-}
-
-string
-u8conv::operator()(const string& text)
-{
-  if (!*this) throw text;
-  string result;
-  const char* in = text.c_str();
-  size_t inlen = text.size();
-  size_t ret;
-  do {
-    char buf[128];
-    char* out = buf;
-    size_t outlen = sizeof(buf);
-    ret = _iconv(_cd, &in, &inlen, &out, &outlen);
-    if (outlen == sizeof(buf)) break;
-    result.append(buf, sizeof(buf) - outlen);
-  } while (ret == size_t(-1));
-  return result;
-}
-
-#undef FUNC
-#else // !USE_ICONV
 /** u8conv - convert multibyte text to UTF-8
  */
 namespace {
@@ -151,7 +75,6 @@ u8conv::operator()(const string& text)
   buf.data[n] = 0;
   return win32::wstr::mbstr(buf.data, CP_UTF8);
 }
-#endif // !USE_ICONV
 
 /*
  * Functions of the class mail.

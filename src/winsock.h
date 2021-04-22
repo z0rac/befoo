@@ -20,17 +20,9 @@ using namespace std;
 
 // winsock - winsock handler
 class winsock {
-  typedef int (WSAAPI *_get_t)(const char*, const char*,
-			       const struct addrinfo*, struct addrinfo**);
-  typedef void (WSAAPI *_free_t)(struct addrinfo*);
-  static _get_t _get;
-  static _free_t _free;
 public:
   winsock();
   ~winsock() { WSACleanup(); }
-  static struct addrinfo* getaddrinfo(const string& host, const string& port,
-				      int domain = AF_UNSPEC);
-  static void freeaddrinfo(struct addrinfo* info) { _free(info); }
   static string idn(const string& host);
   static string idn(LPCWSTR host);
 public:
