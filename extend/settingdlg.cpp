@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2013 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -13,31 +13,6 @@
 /*
  * Functions of the class dialog
  */
-INT_PTR CALLBACK
-dialog::_dlgproc(HWND h, UINT m, WPARAM w, LPARAM l)
-{
-  try {
-    if (m == WM_INITDIALOG) {
-      dialog* dp = reinterpret_cast<dialog*>(l);
-      dp->_hwnd = h;
-      SetWindowLongPtr(h, GWLP_USERDATA, LONG_PTR(dp));
-      dp->initialize();
-      return TRUE;
-    }
-    dialog* dp = reinterpret_cast<dialog*>(GetWindowLongPtr(h, GWLP_USERDATA));
-    if (dp) {
-      switch (m) {
-      case WM_COMMAND:
-	dp->clearballoon();
-	return dp->action(GET_WM_COMMAND_ID(w, l), GET_WM_COMMAND_CMD(w, l));
-      case WM_DRAWITEM:
-	return dp->drawitem(static_cast<int>(w), LPDRAWITEMSTRUCT(l));
-      }
-    }
-  } catch (...) {}
-  return FALSE;
-}
-
 void
 dialog::done(bool ok)
 {
@@ -59,43 +34,42 @@ dialog::drawitem(int, LPDRAWITEMSTRUCT)
 }
 
 void
-dialog::setspin(int id, int value, int minv, int maxv)
+dialog::setspin(int id, int value, int minv, int maxv) noexcept
 {
-  HWND h = item(id);
+  auto h = item(id);
   SendMessage(h, UDM_SETRANGE, 0, MAKELPARAM(maxv, minv));
   SendMessage(h, UDM_SETPOS, 0, value);
 }
 
 void
-dialog::seticon(int id, HICON icon)
+dialog::seticon(int id, HICON icon) noexcept
 {
   icon = HICON(SendMessage(item(id), BM_SETIMAGE, IMAGE_ICON, LPARAM(icon)));
   if (icon) DestroyIcon(icon);
 }
 
-string
+std::string
 dialog::gettext(int id) const
 {
-  win32::textbuf<char> buf;
+  std::unique_ptr<char[]> buf;
   int size = 0;
   for (int n = 0; n <= size + 1;) {
-    n += 256;
-    size = GetDlgItemText(_hwnd, id, buf(n), n);
+    buf = std::unique_ptr<char[]>(new char[n += 256]);
+    size = GetDlgItemText(_hwnd, id, buf.get(), n);
   }
-  return string(buf.data, size);
+  return std::string(buf.get(), size);
 }
 
-string
-dialog::getfile(int filter, bool quote, const string& dir) const
+std::string
+dialog::getfile(int filter, bool quote, std::string const& dir) const
 {
-  char fn[MAX_PATH] = "";
-  OPENFILENAME ofn = { sizeof(OPENFILENAME) };
+  char fn[MAX_PATH] {};
+  OPENFILENAME ofn { sizeof(ofn) };
   ofn.hwndOwner = _hwnd;
-  string fs = extend::dll.text(filter);
-  if (fs.size() > 1) {
-    string::reverse_iterator p = fs.rbegin();
-    for (char delim = *p; p != fs.rend(); ++p) {
-      if (*p == delim) *p = '\0';
+  if (auto fs = extend::dll.text(filter); fs.size() > 1) {
+    auto delim = *fs.rbegin();
+    for (auto& c : fs) {
+      if (c == delim) c = '\0';
     }
     ofn.lpstrFilter = fs.c_str();
     ofn.nFilterIndex = 1;
@@ -112,51 +86,49 @@ dialog::getfile(int filter, bool quote, const string& dir) const
   return fn;
 }
 
-string
+std::string
 dialog::listitem(int id) const
 {
-  HWND h = item(id);
+  auto h = item(id);
   int i = ListBox_GetCurSel(h);
-  int n = ListBox_GetTextLen(h, i);
-  win32::textbuf<char> buf;
-  return n > 0 && ListBox_GetText(h, i, buf(n + 1)) == n ?
-    string(buf.data, n) : string();
+  if (int n = ListBox_GetTextLen(h, i); n > 0) {
+    std::unique_ptr<char[]> buf(new char[n + 1]);
+    if (ListBox_GetText(h, i, buf.get()) == n) return std::string(buf.get(), n);
+  }
+  return {};
 }
 
 void
-dialog::editselect(int id, int start, int end) const
+dialog::editselect(int id, int start, int end) const noexcept
 {
-  HWND h = item(id);
+  auto h = item(id);
   SetFocus(h);
   Edit_SetSel(h, start, end);
 }
 
 int
-dialog::msgbox(const string& msg, UINT flags) const
+dialog::msgbox(std::string const& msg, UINT flags) const
 {
-  string t[2];
+  std::string t[2];
   if (!msg.empty()) {
-    string::size_type i = msg.find_first_of(*msg.rbegin()) + 1;
-    if (i < msg.size()) {
+    if (auto i = msg.find(*msg.rbegin()) + 1; i < msg.size()) {
       t[0] = msg.substr(i, msg.size() - i - 1);
       t[1] = msg.substr(0, i - 1);
-    } else {
-      t[0] = msg;
-    }
+    } else t[0] = msg;
   }
   return MessageBox(_hwnd, t[0].c_str(), t[1].c_str(), flags);
 }
 
 void
-dialog::balloon(int id, const string& msg) const
+dialog::balloon(int id, std::string const& msg) const noexcept
 {
-  TOOLINFO ti = { sizeof(TOOLINFO), TTF_TRACK, _hwnd };
+  TOOLINFO ti { sizeof(ti), TTF_TRACK, _hwnd };
   if (!_tips) {
-    _tips = CreateWindow(TOOLTIPS_CLASS, NULL,
+    _tips = CreateWindow(TOOLTIPS_CLASS, {},
 			 WS_POPUP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE,
 			 CW_USEDEFAULT, CW_USEDEFAULT,
 			 CW_USEDEFAULT, CW_USEDEFAULT,
-			 _hwnd, NULL, extend::dll, NULL);
+			 _hwnd, {}, extend::dll, {});
     if (_tips) SendMessage(_tips, TTM_ADDTOOL, 0, LPARAM(&ti));
   }
   if (_tips) {
@@ -173,16 +145,16 @@ dialog::balloon(int id, const string& msg) const
 }
 
 void
-dialog::clearballoon() const
+dialog::clearballoon() const noexcept
 {
   if (!_balloon) return;
-  TOOLINFO ti = { sizeof(TOOLINFO), 0, _hwnd };
+  TOOLINFO ti { sizeof(ti), 0, _hwnd };
   SendMessage(_tips, TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
   _balloon = false;
 }
 
 void
-dialog::error(int id, const string& msg, int start, int end) const
+dialog::error(int id, std::string const& msg, int start, int end) const
 {
   editselect(id, start, end);
   balloon(id, msg);
@@ -190,25 +162,46 @@ dialog::error(int id, const string& msg, int start, int end) const
 }
 
 int
-dialog::modal(int id, HWND parent)
+dialog::modal(int id, HWND parent) noexcept
 {
+  constexpr auto callback = [](auto h, auto m, auto w, auto l) -> INT_PTR {
+    try {
+      if (m == WM_INITDIALOG) {
+	auto dp = reinterpret_cast<dialog*>(l);
+	dp->_hwnd = h;
+	SetWindowLongPtr(h, GWLP_USERDATA, LONG_PTR(dp));
+	dp->initialize();
+	return TRUE;
+      }
+      if (auto dp = reinterpret_cast<dialog*>(GetWindowLongPtr(h, GWLP_USERDATA)); dp) {
+	switch (m) {
+	case WM_COMMAND:
+	  dp->clearballoon();
+	  return dp->action(GET_WM_COMMAND_ID(w, l), GET_WM_COMMAND_CMD(w, l));
+	case WM_DRAWITEM:
+	  return dp->drawitem(static_cast<int>(w), LPDRAWITEMSTRUCT(l));
+	}
+      }
+    } catch (...) {}
+    return FALSE;
+  };
   return static_cast<int>(DialogBoxParam(extend::dll, MAKEINTRESOURCE(id),
-					 parent, &_dlgproc, LPARAM(this)));
+					 parent, callback, LPARAM(this)));
 }
 
 /** Functions of the class icon spec
  */
-iconspec::iconspec(const string& setting, int width)
-  : setting(setting), size(64)
+iconspec::iconspec(std::string const& setting, int width)
+  : setting(setting)
 {
   try {
     int id;
-    string fn;
+    std::string fn;
     (setting::manip(setting))(id = 1).sep(0)(fn);
     icon mascot(id, fn);
     size = mascot.size(), symbol = mascot.read(min(size, width));
   } catch (...) {
-    symbol = CopyIcon(LoadIcon(NULL, IDI_QUESTION));
+    symbol = CopyIcon(LoadIcon({}, IDI_QUESTION));
   }
 }
 
@@ -216,15 +209,15 @@ iconspec::iconspec(const string& setting, int width)
  */
 namespace {
   class startup {
-    template<typename Ty> class com {
-      Ty* _p;
+    template<class T> class com {
+      T* _p = {};
     public:
-      com() : _p(NULL) {}
+      com() {}
       ~com() { _p && _p->Release(); }
-      Ty** operator&() { assert(!_p); return &_p; }
-      Ty* operator->() const { return _p; }
+      T** operator&() { assert(!_p); return &_p; }
+      T* operator->() const { return _p; }
     };
-    string _exe, _link;
+    std::string _exe, _link;
   public:
     startup(bool update = false);
     bool exists() const { return !_link.empty(); }
@@ -234,29 +227,29 @@ namespace {
 
 startup::startup(bool update)
 {
-  win32::textbuf<char> dir(MAX_PATH), path(MAX_PATH);
-  if (!GetModuleFileName(NULL, path.data, MAX_PATH)) return;
-  _exe = path.data;
-  if (!SHGetSpecialFolderPath(NULL, dir.data, CSIDL_STARTUP, FALSE) ||
-      !PathCombine(path.data, dir.data, "*")) return;
-  for (win32::find fd(path.data); fd; fd.next()) {
+  std::unique_ptr<char[]> dir(new char[MAX_PATH]), path(new char[MAX_PATH]);
+  if (!GetModuleFileName({}, path.get(), MAX_PATH)) return;
+  _exe = path.get();
+  if (!SHGetSpecialFolderPath({}, dir.get(), CSIDL_STARTUP, FALSE) ||
+      !PathCombine(path.get(), dir.get(), "*")) return;
+  for (win32::find fd(path.get()); fd; fd.next()) {
     if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
 	lstrcmpi(PathFindExtension(fd.cFileName), ".lnk") != 0 ||
-	!PathCombine(path.data, dir.data, fd.cFileName)) continue;
-    string link = path.data;
+	!PathCombine(path.get(), dir.get(), fd.cFileName)) continue;
+    std::string link = path.get();
     com<IShellLink> sl;
     com<IPersistFile> pf;
-    if (FAILED(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+    if (FAILED(CoCreateInstance(CLSID_ShellLink, {}, CLSCTX_INPROC_SERVER,
 				IID_IShellLink, (PVOID*)&sl)) ||
 	FAILED(sl->QueryInterface(IID_IPersistFile, (PVOID*)&pf)) ||
-	FAILED(pf->Load(win32::wstr(link), STGM_READ)) ||
-	FAILED(sl->GetPath(path.data, MAX_PATH, NULL, 0))) continue;
-    if (lstrcmpi(path.data, _exe.c_str()) != 0) {
-      if (!*path.data || PathFileExists(path.data) ||
-	  FAILED(sl->Resolve(NULL, SLR_NO_UI | SLR_NOSEARCH)) ||
-	  FAILED(sl->GetPath(path.data, MAX_PATH, NULL, 0)) ||
-	  lstrcmpi(path.data, _exe.c_str()) != 0) continue;
-      if (update && SUCCEEDED(pf->Save(NULL, TRUE))) pf->SaveCompleted(NULL);
+	FAILED(pf->Load(win32::wstring(link).c_str(), STGM_READ)) ||
+	FAILED(sl->GetPath(path.get(), MAX_PATH, {}, 0))) continue;
+    if (lstrcmpi(path.get(), _exe.c_str()) != 0) {
+      if (!*path.get() || PathFileExists(path.get()) ||
+	  FAILED(sl->Resolve({}, SLR_NO_UI | SLR_NOSEARCH)) ||
+	  FAILED(sl->GetPath(path.get(), MAX_PATH, {}, 0)) ||
+	  lstrcmpi(path.get(), _exe.c_str()) != 0) continue;
+      if (update && SUCCEEDED(pf->Save({}, TRUE))) pf->SaveCompleted({});
     }
     _link = link;
     break;
@@ -271,18 +264,18 @@ startup::update(bool add)
   com<IShellLink> sl;
   com<IPersistFile> pf;
   if (_exe.empty() ||
-      FAILED(CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+      FAILED(CoCreateInstance(CLSID_ShellLink, {}, CLSCTX_INPROC_SERVER,
 			      IID_IShellLink, (PVOID*)&sl)) ||
       FAILED(sl->QueryInterface(IID_IPersistFile, (PVOID*)&pf)) ||
       FAILED(sl->SetPath(_exe.c_str()))) return false;
-  win32::textbuf<char> name(MAX_PATH);
-  lstrcpy(name.data, PathFindFileName(LPSTR(_exe.c_str())));
-  lstrcpy(PathFindExtension(name.data), ".lnk");
-  win32::textbuf<WCHAR> path(MAX_PATH);
-  if (!SHGetSpecialFolderPathW(NULL, path.data, CSIDL_STARTUP, TRUE) ||
-      !PathAppendW(path.data, win32::wstr(name.data)) ||
-      FAILED(pf->Save(path.data, TRUE))) return false;
-  pf->SaveCompleted(path.data);
+  std::unique_ptr<char[]> name(new char[MAX_PATH]);
+  lstrcpy(name.get(), PathFindFileName(LPSTR(_exe.c_str())));
+  lstrcpy(PathFindExtension(name.get()), ".lnk");
+  std::unique_ptr<WCHAR[]> path(new WCHAR[MAX_PATH]);
+  if (!SHGetSpecialFolderPathW({}, path.get(), CSIDL_STARTUP, TRUE) ||
+      !PathAppendW(path.get(), win32::wstring(name.get()).c_str()) ||
+      FAILED(pf->Save(path.get(), TRUE))) return false;
+  pf->SaveCompleted(path.get());
   return true;
 }
 
@@ -292,10 +285,8 @@ void
 maindlg::initialize()
 {
   { // mailbox list and buttons
-    list<string> mboxes = setting::mailboxes();
-    list<string>::iterator p = mboxes.begin();
-    for (; p != mboxes.end(); ++p) {
-      ListBox_AddString(item(IDC_LIST_MAILBOX), p->c_str());
+    for (auto& t : setting::mailboxes()) {
+      ListBox_AddString(item(IDC_LIST_MAILBOX), t.c_str());
     }
     _enablebuttons();
   }
@@ -340,7 +331,7 @@ maindlg::done(bool ok)
 	 (Button_GetCheck(item(IDC_CHECKBOX_SUMMARY)))
 	 (getint(IDC_EDIT_SUMMARYTRANS)));
     pref("delay", setting::tuple(getint(IDC_EDIT_STARTUP)));
-    bool add = Button_GetCheck(item(IDC_CHECKBOX_STARTUP)) != 0;
+    auto add = Button_GetCheck(item(IDC_CHECKBOX_STARTUP)) != 0;
     startup(add).update(add);
   }
   dialog::done(ok);
@@ -376,26 +367,26 @@ maindlg::action(int id, int cmd)
 void
 maindlg::_delete()
 {
-  string name = listitem(IDC_LIST_MAILBOX);
+  auto name = listitem(IDC_LIST_MAILBOX);
   if (name.empty() ||
       msgbox(extend::dll.textf(IDS_MSGBOX_DELETE, name.c_str()),
 	     MB_ICONQUESTION | MB_YESNO) != IDYES) return;
   setting::mailboxclear(name);
-  HWND h = item(IDC_LIST_MAILBOX);
+  auto h = item(IDC_LIST_MAILBOX);
   ListBox_DeleteString(h, ListBox_GetCurSel(h));
   _enablebuttons();
 }
 
 void
-maindlg::_enablebuttons()
+maindlg::_enablebuttons() noexcept
 {
-  bool en = ListBox_GetCurSel(item(IDC_LIST_MAILBOX)) != LB_ERR;
+  auto en = ListBox_GetCurSel(item(IDC_LIST_MAILBOX)) != LB_ERR;
   enable(IDC_BUTTON_EDIT, en);
   enable(IDC_BUTTON_DELETE, en);
 }
 
 int
-maindlg::_iconwidth() const
+maindlg::_iconwidth() const noexcept
 {
   RECT rc;
   GetClientRect(item(IDC_BUTTON_ICON), &rc);
@@ -403,7 +394,7 @@ maindlg::_iconwidth() const
 }
 
 void
-maindlg::_enableicon(bool en)
+maindlg::_enableicon(bool en) noexcept
 {
   enable(IDC_EDIT_ICON, en);
   enable(IDC_SPIN_ICON, en);

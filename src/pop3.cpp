@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -10,7 +10,7 @@
 #if _DEBUG >= 2
 #include <iostream>
 #define DBG(s) s
-#define LOG(s) (cout << s)
+#define LOG(s) (std::cout << s)
 #else
 #define DBG(s)
 #define LOG(s)
@@ -20,28 +20,27 @@
  * This class is a mailbox::backend for POP3 protocol.
  */
 class pop3 : public mailbox::backend {
-  bool _command(const string& cmd, bool ok = true);
+  bool _command(std::string const& cmd, bool ok = true);
   bool _ok(bool ok = true);
-  typedef list< pair<string, string> > plist;
+  using plist = std::list<std::pair<std::string, std::string>>;
   plist _plist(bool upper = false);
-  string _headers();
+  std::string _headers();
 #ifdef _DEBUG
   using backend::read;
-  string read()
-  {
-    string line = backend::read();
-    LOG("R: " << line << endl);
+  std::string read() {
+    std::string line = backend::read();
+    LOG("R: " << line << std::endl);
     return line;
   }
 #endif
 public:
-  void login(const uri& uri, const string& passwd);
-  void logout();
-  size_t fetch(mailbox& mbox, const uri& uri);
+  void login(uri const& uri, std::string const& passwd) override;
+  void logout() override;
+  size_t fetch(mailbox& mbox, uri const& uri) override;
 };
 
 void
-pop3::login(const uri& uri, const string& passwd)
+pop3::login(uri const& uri, std::string const& passwd)
 {
   _ok();
   if (_command("CAPA", false)) {
@@ -75,23 +74,22 @@ pop3::logout()
 }
 
 size_t
-pop3::fetch(mailbox& mbox, const uri& uri)
+pop3::fetch(mailbox& mbox, uri const& uri)
 {
-  const list<string>& ignore = mbox.ignore();
-  list<string> ignored;
-  list<mail> mails;
-  list<mail> recents;
+  std::list<std::string> const& ignore = mbox.ignore();
+  std::list<std::string> ignored;
+  std::list<mail> mails;
+  std::list<mail> recents;
   bool recent = uri[uri::fragment] == "recent";
   _command("UIDL");
   plist uidl(_plist());
-  plist::iterator uidp = uidl.begin();
-  for (; uidp != uidl.end(); ++uidp) {
-    string uid = uidp->second;
+  for (auto uidp = uidl.begin(); uidp != uidl.end(); ++uidp) {
+    std::string uid = uidp->second;
     if (find(ignore.begin(), ignore.end(), uid) != ignore.end()) {
       ignored.push_back(uid);
       continue;
     }
-    LOG("Fetch mail: " << uid << endl);
+    LOG("Fetch mail: " << uid << std::endl);
     _command("TOP " + uidp->first + " 0");
     mail m(uid);
     if (m.header(_headers())) {
@@ -113,18 +111,18 @@ pop3::fetch(mailbox& mbox, const uri& uri)
 }
 
 bool
-pop3::_command(const string& cmd, bool ok)
+pop3::_command(std::string const& cmd, bool ok)
 {
   write(cmd);
-  LOG("S: " << cmd << endl);
+  LOG("S: " << cmd << std::endl);
   return _ok(ok);
 }
 
 bool
 pop3::_ok(bool ok)
 {
-  string line = read();
-  bool resp = line.substr(0, line.find_first_of(' ')) == "+OK";
+  auto line = read();
+  auto resp = std::string_view(line).substr(0, line.find(' ')) == "+OK";
   if (ok && !resp) throw mailbox::error(line);
   return resp;
 }
@@ -134,29 +132,29 @@ pop3::_plist(bool upper)
 {
   plist result;
   for (;;) {
-    string line = read();
+    auto line = read();
     if (!line.empty() && line[0] == '.') {
       line.assign(line, 1, line.size() - 1);
       if (line.empty()) break;
     }
     if (upper) line = tokenizer::uppercase(line);
-    pair<string, string> ps;
-    string::size_type i = line.find_first_of(' ');
+    std::pair<std::string, std::string> ps;
+    auto i = line.find(' ');
     ps.first.assign(line, 0, i);
-    if (i != string::npos) {
+    if (i != line.npos) {
       i = line.find_first_not_of(' ', i);
-      if (i != string::npos) ps.second.assign(line, i, line.size() - i);
+      if (i != line.npos) ps.second.assign(line, i, line.size() - i);
     }
     result.push_back(ps);
   }
   return result;
 }
 
-string
+std::string
 pop3::_headers()
 {
-  string result;
-  string line = read();
+  std::string result;
+  std::string line = read();
   for (; !line.empty(); line = read()) {
     if (line[0] == '.') {
       if (line.size() == 1) break;

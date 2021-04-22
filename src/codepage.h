@@ -1,6 +1,6 @@
 // This file was created by codepage.exe.
 
-static const unsigned hash[] = {
+constexpr unsigned hash[] = {
   0x0058cea8,	// GREEK8
   0x0084bfe3,	// ISO-8859-4
   0x0157ce9a,	// GB18030
@@ -354,7 +354,7 @@ static const unsigned hash[] = {
   0xff088cb4,	// X-MAC-CE
 };
 
-static const unsigned short codepage[] = {
+constexpr unsigned short codepage[] = {
        28597,	// GREEK8
        28594,	// ISO-8859-4
        54936,	// GB18030

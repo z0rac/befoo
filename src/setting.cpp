@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -14,7 +14,7 @@
 #ifdef _DEBUG
 #include <iostream>
 #define DBG(s) s
-#define LOG(s) (cout << s)
+#define LOG(s) (std::cout << s)
 #else
 #define DBG(s)
 #define LOG(s)
@@ -23,7 +23,7 @@
 /*
  * Functions of class setting::_repository
  */
-static setting::repository* _rep = NULL;
+static setting::repository* _rep = {};
 
 setting::_repository::_repository()
 {
@@ -45,77 +45,74 @@ setting::preferences(_str name)
 {
   assert(_rep);
   assert(name && name[0]);
-  return _rep->storage('(' + string(name) + ')');
+  return _rep->storage('(' + std::string(name) + ')');
 }
 
-list<string>
+std::list<std::string>
 setting::mailboxes()
 {
   assert(_rep);
-  list<string> st(_rep->storages());
-  for (list<string>::iterator p = st.begin(); p != st.end();) {
+  std::list<std::string> st(_rep->storages());
+  for (auto p = st.begin(); p != st.end();) {
     // skip sections matched with the pattern "(.*)".
-    p =  p->empty() || ((*p)[0] == '(' && *p->rbegin() == ')') ? st.erase(p) : ++p;
+    p =  p->empty() || (*p)[0] == '(' && *p->rbegin() == ')' ? st.erase(p) : ++p;
   }
   return st;
 }
 
 setting
-setting::mailbox(const string& id)
+setting::mailbox(std::string const& id)
 {
   assert(_rep);
   return _rep->storage(id);
 }
 
 void
-setting::mailboxclear(const string& id)
+setting::mailboxclear(std::string const& id)
 {
   assert(_rep);
   _rep->erase(id);
 }
 
 namespace {
-  string cachekey(const string& key)
+  std::string cachekey(std::string const& key)
   {
-    string esc;
-    string ch = string("$") + _rep->invalidchars();
-    string::size_type i = 0, n;
+    std::string esc;
+    auto ch = std::string("$") + _rep->invalidchars();
+    size_t i = 0, n;
     while (n = StrCSpn(key.c_str() + i, ch.c_str()), i + n < key.size()) {
       esc += key.substr(i, n), i += n;
       char e[] = "$0";
-      e[1] += char(ch.find_first_of(key[i++]));
+      e[1] += char(ch.find(key[i++]));
       esc += e;
     }
     return "(cache:" + esc + key.substr(i, n) + ')';
   }
 }
 
-list<string>
-setting::cache(const string& key)
+std::list<std::string>
+setting::cache(std::string const& key)
 {
   assert(_rep);
-  list<string> result;
-  unique_ptr<storage> cache(_rep->storage(cachekey(key)));
-  list<string> keys(cache->keys());
-  for (list<string>::iterator p = keys.begin(); p != keys.end(); ++p) {
-    result.push_back(cache->get(p->c_str()));
+  std::list<std::string> result;
+  std::unique_ptr<storage> cache(_rep->storage(cachekey(key)));
+  for (auto const& k : cache->keys()) {
+    result.push_back(cache->get(k.c_str()));
   }
   return result;
 }
 
 void
-setting::cache(const string& key, const list<string>& data)
+setting::cache(std::string const& key, std::list<std::string> const& data)
 {
   assert(_rep);
-  string id = cachekey(key);
+  auto id = cachekey(key);
   _rep->erase(id);
   if (!data.empty()) {
-    unique_ptr<storage> cache(_rep->storage(id));
+    std::unique_ptr<storage> cache(_rep->storage(id));
+    char s[35];
     long i = 0;
-    for (list<string>::const_iterator p = data.begin(); p != data.end(); ++p) {
-      char s[35];
-      cache->put(_ltoa(++i, s, 10), p->c_str());
-    }
+    for (auto const& v : data) cache->put(_ltoa(++i, s, 10), v.c_str());
   }
 }
 
@@ -123,44 +120,42 @@ void
 setting::cacheclear()
 {
   assert(_rep);
-  list<string> rep(_rep->storages());
-  for (list<string>::iterator p = rep.begin(); p != rep.end(); ++p) {
-    if (!p->empty() && *p->rbegin() == ')' && p->find("(cache:") == 0) {
-      _rep->erase(*p);
-    }
+  for (auto const& key : _rep->storages()) {
+    if (!key.empty() && *key.rbegin() == ')' &&
+	key.starts_with("(cache:")) _rep->erase(key);
   }
 }
 
-const char*
+char const*
 setting::invalidchars()
 {
   assert(_rep);
   return _rep->invalidchars();
 }
 
-static const char code64[] =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static constexpr std::string_view code64
+("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
 
-string
+std::string
 setting::cipher(_str key)
 {
-  string s = _st->get(key);
+  auto s = _st->get(key);
   if (!s.empty()) {
     if (s[0] == '\x7f') {
-      if (s.size() < 5 || (s.size() & 1) == 0) return string();
-      string e;
+      if (s.size() < 5 || (s.size() & 1) == 0) return {};
+      std::string e;
       unsigned i = 0;
-      for (const char* p = s.c_str() + 1; *p; p += 2) {
+      for (auto p = s.c_str() + 1; *p; p += 2) {
 	int c = 0;
 	for (int h = 0; h < 2; ++h) {
-	  const char* pos = strchr(code64, p[h]);
-	  if (!pos) return string();
-	  c = (c << 4) | ((unsigned(pos - code64) - i) & 15);
+	  auto pos = code64.find(p[h]);
+	  if (pos == code64.npos) return {};
+	  c = (c << 4) | ((pos - i) & 15);
 	  i += 5 + h;
 	}
 	e += char(c);
       }
-      for (string::size_type j = e.size(); j-- > 2;) e[j] ^= e[j & 1];
+      for (auto j = e.size(); j-- > 2;) e[j] ^= e[j & 1];
       s = e.substr(2);
     } else {
       cipher(key, s);
@@ -170,15 +165,15 @@ setting::cipher(_str key)
 }
 
 setting&
-setting::cipher(_str key, const string& value)
+setting::cipher(_str key, std::string const& value)
 {
   union { char s[2]; short r; } seed;
-  seed.r = short(unsigned(ptrdiff_t(value.data())) + time(NULL));
-  string e = string(seed.s, 2) + value;
-  for (string::size_type i = e.size(); i-- > 2;) e[i] ^= e[i & 1];
-  string s(e.size() * 2 + 1, '\x7f');
+  seed.r = short(unsigned(ptrdiff_t(value.data())) + time({}));
+  auto e = std::string(seed.s, 2) + value;
+  for (auto i = e.size(); i-- > 2;) e[i] ^= e[i & 1];
+  std::string s(e.size() * 2 + 1, '\x7f');
   unsigned d = 0;
-  for (string::size_type i = 0; i < e.size(); ++i) {
+  for (size_t i = 0; i < e.size(); ++i) {
     s[i * 2 + 1] = code64[(((e[i] >> 4) & 15) + d) & 63];
     s[i * 2 + 2] = code64[((e[i] & 15) + d + 5) & 63];
     d += 11;
@@ -191,13 +186,13 @@ setting::cipher(_str key, const string& value)
  * Functions of class setting::tuple
  */
 setting::tuple&
-setting::tuple::add(const string& s)
+setting::tuple::add(std::string const& s)
 {
   _s += _sep, _s += s;
   return *this;
 }
 
-string
+std::string
 setting::tuple::digit(long i)
 {
   char s[35];
@@ -207,206 +202,85 @@ setting::tuple::digit(long i)
 /*
  * Functions of class setting::manip
  */
-setting::manip::manip(const string& s)
-  : _s(s), _next(0), _sep(',') {}
-
-string
+std::string
 setting::manip::next()
 {
-  static const char ws[] = " \t";
-  if (!avail()) return string();
-  string::size_type i = _s.find_first_not_of(ws, _next);
-  string::size_type n = _s.find_first_of(_sep, _next);
-  _next = n != string::npos ? n + 1 : (n = _s.size());
-  return i < n ? _s.substr(i, _s.find_last_not_of(ws, n - 1) - i + 1) : string();
+  constexpr char ws[] = "\t ";
+  if (!avail()) return {};
+  auto i = _s.find_first_not_of(ws, _next);
+  auto n = _s.find(_sep, _next);
+  _next = n != _s.npos ? n + 1 : (n = _s.size());
+  return i < n ? _s.substr(i, _s.find_last_not_of(ws, n - 1) - i + 1) : std::string();
 }
 
 bool
 setting::manip::next(int& v)
 {
-  string s = next();
+  auto s = next();
   if (s.empty()) return false;
-  v = strtol(s.c_str(), NULL, 0);
+  v = strtol(s.c_str(), {}, 0);
   return true;
 }
 
 setting::manip&
-setting::manip::operator()(string& v)
+setting::manip::operator()(std::string& v)
 {
-  string s = next();
-  if (!s.empty()) v = win32::xenv(s);
+  if (auto s = next(); !s.empty()) v = win32::xenv(s);
   return *this;
 }
 
-list<string>
+std::list<std::string>
 setting::manip::split()
 {
-  list<string> result;
+  std::list<std::string> result;
   while (avail()) result.push_back(win32::xenv(next()));
   return result;
 }
 
-#if USE_REG
-/** regkey - implement for setting::storage.
- */
-namespace {
-  class regkey : public setting::storage {
-    HKEY _key;
-  public:
-    regkey(HKEY key, const string& name);
-    ~regkey();
-    string get(const char* key) const;
-    void put(const char* key, const char* value);
-    void erase(const char* key);
-    list<string> keys() const;
-  };
-}
-
-regkey::regkey(HKEY key, const string& name)
-  : _key(NULL)
-{
-  key && RegCreateKeyEx(key, name.c_str(), 0, NULL,
-			REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &_key, NULL);
-}
-
-regkey::~regkey()
-{
-  _key && RegCloseKey(_key);
-}
-
-string
-regkey::get(const char* key) const
-{
-  DWORD type;
-  DWORD size;
-  if (_key &&
-      RegQueryValueEx(_key, key, NULL, &type, NULL, &size) == ERROR_SUCCESS &&
-      type == REG_SZ) {
-    win32::textbuf<char> buf(size);
-    if (RegQueryValueEx(_key, key, NULL, NULL, LPBYTE(buf.data), &size) == ERROR_SUCCESS) {
-      return buf.data;
-    }
-  }
-  return string();
-}
-
-void
-regkey::put(const char* key, const char* value)
-{
-  _key && RegSetValueEx(_key, key, 0, REG_SZ, (const BYTE*)value, strlen(value) + 1);
-}
-
-void
-regkey::erase(const char* key)
-{
-  _key && RegDeleteValue(_key, key);
-}
-
-list<string>
-regkey::keys() const
-{
-  list<string> result;
-  DWORD size;
-  if (_key && RegQueryInfoKey(_key, NULL, NULL, NULL, NULL, NULL,
-			      NULL, NULL, &size, NULL, NULL, NULL) == ERROR_SUCCESS) {
-    win32::textbuf<char> buf(++size);
-    DWORD i = 0, n;
-    while (n = size, RegEnumValue(_key, i++, buf.data, &n,
-				  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
-      result.push_back(buf.data);
-    }
-  }
-  return result;
-}
-
-/*
- * Functions of class registory
- */
-registory::registory(const char* key)
-  : _key(NULL)
-{
-  RegCreateKeyEx(HKEY_CURRENT_USER, key, 0, NULL,
-		 REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, PHKEY(&_key), NULL);
-}
-
-registory::~registory()
-{
-  _key && RegCloseKey(HKEY(_key));
-}
-
-setting::storage*
-registory::storage(const string& name) const
-{
-  return new regkey(HKEY(_key), name);
-}
-
-list<string>
-registory::storages() const
-{
-  list<string> result;
-  DWORD size;
-  if (_key && RegQueryInfoKey(HKEY(_key), NULL, NULL, NULL, NULL, &size,
-			      NULL, NULL, NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
-    win32::textbuf<char> buf(++size);
-    DWORD i = 0, n;
-    while (n = size, RegEnumKeyEx(HKEY(_key), i++, buf.data, &n,
-				  NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
-      result.push_back(buf.data);
-    }
-  }
-  return result;
-}
-
-void
-registory::erase(const string& name)
-{
-  _key && RegDeleteKey(HKEY(_key), name.c_str());
-}
-#else // !USE_REG
 /** section - implement for setting::storage.
  * This is using Windows API for .INI file.
  */
 namespace {
   class section : public setting::storage {
-    string _section;
-    const char* _path;
+    std::string _section;
+    char const* _path;
   public:
-    section(const string& section, const char* path)
+    section(std::string const& section, char const* path)
       : _section(section), _path(path) {}
-    string get(const char* key) const;
-    void put(const char* key, const char* value);
-    void erase(const char* key);
-    list<string> keys() const;
+    std::string get(char const* key) const override;
+    void put(char const* key, char const* value) override;
+    void erase(char const* key) override;
+    std::list<std::string> keys() const override;
   };
 }
 
-string
-section::get(const char* key) const
+std::string
+section::get(char const* key) const
 {
   return win32::profile(_section.c_str(), key, _path);
 }
 
 void
-section::put(const char* key, const char* value)
+section::put(char const* key, char const* value)
 {
-  string tmp;
+  std::string tmp;
   if (value && value[0] == '"' && value[strlen(value) - 1] == '"') {
-    tmp = '"' + string(value) + '"';
+    tmp = '"' + std::string(value) + '"';
     value = tmp.c_str();
   }
   win32::profile(_section.c_str(), key, value, _path);
 }
 
 void
-section::erase(const char* key)
+section::erase(char const* key)
 {
-  win32::profile(_section.c_str(), key, NULL, _path);
+  win32::profile(_section.c_str(), key, {}, _path);
 }
 
-list<string>
+std::list<std::string>
 section::keys() const
 {
-  return setting::manip(get(NULL)).sep(0).split();
+  return setting::manip(get({})).sep(0).split();
 }
 
 /*
@@ -414,24 +288,23 @@ section::keys() const
  */
 profile::~profile()
 {
-  win32::profile(NULL, NULL, NULL, _path);
+  win32::profile({}, {}, {}, _path);
 }
 
 setting::storage*
-profile::storage(const string& name) const
+profile::storage(std::string const& name) const
 {
   return new section(name, _path);
 }
 
-list<string>
+std::list<std::string>
 profile::storages() const
 {
-  return setting::manip(win32::profile(NULL, NULL, _path)).sep(0).split();
+  return setting::manip(win32::profile({}, {}, _path)).sep(0).split();
 }
 
 void
-profile::erase(const string& name)
+profile::erase(std::string const& name)
 {
-  win32::profile(name.c_str(), NULL, NULL, _path);
+  win32::profile(name.c_str(), {}, {}, _path);
 }
-#endif // !USE_REG

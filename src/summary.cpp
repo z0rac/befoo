@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -14,7 +14,7 @@
 #ifdef _DEBUG
 #include <iostream>
 #define DBG(s) s
-#define LOG(s) (cout << s)
+#define LOG(s) (std::cout << s)
 #else
 #define DBG(s)
 #define LOG(s)
@@ -32,41 +32,41 @@ namespace {
     class item : LVITEMA {
       HWND _h;
     public:
-      item(const window& w);
+      item(window const& w);
       item& operator()(LPCSTR s);
       item& operator()(LPCWSTR s);
-      item& operator()(const string& s) { return operator()(s.c_str()); }
+      item& operator()(std::string const& s) { return operator()(s.c_str()); }
+      item& operator()(std::wstring const& s) { return operator()(s.c_str()); }
     };
+    class compare;
     enum column { SUBJECT, SENDER, DATE, MAILBOX, LAST };
-    time_t* _dates;
-    pair<size_t, string>* _mboxes;
-    int _column;
-    int _order;
-    string _tmp;
-    int _compare(LPARAM s1, LPARAM s2) const;
-    static int CALLBACK compare(LPARAM l1, LPARAM l2, LPARAM lsort);
+    time_t* _dates = {};
+    std::pair<size_t, std::string>* _mboxes = {};
+    int _column = 3;
+    int _order = 1;
+    std::string _tmp;
   protected:
-    void release();
-    LRESULT notify(WPARAM w, LPARAM l);
+    void release() override;
+    LRESULT notify(WPARAM w, LPARAM l) override;
     void _initialize();
     void _sort(int column, int order);
     void _open();
   public:
-    summary(const window& parent);
+    summary(window const& parent);
     ~summary();
-    int initialize(const mailbox* mboxes);
+    int initialize(mailbox const* mboxes);
     void raised(bool topmost);
   };
 }
 
-summary::summary(const window& parent)
-  : window(WC_LISTVIEW, parent), _dates(NULL), _mboxes(NULL),
-    _column(3), _order(1)
+summary::summary(window const& parent)
+  : window(WC_LISTVIEW, parent)
 {
-  static commctrl listview(ICC_LISTVIEW_CLASSES);
+  static commctrl listview { ICC_LISTVIEW_CLASSES };
   style(LVS_REPORT | LVS_SINGLESEL);
   (void)ListView_SetExtendedListViewStyle
-    (hwnd(), LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_LABELTIP);
+    (hwnd(), (LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES |
+	      LVS_EX_LABELTIP | LVS_EX_DOUBLEBUFFER));
   setting::preferences("summary")["sort"](_column)(_order);
   show();
 }
@@ -81,8 +81,8 @@ void
 summary::release()
 {
   try {
-    setting prefs = setting::preferences("summary");
-    setting::tuple tuple = setting::tuple(ListView_GetColumnWidth(hwnd(), 0));
+    auto prefs = setting::preferences("summary");
+    auto tuple = setting::tuple(ListView_GetColumnWidth(hwnd(), 0));
     for (int i = 1; i < LAST; ++i) tuple(ListView_GetColumnWidth(hwnd(), i));
     if (tuple.row().compare(prefs["columns"])) prefs("columns", tuple);
     tuple = setting::tuple(_column)(_order);
@@ -98,7 +98,7 @@ summary::notify(WPARAM w, LPARAM l)
     switch (LPNMLVDISPINFOA(l)->item.iSubItem) {
     case DATE:
       {
-	time_t t = _dates[LPNMLVDISPINFOA(l)->item.lParam];
+	auto t = _dates[LPNMLVDISPINFOA(l)->item.lParam];
 	_tmp = t == time_t(-1) ? "" :
 	  win32::date(t, DATE_LONGDATE) + " " + win32::time(t, TIME_NOSECONDS);
 	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(_tmp.c_str());
@@ -106,7 +106,7 @@ summary::notify(WPARAM w, LPARAM l)
       break;
     case MAILBOX:
       {
-	const pair<size_t, string>* p = _mboxes;
+	auto const* p = _mboxes;
 	while (size_t(LPNMLVDISPINFOA(l)->item.lParam) >= p->first) ++p;
 	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(p->second.c_str());
       }
@@ -127,27 +127,52 @@ summary::notify(WPARAM w, LPARAM l)
 void
 summary::_initialize()
 {
-  list<string> column = win32::exe.texts(ID_TEXT_SUMMARY_COLUMN);
-  const int n = static_cast<int>(column.size());
-  list<int> width = setting::preferences("summary")["columns"].split<int>();
-  list<int>::iterator wp = width.begin();
-  LVCOLUMN col = { LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM };
+  auto column = win32::exe.texts(ID_TEXT_SUMMARY_COLUMN);
+  int const n = static_cast<int>(column.size());
+  auto width = setting::preferences("summary")["columns"].split<int>();
+  auto wp = width.begin(), we = width.end();
+  LVCOLUMN col { LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM };
   int cx = 0, ex = extent().x;
-  for (list<string>::iterator p = column.begin(); p != column.end(); ++p) {
-    col.cx = (wp != width.end() ? *wp++ :
-	      col.iSubItem ? (ex - cx) / (n - col.iSubItem) : ex / 2);
-    col.pszText = LPSTR(p->c_str());
+  for (auto const& name : column) {
+    col.cx = wp != we ? *wp++ : col.iSubItem ? (ex - cx) / (n - col.iSubItem) : ex / 2;
+    col.pszText = LPSTR(name.c_str());
     (void)ListView_InsertColumn(hwnd(), col.iSubItem, &col);
     cx += col.cx;
     ++col.iSubItem;
   }
 }
 
+class summary::compare {
+  summary& subject;
+  int size[2];
+  std::unique_ptr<WCHAR[]> text[2];
+public:
+  compare(summary& subject, int n = 128)
+    : subject(subject), size { n, n }, text {
+	std::unique_ptr<WCHAR[]>(new WCHAR[n]),
+	std::unique_ptr<WCHAR[]>(new WCHAR[n])
+      } {}
+  int operator()(LPARAM s1, LPARAM s2) {
+    LPARAM si[] { s1, s2 };
+    LVITEMW lv { LVIF_TEXT };
+    lv.iSubItem = subject._column;
+    for (int i = 0; i < 2; ++i) {
+      for (lv.cchTextMax = size[i];; size[i] = lv.cchTextMax) {
+	lv.pszText = text[i].get();
+	auto n = SendMessage(subject.hwnd(), LVM_GETITEMTEXTW, si[i], LPARAM(&lv));
+	if (n < lv.cchTextMax - 1) break;
+	text[i] = std::unique_ptr<WCHAR[]>(new WCHAR[lv.cchTextMax <<= 1]);
+      }
+    }
+    return lstrcmpiW(text[0].get(), text[1].get()) * subject._order;
+  }
+};
+
 void
 summary::_sort(int column, int order)
 {
-  HWND hdr = ListView_GetHeader(hwnd());
-  HDITEM hdi = { HDI_FORMAT };
+  auto hdr = ListView_GetHeader(hwnd());
+  HDITEM hdi { HDI_FORMAT };
   if (column != _column) {
     (void)Header_GetItem(hdr, _column, &hdi);
     hdi.fmt &= ~(HDF_SORTDOWN | HDF_SORTUP);
@@ -158,48 +183,28 @@ summary::_sort(int column, int order)
   hdi.fmt |= order > 0 ? HDF_SORTUP : HDF_SORTDOWN;
   (void)Header_SetItem(hdr, column, &hdi);
   _column = column, _order = order;
-  SendMessage(hwnd(), column < DATE ? LVM_SORTITEMSEX : LVM_SORTITEMS,
-	      WPARAM(this), LPARAM(&compare));
-}
-
-inline int
-summary::_compare(LPARAM s1, LPARAM s2) const
-{
-  switch (_column) {
-  case DATE:
-    {
-      size_t v1 = size_t(_dates[s1]);
-      size_t v2 = size_t(_dates[s2]);
-      return v1 < v2 ? -_order : int(v1 != v2) * _order;
-    }
-  case MAILBOX:
-    {
+  constexpr int (CALLBACK* cmp[])(LPARAM, LPARAM, LPARAM) = {
+    [](auto s1, auto s2, auto arg) {
+      auto& s = *reinterpret_cast<summary*>(arg);
+      auto v1 = size_t(s._dates[s1]), v2 = size_t(s._dates[s2]);
+      return v1 < v2 ? -s._order : int(v1 != v2) * s._order;
+    },
+    [](auto s1, auto s2, auto arg) {
+      auto& s = *reinterpret_cast<summary*>(arg);
       size_t v1 = 0, v2 = 0;
-      while (_mboxes[v1].first <= size_t(s1)) ++v1;
-      while (_mboxes[v2].first <= size_t(s2)) ++v2;
-      return v1 < v2 ? -_order : int(v1 != v2) * _order;
-    }
+      while (s._mboxes[v1].first <= size_t(s1)) ++v1;
+      while (s._mboxes[v2].first <= size_t(s2)) ++v2;
+      return v1 < v2 ? -s._order : int(v1 != v2) * s._order;
+    },
+  };
+  if (column == DATE || column == MAILBOX) {
+    (void)ListView_SortItems(hwnd(), cmp[column - DATE], LPARAM(this));
+  } else {
+    compare w { *this };
+    (void)ListView_SortItemsEx(hwnd(), [](auto s1, auto s2, auto arg) {
+      return (*reinterpret_cast<compare*>(arg))(s1, s2);
+    }, LPARAM(&w));
   }
-
-  win32::textbuf<WCHAR> tb[2];
-  LPARAM si[] = { s1, s2 };
-  for (int i = 0; i < 2; ++i) {
-    LVITEMW lv = { LVIF_TEXT };
-    lv.iSubItem = _column;
-    lv.cchTextMax = 256;
-    LRESULT n;
-    do {
-      lv.pszText = tb[i](lv.cchTextMax <<= 1);
-      n = SendMessage(hwnd(), LVM_GETITEMTEXTW, si[i], LPARAM(&lv));
-    } while (n == lv.cchTextMax - 1);
-  }
-  return lstrcmpiW(tb[0].data, tb[1].data) * _order;
-}
-
-int CALLBACK
-summary::compare(LPARAM l1, LPARAM l2, LPARAM lsort)
-{
-  return reinterpret_cast<summary*>(lsort)->_compare(l1, l2);
 }
 
 void
@@ -207,40 +212,39 @@ summary::_open()
 {
   int item = ListView_GetNextItem(hwnd(), -1, LVNI_SELECTED);
   if (item < 0) return;
-  LVITEM lv = { LVIF_PARAM, item };
+  LVITEM lv { LVIF_PARAM, item };
   if (!ListView_GetItem(hwnd(), &lv)) return;
   size_t i = 0;
   while (_mboxes[i].first <= size_t(lv.lParam)) ++i;
-  string mua;
+  std::string mua;
   setting::mailbox(_mboxes[i].second)["mua"].sep(0)(mua);
   if (!mua.empty() && win32::shell(mua)) close(true);
 }
 
 int
-summary::initialize(const mailbox* mboxes)
+summary::initialize(mailbox const* mboxes)
 {
   int h = extent().y;
   _initialize();
   size_t mails = 0;
   int mbn = 0;
-  for (const mailbox* mb = mboxes; mb; mb = mb->next()) {
+  for (auto mb = mboxes; mb; mb = mb->next()) {
     mails += mb->mails().size();
     ++mbn;
   }
   assert(!_dates && !_mboxes);
   _dates = new time_t[mails];
-  _mboxes = new pair<size_t, string>[mbn];
+  _mboxes = new std::pair<size_t, std::string>[mbn];
   mails = 0, mbn = 0;
-  for (const mailbox* mb = mboxes; mb; mb = mb->next()) {
-    LOG("Summary[" << mb->name() << "](" << mb->mails().size() << ")..." << endl);
+  for (auto mb = mboxes; mb; mb = mb->next()) {
+    LOG("Summary[" << mb->name() << "](" << mb->mails().size() << ")..." << std::endl);
     _mboxes[mbn].first = mails + mb->mails().size();
     _mboxes[mbn++].second = mb->name();
-    list<mail>::const_iterator mp = mb->mails().begin();
-    for (; mp != mb->mails().end(); ++mp) {
-      _dates[mails++] = mp->date();
+    for (auto const& mail : mb->mails()) {
+      _dates[mails++] = mail.date();
       item(*this)
-	(win32::wstr(mp->subject(), CP_UTF8))
-	(win32::wstr(mp->sender(), CP_UTF8))
+	(win32::wstring(mail.subject(), CP_UTF8))
+	(win32::wstring(mail.sender(), CP_UTF8))
 	(LPSTR_TEXTCALLBACK)
 	(LPSTR_TEXTCALLBACK);
     }
@@ -250,10 +254,9 @@ summary::initialize(const mailbox* mboxes)
   return HIWORD(ListView_ApproximateViewRect(hwnd(), -1, -1, n)) - h;
 }
 
-summary::item::item(const window& w)
-  : _h(w.hwnd())
+summary::item::item(window const& w)
+  : LVITEMA({}), _h(w.hwnd())
 {
-  ZeroMemory(this, sizeof(LVITEMA));
   mask = LVIF_PARAM;
   lParam = iItem = ListView_GetItemCount(_h);
   (void)ListView_InsertItem(_h, this);
@@ -281,7 +284,7 @@ summary::item::operator()(LPCWSTR s)
 void
 summary::raised(bool topmost)
 {
-  HWND h = ListView_GetToolTips(hwnd());
+  auto h = ListView_GetToolTips(hwnd());
   if (h && ((GetWindowLong(h, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0) != topmost) {
     SetWindowPos(h, topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
 		 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -298,28 +301,28 @@ namespace {
       int sec;
       void reset(window& source)
       { if (sec > 0) source.settimer(*this, UINT(sec * 1000)); }
-      void wakeup(window& source)
+      void wakeup(window& source) override
       { if (source.hascursor()) reset(source); else source.close(); }
     } _autoclose;
     int _alpha;
   protected:
-    LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
-    void release();
-    void limit(LPMINMAXINFO info);
-    void resize(int w, int h);
-    void raised(bool topmost) { _summary.raised(topmost); }
+    LRESULT dispatch(UINT m, WPARAM w, LPARAM l) override;
+    void release() override;
+    void limit(LPMINMAXINFO info) override;
+    void resize(int w, int h) override;
+    void raised(bool topmost) override { _summary.raised(topmost); }
   public:
-    summarywindow(const mailbox* mboxes);
+    summarywindow(mailbox const* mboxes);
     ~summarywindow() { if (hwnd()) release(); }
   };
 }
 
-summarywindow::summarywindow(const mailbox* mboxes)
+summarywindow::summarywindow(mailbox const* mboxes)
   : _summary(self())
 {
-  const DWORD style(WS_OVERLAPPED | WS_CAPTION |
+  DWORD const style(WS_OVERLAPPED | WS_CAPTION |
 		    WS_SYSMENU | WS_THICKFRAME | WS_CLIPCHILDREN);
-  const DWORD exstyle(WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
+  DWORD const exstyle(WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE);
   setting prefs = setting::preferences();
   int transparency;
   prefs["summary"](_autoclose.sec = 3)()(transparency = 0);
@@ -380,7 +383,7 @@ summarywindow::release()
 {
   if (_changed) {
     try {
-      RECT r = bounds();
+      auto r = bounds();
       setting::preferences("summary")
 	("window", setting::tuple(r.left)(r.top)(r.right)(r.bottom));
     } catch (...) {}
@@ -397,13 +400,13 @@ summarywindow::limit(LPMINMAXINFO info)
 void
 summarywindow::resize(int w, int h)
 {
-  RECT r = _summary.bounds();
+  auto r = _summary.bounds();
   _changed = r.right - r.left != w || r.bottom - r.top != h;
   _summary.move(0, 0, w, h);
 }
 
 window*
-summary(const mailbox* mboxes)
+summary(mailbox const* mboxes)
 {
   return new summarywindow(mboxes);
 }

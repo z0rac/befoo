@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -14,7 +14,7 @@
 #ifdef _DEBUG
 #include <iostream>
 #define DBG(s) s
-#define LOG(s) (cout << s)
+#define LOG(s) (std::cout << s)
 #else
 #define DBG(s)
 #define LOG(s)
@@ -33,26 +33,26 @@ namespace {
   class tooltips : public window, window::timer {
     static commctrl use;
     struct info : public TOOLINFO {
-      info(const window& tips);
+      info(window const& tips);
     };
     class status : public window {
-      LRESULT notify(WPARAM w, LPARAM l);
+      LRESULT notify(WPARAM w, LPARAM l) override;
       void tracking(bool tracking);
     public:
-      status(const window& owner);
-      void operator()(const string& text);
+      status(window const& owner);
+      void operator()(std::string const& text);
       void reset(bool await = true);
       void disable();
     };
     status _status;
-    void wakeup(window&) { clearballoon(); }
-    LRESULT notify(WPARAM w, LPARAM l);
+    void wakeup(window&) override { clearballoon(); }
+    LRESULT notify(WPARAM w, LPARAM l) override;
   public:
-    tooltips(const window& owner);
-    void tip(const string& text) { _status(text); }
+    tooltips(window const& owner);
+    void tip(std::string const& text) { _status(text); }
     void reset(bool await = true) { _status.reset(await); }
-    void balloon(LPCWSTR text, unsigned sec = 0,
-		 const string& title = string(), int icon = 0);
+    void balloon(std::wstring const& text, unsigned sec = 0,
+		 std::wstring const& title = {}, int icon = 0);
     void clearballoon();
     void topmost(bool owner);
   public:
@@ -62,21 +62,21 @@ namespace {
     public:
       ellipsis();
       ~ellipsis();
-      win32::wstr operator()(LPCWSTR ws) const;
+      std::wstring operator()(std::wstring_view ws) const;
     };
   };
   window::commctrl tooltips::use(ICC_BAR_CLASSES);
 }
 
-tooltips::info::info(const window& tips)
+tooltips::info::info(window const& tips)
 {
   ZeroMemory(this, sizeof(TOOLINFO));
   cbSize = sizeof(TOOLINFO);
   hwnd = GetParent(tips.hwnd());
 }
 
-tooltips::status::status(const window& owner)
-  : window(TOOLTIPS_CLASS, NULL, owner.hwnd())
+tooltips::status::status(window const& owner)
+  : window(TOOLTIPS_CLASS, {}, owner.hwnd())
 {
   style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX);
   info ti(*this);
@@ -86,7 +86,7 @@ tooltips::status::status(const window& owner)
 }
 
 void
-tooltips::status::operator()(const string& text)
+tooltips::status::operator()(std::string const& text)
 {
   info ti(*this);
   ti.lpszText = LPSTR(text.c_str());
@@ -128,8 +128,8 @@ tooltips::status::notify(WPARAM w, LPARAM l)
   return window::notify(w, l);
 }
 
-tooltips::tooltips(const window& owner)
-  : window(TOOLTIPS_CLASS, NULL, owner.hwnd()), _status(owner)
+tooltips::tooltips(window const& owner)
+  : window(TOOLTIPS_CLASS, {}, owner.hwnd()), _status(owner)
 {
   style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE);
   info ti(*this);
@@ -139,9 +139,10 @@ tooltips::tooltips(const window& owner)
 }
 
 void
-tooltips::balloon(LPCWSTR text, unsigned sec, const string& title, int icon)
+tooltips::balloon(std::wstring const& text, unsigned sec,
+		  std::wstring const& title, int icon)
 {
-  TOOLINFOW ti = { sizeof(TOOLINFOW) };
+  TOOLINFOW ti { sizeof(ti) };
   ti.hwnd = GetParent(hwnd());
   SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
   _status.disable();
@@ -150,9 +151,9 @@ tooltips::balloon(LPCWSTR text, unsigned sec, const string& title, int icon)
   r.left = r.right / 2, r.top = r.bottom * 9 / 16;
   ClientToScreen(ti.hwnd, LPPOINT(&r));
   SendMessage(hwnd(), TTM_TRACKPOSITION, 0, MAKELPARAM(r.left, r.top));
-  ti.lpszText = LPWSTR(text);
+  ti.lpszText = LPWSTR(text.c_str());
   SendMessage(hwnd(), TTM_UPDATETIPTEXTW, 0, LPARAM(&ti));
-  SendMessage(hwnd(), TTM_SETTITLEA, WPARAM(icon), LPARAM(title.c_str()));
+  SendMessage(hwnd(), TTM_SETTITLEW, WPARAM(icon), LPARAM(title.c_str()));
   SendMessage(hwnd(), TTM_TRACKACTIVATE, TRUE, LPARAM(&ti));
   settimer(*this, sec * 1000);
 }
@@ -179,9 +180,9 @@ tooltips::notify(WPARAM w, LPARAM l)
 }
 
 tooltips::ellipsis::ellipsis()
-  : hDC(CreateCompatibleDC(NULL))
+  : hDC(CreateCompatibleDC({}))
 {
-  NONCLIENTMETRICS ncm = { sizeof(NONCLIENTMETRICS) };
+  NONCLIENTMETRICS ncm { sizeof(ncm) };
   SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
   hFont = SelectObject(hDC, CreateFontIndirect(&ncm.lfStatusFont));
 }
@@ -192,21 +193,18 @@ tooltips::ellipsis::~ellipsis()
   DeleteDC(hDC);
 }
 
-win32::wstr
-tooltips::ellipsis::operator()(LPCWSTR ws) const
+std::wstring
+tooltips::ellipsis::operator()(std::wstring_view ws) const
 {
-  struct buf {
-    LPWSTR data;
-    buf(LPCWSTR ws) : data(lstrcpyW(new WCHAR[lstrlenW(ws) + 5], ws)) {}
-    ~buf() { delete [] data; }
-  } buf(ws);
-  for (LPWSTR p = buf.data; *++p;) {
+  std::unique_ptr<WCHAR[]> buf(new WCHAR[ws.size() + 5]);
+  lstrcpynW(buf.get(), ws.data(), int(ws.size() + 1));
+  for (auto p = buf.get(); *++p;) {
     if (*p == '\t') *p = ' ';
   }
-  static RECT r = { 0, 0, 300, 300 };
-  DrawTextW(hDC, buf.data, -1, &r,
+  static RECT r { 0, 0, 300, 300 };
+  DrawTextW(hDC, buf.get(), -1, &r,
 	    DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS | DT_MODIFYSTRING);
-  return buf.data;
+  return buf.get();
 }
 
 /** iconwindow - icon window with system tray
@@ -215,25 +213,25 @@ namespace {
   class iconwindow : public appwindow, window::timer {
     icon _icon;
     tooltips _tips;
-    string _status;
+    std::string _status;
     UINT _tbcmsg;
     bool _trayicon(bool tray);
     void _update();
     void _updatetips();
   protected:
-    LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
-    void release() { _trayicon(false); }
-    void draw(HDC hDC);
-    void raised(bool topmost) { _tips.topmost(topmost); }
-    bool popup(const menu& menu, LPARAM pt);
-    void wakeup(window& source);
+    LRESULT dispatch(UINT m, WPARAM w, LPARAM l) override;
+    void release() override { _trayicon(false); }
+    void draw(HDC hDC) override;
+    void raised(bool topmost) override { _tips.topmost(topmost); }
+    bool popup(menu const& menu, LPARAM pt) override;
+    void wakeup(window& source) override;
     void reset(int type);
-    void status(const string& text);
-    void balloon(LPCWSTR text, unsigned sec,
-		 const string& title = string(), int icon = 0);
+    void status(std::string const& text);
+    void balloon(std::wstring const& text, unsigned sec,
+		 std::wstring const& title = {}, int icon = 0);
     int size() const { return _icon.size(); }
   public:
-    iconwindow(const icon& icon);
+    iconwindow(icon const& icon);
     ~iconwindow() { if (hwnd()) _trayicon(false); }
     void trayicon(bool tray);
     bool intray() const { return !visible(); }
@@ -329,7 +327,7 @@ iconwindow::draw(HDC hDC)
 }
 
 bool
-iconwindow::popup(const menu& menu, LPARAM pt)
+iconwindow::popup(menu const& menu, LPARAM pt)
 {
   bool t = appwindow::popup(menu, pt);
   if (!t && intray()) {
@@ -354,7 +352,7 @@ iconwindow::reset(int type)
 }
 
 void
-iconwindow::status(const string& text)
+iconwindow::status(std::string const& text)
 {
   _status = text;
   _tips.clearballoon();
@@ -362,21 +360,21 @@ iconwindow::status(const string& text)
 }
 
 void
-iconwindow::balloon(LPCWSTR text, unsigned sec,
-		    const string& title, int icon)
+iconwindow::balloon(std::wstring const& text, unsigned sec,
+		    std::wstring const& title, int icon)
 {
   if (intray()) {
-    NOTIFYICONDATAW ni = { sizeof(NOTIFYICONDATAW), hwnd() };
+    NOTIFYICONDATAW ni { sizeof(ni), hwnd() };
     ni.uFlags = NIF_INFO;
-    int n = lstrlenW(text);
-    if (n >= int(sizeof(ni.szInfo) / sizeof(ni.szInfo[0]))) {
-      n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]);
+    auto n = int(text.size());
+    if (constexpr auto sz = int(sizeof(ni.szInfo) / sizeof(ni.szInfo[0])); n >= sz) {
+      n = sz;
       while (n-- && text[n] != '\n') continue;
-      if (n < 0) n = sizeof(ni.szInfo) / sizeof(ni.szInfo[0]) - 1;
+      if (n < 0) n = sz - 1;
     }
-    lstrcpynW(ni.szInfo, text, n + 1);
+    lstrcpynW(ni.szInfo, text.c_str(), n + 1);
     ni.uTimeout = sec * 1000;
-    lstrcpynW(ni.szInfoTitle, win32::wstr(title),
+    lstrcpynW(ni.szInfoTitle, title.c_str(),
 	      sizeof(ni.szInfoTitle) / sizeof(ni.szInfoTitle[0]));
     ni.dwInfoFlags = icon & 3;
     Shell_NotifyIconW(NIM_MODIFY, &ni);
@@ -385,7 +383,7 @@ iconwindow::balloon(LPCWSTR text, unsigned sec,
   }
 }
 
-iconwindow::iconwindow(const icon& icon)
+iconwindow::iconwindow(icon const& icon)
   : _icon(icon), _tips(self()), _tbcmsg(RegisterWindowMessage("TaskbarCreated"))
 {
   style(WS_POPUP, WS_EX_TOOLWINDOW | WS_EX_LAYERED);
@@ -414,9 +412,9 @@ namespace {
     void _release();
     static icon _icon();
   protected:
-    LRESULT dispatch(UINT m, WPARAM w, LPARAM l);
-    void release();
-    void update(int recent, int unseen, list<mailbox*>* mboxes);
+    LRESULT dispatch(UINT m, WPARAM w, LPARAM l) override;
+    void release() override;
+    void update(int recent, int unseen, std::list<mailbox*>* mboxes);
   public:
     mascotwindow();
     ~mascotwindow() { if (hwnd()) _release(); }
@@ -444,7 +442,7 @@ mascotwindow::_icon()
 {
   try {
     int id;
-    string fn;
+    std::string fn;
     setting::preferences()["icon"]()()(id = 1).sep(0)(fn);
     return icon(id, fn);
   } catch (...) {
@@ -482,7 +480,7 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     popup(_menu, l);
     return 0;
   case WM_APP: // broadcast
-    update(LOWORD(w), HIWORD(w), reinterpret_cast<list<mailbox*>*>(l));
+    update(LOWORD(w), HIWORD(w), reinterpret_cast<std::list<mailbox*>*>(l));
     return 0;
   }
   return iconwindow::dispatch(m, w, l);
@@ -497,40 +495,40 @@ mascotwindow::release()
 }
 
 void
-mascotwindow::update(int recent, int unseen, list<mailbox*>* mboxes)
+mascotwindow::update(int recent, int unseen, std::list<mailbox*>* mboxes)
 {
   if (mboxes) {
-    LOG("Update: " << recent << ", " << unseen << endl);
-    win32::wstr info;
-    bool newer = false;
+    LOG("Update: " << recent << ", " << unseen << std::endl);
+    std::wstring info;
     tooltips::ellipsis ellips;
-    list<mailbox*>::const_iterator p = mboxes->begin();
-    for (; p != mboxes->end(); ++p) {
-      int n = (*p)->recent();
+    auto newer = false;
+    for (auto mbox : *mboxes) {
+      int n = mbox->recent();
       if (n > 0 && _balloon) {
-	const list<mail>& mails = (*p)->mails();
-	info += win32::wstr('\n' + win32::exe.textf(ID_TEXT_FETCHED_MAIL,
-						    n, mails.size()) +
-			    " @ " + (*p)->name());
-	list<mail>::const_iterator it = mails.end();
-	for (int i = min(n, _subjects); i-- > 0;) {
-	  --it, info += ellips(win32::wstr("\n- " + it->subject(), CP_UTF8));
+	auto const& mails = mbox->mails();
+	info += win32::wstring
+	  (win32::exe.textf(ID_TEXT_FETCHED_MAIL, n, mails.size()) +
+	   " @ " + mbox->name()) + L'\n';
+	auto mail = mails.crbegin();
+	for (auto i = min(n, _subjects); i--; ++mail) {
+	  info += ellips(win32::wstring("- " + mail->subject(), CP_UTF8)) + L'\n';
 	}
       } else if (n < 0) {
-	info += win32::wstr('\n' + win32::exe.text(ID_TEXT_FETCH_ERROR) +
-			    " @ " + (*p)->name());
+	info += win32::wstring(win32::exe.text(ID_TEXT_FETCH_ERROR) +
+			       " @ " + mbox->name()) + L'\n';
       }
       newer = newer || n > 0;
     }
     ReplyMessage(0);
     status(win32::exe.textf(ID_TEXT_FETCHED_MAIL, recent, unseen));
-    if (info) {
-      balloon(info + 1, _balloon ? _balloon : 10,
-	      win32::exe.text(newer ? ID_TEXT_BALLOON_TITLE :
-			      ID_TEXT_BALLOON_ERROR),
+    if (!info.empty()) {
+      info[info.size() - 1] = 0;
+      balloon(info, _balloon ? _balloon : 10,
+	      win32::wstring(win32::exe.text(newer ? ID_TEXT_BALLOON_TITLE :
+					     ID_TEXT_BALLOON_ERROR)),
 	      newer ? NIIF_INFO : NIIF_ERROR);
     }
-    reset((unseen == 0) + 1);
+    reset(!unseen + 1);
   } else {
     status(win32::exe.text(ID_TEXT_FETCHING));
     reset(0);
@@ -571,16 +569,16 @@ mascotwindow::mascotwindow()
 
 namespace cmd {
   struct trayicon : public window::command {
-    void execute(window& source)
+    void execute(window& source) override
     { ((mascotwindow&)source).trayicon(!((mascotwindow&)source).intray()); }
-    UINT state(window& source)
+    UINT state(window& source) override
     { return ((mascotwindow&)source).intray() ? MFS_CHECKED : 0; }
   };
 
   struct alwaysontop : public window::command {
-    void execute(window& source) { source.topmost(!source.topmost()); }
-    UINT state(window& source)
-    {
+    void execute(window& source) override
+    { source.topmost(!source.topmost()); }
+    UINT state(window& source) override {
       return ((mascotwindow&)source).intray() ?
 	MFS_DISABLED : source.topmost() ? MFS_CHECKED : 0;
     }
@@ -588,10 +586,10 @@ namespace cmd {
 
   struct about : public window::command {
     about() : window::command(-1001) {}
-    void execute(window& source)
-    {
-      ((mascotwindow&)source).balloon(win32::wstr(win32::exe.text(ID_TEXT_ABOUT)), 10,
-				      win32::exe.text(ID_TEXT_VERSION));
+    void execute(window& source) override {
+      ((mascotwindow&)source).balloon
+	(win32::wstring(win32::exe.text(ID_TEXT_ABOUT)), 10,
+	 win32::wstring(win32::exe.text(ID_TEXT_VERSION)));
     }
   };
 }
@@ -599,11 +597,11 @@ namespace cmd {
 window*
 mascot()
 {
-  unique_ptr<mascotwindow> w(new mascotwindow);
+  std::unique_ptr<mascotwindow> w(new mascotwindow);
   w->addcmd(ID_MENU_TRAYICON, new cmd::trayicon);
   w->addcmd(ID_MENU_ALWAYSONTOP, new cmd::alwaysontop);
   w->addcmd(ID_MENU_ABOUT, new cmd::about);
-  if (string(setting::preferences("mascot")["tray"]).empty()) {
+  if (std::string(setting::preferences("mascot")["tray"]).empty()) {
     w->execute(ID_MENU_ABOUT);
   }
   return w.release();

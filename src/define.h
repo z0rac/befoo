@@ -1,12 +1,11 @@
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
-#define _WIN32_WINNT 0x0500
-#define _WIN32_IE 0x0500
-#define WINVER _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
+#include <sdkddkver.h>
 
 #include "version.h"
 

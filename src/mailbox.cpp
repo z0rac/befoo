@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2016 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -11,7 +11,7 @@
 #ifdef _DEBUG
 #include <iostream>
 #define DBG(s) s
-#define LOG(s) (cout << s)
+#define LOG(s) (std::cout << s)
 #else
 #define DBG(s)
 #define LOG(s)
@@ -29,16 +29,16 @@ namespace {
   public:
     tcpstream(int verifylevel) : _verifylevel(verifylevel) {}
     ~tcpstream() { _socket.shutdown(); }
-    void connect(const string& host, const string& port, int domain);
+    void connect(std::string const& host, std::string const& port, int domain);
     size_t read(char* buf, size_t size);
-    size_t write(const char* data, size_t size);
+    size_t write(char const* data, size_t size);
     int tls() const;
-    mailbox::backend::stream* starttls(const string& host);
+    mailbox::backend::stream* starttls(std::string const& host);
   };
 }
 
 void
-tcpstream::connect(const string& host, const string& port, int domain)
+tcpstream::connect(std::string const& host, std::string const& port, int domain)
 {
   assert(_socket == INVALID_SOCKET);
   _socket.connect(host, port, domain).timeout(TCP_TIMEOUT);
@@ -51,7 +51,7 @@ tcpstream::read(char* buf, size_t size)
 }
 
 size_t
-tcpstream::write(const char* data, size_t size)
+tcpstream::write(char const* data, size_t size)
 {
   return _socket.send(data, size);
 }
@@ -63,24 +63,21 @@ namespace {
   class sslstream : public mailbox::backend::stream {
     struct tls : public winsock::tlsclient {
       winsock::tcpclient socket;
-#if USE_SSL2
-      tls() : winsock::tlsclient(SP_PROT_SSL2 | SP_PROT_SSL3) {}
-#endif
       ~tls() { shutdown(); }
-      size_t _recv(char* buf, size_t size);
-      size_t _send(const char* data, size_t size);
+      size_t _recv(char* buf, size_t size) override;
+      size_t _send(char const* data, size_t size) override;
     };
     tls _tls;
     int _verifylevel;
-    void _connect(const string& host);
+    void _connect(std::string const& host);
   public:
     sslstream(int verifylevel) : _verifylevel(verifylevel) {}
-    void connect(SOCKET socket, const string& host);
-    void connect(const string& host, const string& port, int domain);
-    size_t read(char* buf, size_t size);
-    size_t write(const char* data, size_t size);
-    int tls() const { return 1; }
-    mailbox::backend::stream* starttls(const string&) { return NULL; }
+    void connect(SOCKET socket, std::string const& host);
+    void connect(std::string const& host, std::string const& port, int domain);
+    size_t read(char* buf, size_t size) override;
+    size_t write(char const* data, size_t size) override;
+    int tls() const override { return 1; }
+    mailbox::backend::stream* starttls(std::string const&) override { return {}; }
   };
 }
 
@@ -92,14 +89,14 @@ sslstream::tls::_recv(char* buf, size_t size)
 }
 
 size_t
-sslstream::tls::_send(const char* data, size_t size)
+sslstream::tls::_send(char const* data, size_t size)
 {
   assert(socket != INVALID_SOCKET);
   return socket.send(data, size);
 }
 
 void
-sslstream::_connect(const string& host)
+sslstream::_connect(std::string const& host)
 {
   _tls.connect();
   if (_verifylevel) {
@@ -115,7 +112,7 @@ sslstream::_connect(const string& host)
 }
 
 void
-sslstream::connect(SOCKET socket, const string& host)
+sslstream::connect(SOCKET socket, std::string const& host)
 {
   assert(_tls.socket == INVALID_SOCKET);
   _tls.socket(socket).timeout(TCP_TIMEOUT);
@@ -123,7 +120,7 @@ sslstream::connect(SOCKET socket, const string& host)
 }
 
 void
-sslstream::connect(const string& host, const string& port, int domain)
+sslstream::connect(std::string const& host, std::string const& port, int domain)
 {
   assert(_tls.socket == INVALID_SOCKET);
   _tls.socket.connect(host, port, domain).timeout(TCP_TIMEOUT);
@@ -137,7 +134,7 @@ sslstream::read(char* buf, size_t size)
 }
 
 size_t
-sslstream::write(const char* data, size_t size)
+sslstream::write(char const* data, size_t size)
 {
   return _tls.send(data, size);
 }
@@ -149,10 +146,10 @@ tcpstream::tls() const
 }
 
 mailbox::backend::stream*
-tcpstream::starttls(const string& host)
+tcpstream::starttls(std::string const& host)
 {
   assert(_socket != INVALID_SOCKET);
-  unique_ptr<sslstream> st(new sslstream(_verifylevel));
+  std::unique_ptr<sslstream> st(new sslstream(_verifylevel));
   st->connect(_socket.release(), host);
   return st.release();
 }
@@ -161,59 +158,58 @@ tcpstream::starttls(const string& host)
  * Functions of the class mailbox::backend
  */
 void
-mailbox::backend::tcp(const string& host, const string& port, int domain, int verify)
+mailbox::backend::tcp(std::string const& host, std::string const& port, int domain, int verify)
 {
-  unique_ptr<tcpstream> st(new tcpstream(verify));
+  std::unique_ptr<tcpstream> st(new tcpstream(verify));
   st->connect(host, port, domain);
   _st.reset(st.release());
 }
 
 void
-mailbox::backend::ssl(const string& host, const string& port, int domain, int verify)
+mailbox::backend::ssl(std::string const& host, std::string const& port, int domain, int verify)
 {
-  unique_ptr<sslstream> st(new sslstream(verify));
+  std::unique_ptr<sslstream> st(new sslstream(verify));
   st->connect(host, port, domain);
   _st.reset(st.release());
 }
 
 void
-mailbox::backend::starttls(const string& host)
+mailbox::backend::starttls(std::string const& host)
 {
   stream* st = _st->starttls(host);
   if (st) _st.reset(st);
 }
 
-string
+std::string
 mailbox::backend::read(size_t size)
 {
-  string result;
+  std::string result;
   while (size) {
     char buf[1024];
-    size_t n = _st->read(buf, min(size, sizeof(buf)));
-    if (!n) throw mailbox::error("connection reset");
+    auto n = _st->read(buf, min(size, sizeof(buf)));
     result.append(buf, n);
     size -= n;
   }
   return result;
 }
 
-string
+std::string
 mailbox::backend::read()
 {
   char c;
-  if (!_st->read(&c, 1)) throw mailbox::error("connection reset");
-  string result(1, c);
+  _st->read(&c, 1);
+  std::string data(1, c);
   do {
     do {
-      if (!_st->read(&c, 1)) throw mailbox::error("connection reset");
-      result.push_back(c);
+      _st->read(&c, 1);
+      data.push_back(c);
     } while (c != '\012');
-  } while (result[result.size() - 2] != '\015');
-  return result.erase(result.size() - 2); // remove CRLF
+  } while (data[data.size() - 2] != '\015');
+  return data.substr(0, data.size() - 2); // remove CRLF
 }
 
 void
-mailbox::backend::write(const char* data, size_t size)
+mailbox::backend::write(char const* data, size_t size)
 {
   while (size) {
     size_t n = _st->write(data, size);
@@ -222,9 +218,9 @@ mailbox::backend::write(const char* data, size_t size)
 }
 
 void
-mailbox::backend::write(const string& data)
+mailbox::backend::write(std::string const& data)
 {
-  string ln(data);
+  std::string ln(data);
   ln.append("\015\012");
   write(ln.data(), ln.size());
 }
@@ -233,21 +229,20 @@ mailbox::backend::write(const string& data)
  * Functions of the class mailbox
  */
 mailbox&
-mailbox::uripasswd(const string& uri, const string& passwd)
+mailbox::uripasswd(std::string const& uri, std::string const& passwd)
 {
   _uri = ::uri(uri);
   _passwd = passwd;
   return *this;
 }
 
-const mail*
-mailbox::find(const string& uid) const
+mail const*
+mailbox::find(std::string const& uid) const
 {
-  list<mail>::const_iterator p = _mails.begin();
-  for (; p != _mails.end(); ++p) {
-    if (p->uid() == uid) return &*p;
+  for (auto& t : _mails) {
+    if (t.uid() == uid) return &t;
   }
-  return NULL;
+  return {};
 }
 
 void
@@ -257,10 +252,10 @@ mailbox::fetchmail()
   extern backend* backendPOP3();
 
   static const struct {
-    const char* scheme;
+    char const* scheme;
     backend* (*make)();
-    void (backend::*stream)(const string&, const string&, int, int);
-    const char* port;
+    void (backend::*stream)(std::string const&, std::string const&, int, int);
+    char const* port;
   } backends[] = {
     { "imap",     backendIMAP4, &backend::tcp, "143" },
     { "imap+ssl", backendIMAP4, &backend::ssl, "993" },
@@ -274,13 +269,13 @@ mailbox::fetchmail()
   if (i < 0) throw error("invalid scheme");
 
   uri u(_uri);
-  string pw(_passwd);
+  std::string pw(_passwd);
   if (u[uri::port].empty()) u[uri::port] = backends[i].port;
   if (u[uri::user].empty()) {
     u[uri::user] = "ANONYMOUS";
     if (pw.empty()) pw = "befoo@";
   }
-  unique_ptr<backend> be(backends[i].make());
+  std::unique_ptr<backend> be(backends[i].make());
   ((*be).*backends[i].stream)(u[uri::host], u[uri::port], _domain, _verify);
   be->login(u, pw);
   _recent = static_cast<int>(be->fetch(*this, u));

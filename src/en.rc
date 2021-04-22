@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2009-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -37,7 +37,7 @@ BEGIN
     ID_TEXT_SUMMARY_COLUMN	"Subject/Sender/Date/Mailbox/"
     ID_TEXT_ABOUT		APP_COPYRIGHT "\n\
 License GPLv3+: GNU GPL version 3 or later \
-<http://gnu.org/licenses/gpl.html>\n\
+<https://gnu.org/licenses/gpl.html>\n\
 This is free software; you are free to change and redistribute it. \
 There is NO WARRANTY, to the extent permitted by law."
     ID_TEXT_VERSION             APP_NAME " version " APP_VERSION

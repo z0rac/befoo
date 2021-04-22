@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
+ * Copyright (C) 2010-2021 TSUBAKIMOTO Hiroya <z0rac@users.sourceforge.jp>
  *
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
@@ -13,7 +13,7 @@
 #ifdef _DEBUG
 #include <iostream>
 #define DBG(s) s
-#define LOG(s) (cout << s)
+#define LOG(s) (std::cout << s)
 #else
 #define DBG(s)
 #define LOG(s)
@@ -23,102 +23,95 @@
  * Functions of the class uri
  */
 namespace {
-  string::size_type find(const string& s,
-			 string::value_type c, string::size_type i = 0)
+  size_t find(std::string_view s, char c, size_t i = 0)
   {
     while (i < s.size()) {
       if (s[i] == c) return i;
       i += (i + 1 < s.size() && IsDBCSLeadByte(BYTE(s[i]))) + 1;
     }
-    return string::npos;
+    return s.npos;
   }
 
-  string decode(const string& s)
+  std::string decode(std::string_view s)
   {
-    string result;
-    string::size_type i = 0;
-    while (i < s.size()) {
-      string::size_type n = find(s, '%', i);
-      if (n == string::npos || s.size() - n < 3) break;
-      result.append(s, i, n - i);
-      char hex[3] = { s[n + 1], s[n + 2] };
+    std::string result;
+    while (!s.empty()) {
+      auto i = find(s, '%');
+      if (i == s.npos || s.size() - i < 3) break;
+      result += s.substr(0, i);
+      char hex[3] { s[i + 1], s[i + 2] };
       char* e;
       char c = char(strtoul(hex, &e, 16));
-      i = n + (*e ? (c = '%', 1) : 3);
+      s = s.substr(i + (*e ? (c = '%', 1) : 3));
       result.push_back(c);
     }
-    if (i < s.size()) result.append(s.c_str() + i);
+    if (!s.empty()) result += s;
     return result;
   }
 
-  string encode(const string& s, const char* chs)
+  std::string encode(std::string_view s, std::string_view chs)
   {
-    string result;
-    string::size_type i = 0;
-    while (i < s.size()) {
-      const char* const t = s.c_str();
-      const char* p = t + i;
-      while (BYTE(*p) > 32) {
-	string::size_type n =
-	  IsDBCSLeadByte(BYTE(*p)) ? (p[1] != 0) * 2 : !strchr(chs, *p);
-	p += n;
+    std::string result;
+    while (!s.empty()) {
+      size_t i = 0;
+      while (i < s.size() && BYTE(s[i]) > 32) {
+	auto c = s[i];
+	auto n = IsDBCSLeadByte(BYTE(c)) ?
+	  (i + 1 < s.size()) * 2 : chs.find(c) == chs.npos;
+	i += n;
 	if (n == 0) break;
       }
-      if (!*p) break;
-      string::size_type n = p - t;
-      result.append(s, i, n - i);
-      char hex[4] = { '%' };
-      _ltoa(s[n] & 255, hex + 1, 16);
+      if (i == s.size()) break;
+      result.append(s, 0, i);
+      char hex[4] { '%' };
+      _ltoa(s[i] & 255, hex + 1, 16);
       result.append(hex);
-      i = n + 1;
+      s = s.substr(i + 1);
     }
-    if (i < s.size()) result.append(s.c_str() + i);
+    if (!s.empty()) result += s;
     return result;
   }
 }
 
-uri::uri(const string& uri)
+uri::uri(std::string_view uri)
 {
-  string::size_type i = find(uri, '#');
-  if (i != string::npos) _part[fragment] = decode(uri.substr(i + 1));
-  
-  string t(uri, 0, min(find(uri, '?'), i));
-  i = find(t, ':');
-  for (; i != string::npos; i = find(t, ':', i)) {
-    if (++i == t.size() || t[i] != '/') continue;
-    if (++i == t.size() || t[i] != '/') continue;
-    _part[scheme] = decode(t.substr(0, i - 2));
-    t.erase(0, i + 1);
+  if (auto i = find(uri, '#'); i != uri.npos) {
+    _part[fragment] = decode(uri.substr(i + 1));
+    uri = uri.substr(0, i);
+  }
+  uri = uri.substr(0, find(uri, '?'));
+  for (auto i = find(uri, ':'); i != uri.npos; i = find(uri, ':', i)) {
+    if (++i == uri.size() || uri[i] != '/') continue;
+    if (++i == uri.size() || uri[i] != '/') continue;
+    _part[scheme] = decode(uri.substr(0, i - 2));
+    uri = uri.substr(i + 1);
     break;
   }
-  i = find(t, '/');
-  if (i != string::npos) {
-    _part[path] = decode(t.substr(i + 1));
-    t.erase(i);
+  if (auto i = find(uri, '/'); i != uri.npos) {
+    _part[path] = decode(uri.substr(i + 1));
+    uri = uri.substr(0, i);
   }
-  i = find(t, '@');
-  if (i != string::npos) {
-    _part[user] = decode(t.substr(0, min(find(t, ';'), i)));
-    t.erase(0, i + 1);
+  if (auto i = find(uri, '@'); i != uri.npos) {
+    _part[user] = decode(uri.substr(0, min(find(uri, ';'), i)));
+    uri = uri.substr(i + 1);
   }
-  i = find(t, ':');
-  for (; i != string::npos; i = find(t, ':', i)) {
-    string::size_type n = i;
-    while (++i < t.size() && strchr("0123456789", t[i])) continue;
-    if (i < t.size()) continue;
-    _part[port] = t.substr(n + 1);
-    t.erase(n);
+  for (auto i = find(uri, ':'); i != uri.npos; i = find(uri, ':', i)) {
+    auto n = i;
+    if (i = uri.find_first_not_of("0123456789", i + 1); i == uri.npos) {
+      _part[port] = uri.substr(n + 1);
+      uri = uri.substr(0, n);
+    }
   }
-  _part[host] = decode(t);
+  _part[host] = decode(uri);
 }
 
-uri::operator string() const
+uri::operator std::string() const
 {
-  string uri = encode(_part[scheme], "#%") + "://";
+  auto uri = encode(_part[scheme], "#%") + "://";
   if (!_part[host].empty()) {
     if (!_part[user].empty()) uri += encode(_part[user], "@/#%") + '@';
-    const string& h = _part[host];
-    uri += encode(h, *h.begin() == '[' && *h.rbegin() == ']' ? "/#%" : ":/#%");
+    auto& h = _part[host];
+    uri += encode(h, h[0] == '[' && *h.rbegin() == ']' ? "/#%" : ":/#%");
     if (!_part[port].empty()) uri += ':' + _part[port];
   }
   uri += '/' + encode(_part[path], "#%");
