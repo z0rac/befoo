@@ -74,7 +74,7 @@ public:
     void _sendtoken(const char* data, size_t size);
     size_t _copyextra(size_t i, size_t size);
   public:
-    tlsclient(DWORD proto = SP_PROT_SSL3 | SP_PROT_TLS1);
+    tlsclient(DWORD proto = 0);
     virtual ~tlsclient();
     bool avail() const { return _avail; }
     tlsclient& connect();
