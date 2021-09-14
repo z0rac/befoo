@@ -10,10 +10,10 @@
 #include <cstdlib>
 #include <cstring>
 
-#if _DEBUG >= 2
+#ifdef _DEBUG
 #include <iostream>
 #define DBG(s) s
-#define LOG(s) (std::cout << s)
+#define LOG(s) (std::cout << win32::time(time({})) << "|" << s)
 #else
 #define DBG(s)
 #define LOG(s)
@@ -38,8 +38,10 @@ class imap4 : public mailbox::backend {
   static std::string _utf7m(std::string_view s);
   std::string _tag();
   static std::string _arg(std::string_view arg);
+  size_t _fetch(mailbox& mbox);
+  void _idle();
   std::string _command(std::string_view cmd, std::string_view res = {});
-  response _response();
+  response _response(bool logout = false);
   std::string _read();
   unsigned _seqinit() const { return unsigned(ptrdiff_t(this)) + unsigned(time({})); }
 #ifdef _DEBUG
@@ -51,12 +53,13 @@ class imap4 : public mailbox::backend {
   }
 #endif
 public:
-  void login(uri const& uri, std::string const& passwd) override;
+  bool login(uri const& uri, std::string const& passwd) override;
   void logout() override;
   size_t fetch(mailbox& mbox, uri const& uri) override;
+  size_t fetch(mailbox& mbox) override;
 };
 
-void
+bool
 imap4::login(uri const& uri, std::string const& passwd)
 {
   constexpr char notimap[] = "server not IMAP4 compliant";
@@ -65,23 +68,30 @@ imap4::login(uri const& uri, std::string const& passwd)
   if (resp.tag != "*" || (!preauth && resp.type != "OK")) throw mailbox::error(notimap);
   auto imap = false;
   auto stls = false;
-  constexpr char CAPABILITY[] = "CAPABILITY", STARTTLS[] = "STARTTLS";
+  auto idle = false;
+  constexpr char CAPABILITY[] = "CAPABILITY", STARTTLS[] = "STARTTLS", IDLE[] = "IDLE";
   auto cap = _command(CAPABILITY, CAPABILITY);
   for (parser caps(cap); caps;) {
-    if (auto s = caps.token(); s == "IMAP4" || s == "IMAP4REV1") imap = true;
-    else if (s == STARTTLS) stls = true;
+    auto s = caps.token();
+    imap = imap || s == "IMAP4" || s == "IMAP4REV1";
+    stls = stls || s == STARTTLS;
+    idle = idle || s == IDLE;
   }
   if (!imap) throw mailbox::error(notimap);
-  if (preauth) return;
+  if (preauth) return idle;
   if (stls && !tls()) {
     _command(STARTTLS);
     starttls(uri[uri::host]);
     cap = _command(CAPABILITY, CAPABILITY);
+    idle = false;
   }
   for (parser caps(cap); caps;) {
-    if (caps.token() == "LOGINDISABLED") throw mailbox::error("login disabled");
+    auto s = caps.token();
+    if (s == "LOGINDISABLED") throw mailbox::error("login disabled");
+    idle = idle || s == IDLE;
   }
   _command("LOGIN" + _arg(uri[uri::user]) + _arg(passwd));
+  return idle;
 }
 
 void
@@ -95,33 +105,14 @@ imap4::fetch(mailbox& mbox, uri const& uri)
 {
   auto& path = uri[uri::path];
   _command("EXAMINE" + _arg(!path.empty() ? _utf7m(path) : "INBOX"));
-  std::list<mail> mails, recents;
-  for (parser ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
-    auto uid = ids.token();
-    if (auto p = mbox.find(uid); p) {
-      mails.push_back(*p);
-      continue;
-    }
-    LOG("Fetch mail: " << uid << std::endl);
-    parser parse(_command("UID FETCH " + uid +
-			  " BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]",
-			  "FETCH"));
-    parse.token(); // drop sequence#
-    if (parse.peek() != '(') throw mailbox::error(parse.data());
-    for (parse = parse.token(true); parse;) {
-      auto item = parse.token(), value = parse.token();
-      if (item.starts_with("BODY[HEADER.FIELDS (")) {
-	mail m(uid);
-	m.header(value);
-	recents.push_back(m);
-	break;
-      }
-    }
-  }
-  auto count = recents.size();
-  mails.splice(mails.end(), recents);
-  mbox.mails(mails);
-  return count;
+  return _fetch(mbox);
+}
+
+size_t
+imap4::fetch(mailbox& mbox)
+{
+  _idle();
+  return _fetch(mbox);
 }
 
 std::string
@@ -186,6 +177,73 @@ imap4::_arg(std::string_view arg)
   return esc + '"';
 }
 
+size_t
+imap4::_fetch(mailbox& mbox)
+{
+  std::list<mail> mails, recents;
+  for (parser ids(_command("UID SEARCH UNSEEN", "SEARCH")); ids;) {
+    auto uid = ids.token();
+    if (auto p = mbox.find(uid); p) {
+      mails.push_back(*p);
+      continue;
+    }
+    LOG("Fetch mail: " << uid << std::endl);
+    parser parse(_command("UID FETCH " + uid +
+			  " BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)]",
+			  "FETCH"));
+    parse.token(); // drop sequence#
+    if (parse.peek() != '(') throw mailbox::error(parse.data());
+    for (parse = parse.token(true); parse;) {
+      auto item = parse.token(), value = parse.token();
+      if (item.starts_with("BODY[HEADER.FIELDS (")) {
+	mail m(uid);
+	m.header(value);
+	recents.push_back(m);
+	break;
+      }
+    }
+  }
+  auto count = recents.size();
+  mails.splice(mails.end(), recents);
+  auto lock = mbox.lock();
+  mbox.mails(mails);
+  return count;
+}
+
+void
+imap4::_idle()
+{
+  auto const tag = _tag();
+  write(tag + " IDLE");
+  LOG("S: " << tag << " IDLE" << std::endl);
+
+  response resp;
+  auto idling = false, done = false;
+  for (auto t = time({}); time({}) - t < 1680 && idling + done < 2;) {
+    try {
+      resp = _response();
+      if (resp.tag == "*") {
+	for (auto type : { "RECENT", "EXISTS", "EXPUNGE" }) {
+	  done = done || resp.type == type;
+	}
+      } else if (resp.tag == "+") {
+	if (idling) throw mailbox::error("unexcepted continuation request");
+	idling = true;
+      } else break;
+    } catch (mailbox::silent const&) {
+      LOG("..." << std::endl);
+    }
+  }
+  if (idling) {
+    write("DONE");
+    LOG("S: DONE" << std::endl);
+    if (resp.tag == "+") resp = _response();
+    while (resp.tag == "*") resp = _response();
+  }
+  if (resp.tag != tag) throw mailbox::error("unexpected tagged response");
+  if (resp.type != "OK") throw mailbox::error(resp.type + ' ' + resp.data);
+}
+
 std::string
 imap4::_command(std::string_view cmd, std::string_view res)
 {
@@ -196,9 +254,8 @@ imap4::_command(std::string_view cmd, std::string_view res)
 
   response resp;
   std::string untagged;
-  auto bye = false;
-  for (;;) {
-    resp = _response();
+  for (auto logout = cmd == "LOGOUT";;) {
+    resp = _response(logout);
     if (!res.empty() && resp.type == "OK") {
       if (parser parse(resp.data); parse.peek() == '[') {
 	parse = parse.token(true);
@@ -206,17 +263,15 @@ imap4::_command(std::string_view cmd, std::string_view res)
       }
     }
     if (resp.tag != "*") break;
-    if (resp.type == "BYE") bye = true;
     if (!res.empty() && resp.type == res) untagged = resp.data;
   }
   if (resp.tag != tag) throw mailbox::error("unexpected tagged response");
-  if (bye && cmd != "LOGOUT") throw mailbox::error("bye");
   if (resp.type != "OK") throw mailbox::error(resp.type + ' ' + resp.data);
   return untagged;
 }
 
 imap4::response
-imap4::_response()
+imap4::_response(bool logout)
 {
   parser parse(_read());
   response resp;
@@ -227,6 +282,9 @@ imap4::_response()
   resp.type = parse.token();
   if (resp.tag.empty() || resp.type.empty()) {
     throw mailbox::error("unexpected response: " + parse.data());
+  }
+  if (!logout && resp.tag == "*" && resp.type == "BYE") {
+    throw mailbox::error("bye");
   }
   if (parse && parser::digit(resp.type)) {
     resp.data = resp.type, resp.type = parse.token();

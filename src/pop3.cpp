@@ -34,12 +34,12 @@ class pop3 : public mailbox::backend {
   }
 #endif
 public:
-  void login(uri const& uri, std::string const& passwd) override;
+  bool login(uri const& uri, std::string const& passwd) override;
   void logout() override;
   size_t fetch(mailbox& mbox, uri const& uri) override;
 };
 
-void
+bool
 pop3::login(uri const& uri, std::string const& passwd)
 {
   _ok();
@@ -65,6 +65,7 @@ pop3::login(uri const& uri, std::string const& passwd)
   }
   _command("USER " + uri[uri::user]);
   _command("PASS " + passwd);
+  return false;
 }
 
 void
@@ -76,7 +77,7 @@ pop3::logout()
 size_t
 pop3::fetch(mailbox& mbox, uri const& uri)
 {
-  std::list<std::string> const& ignore = mbox.ignore();
+  auto& ignore = mbox.ignore();
   std::list<std::string> ignored;
   std::list<mail> mails;
   std::list<mail> recents;
@@ -84,7 +85,7 @@ pop3::fetch(mailbox& mbox, uri const& uri)
   _command("UIDL");
   plist uidl(_plist());
   for (auto uidp = uidl.begin(); uidp != uidl.end(); ++uidp) {
-    std::string uid = uidp->second;
+    auto uid = uidp->second;
     if (find(ignore.begin(), ignore.end(), uid) != ignore.end()) {
       ignored.push_back(uid);
       continue;
@@ -105,6 +106,7 @@ pop3::fetch(mailbox& mbox, uri const& uri)
   }
   size_t count = recents.size();
   mails.splice(mails.end(), recents);
+  auto lock = mbox.lock();
   mbox.mails(mails);
   mbox.ignore(ignored);
   return count;
@@ -154,15 +156,15 @@ std::string
 pop3::_headers()
 {
   std::string result;
-  std::string line = read();
-  for (; !line.empty(); line = read()) {
-    if (line[0] == '.') {
-      if (line.size() == 1) break;
-      line.erase(0, 1);
-    }
-    result += line + "\015\012";
+  for (;;) {
+    auto line = read();
+    if (line.empty()) break;
+    if (line[0] != '.') result += line;
+    else if (line.size() != 1) result += std::string_view(line).substr(1);
+    else return result;
+    result += "\015\012";
   }
-  while (line.size() != 1 || line[0] != '.') line = read();
+  while (read() != ".") continue;
   return result;
 }
 

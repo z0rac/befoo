@@ -36,7 +36,7 @@ public:
     SOCKET release() { SOCKET s = _socket; _socket = INVALID_SOCKET; return s; }
     operator SOCKET() const { return _socket; }
     tcpclient& connect(std::string const& host, std::string const& port, int domain = AF_UNSPEC);
-    tcpclient& shutdown();
+    tcpclient& shutdown() noexcept;
     size_t recv(char* buf, size_t size);
     size_t send(char const* data, size_t size);
     tcpclient& timeout(int sec);
@@ -63,7 +63,7 @@ public:
     virtual ~tlsclient();
     bool avail() const { return _avail; }
     tlsclient& connect();
-    tlsclient& shutdown();
+    tlsclient& shutdown() noexcept;
     bool verify(std::string const& cn, DWORD ignore = 0);
     size_t recv(char* buf, size_t size);
     size_t send(char const* data, size_t size);
@@ -77,8 +77,13 @@ public:
     std::string _msg;
   public:
     error() : _msg(emsg()) {}
+    error(char const* msg) : _msg(msg) {}
     error(std::string const& msg) : _msg(msg) {}
     char const* what() const noexcept { return _msg.c_str(); }
     static std::string emsg();
+  };
+  class timedout : public error {
+  public:
+    timedout() : error("Timed out") {}
   };
 };

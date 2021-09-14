@@ -233,6 +233,35 @@ win32::module::resource(LPCSTR type, LPCSTR name) const
 win32::module const win32::exe(GetModuleHandle({}));
 
 /*
+ * Functions fo the class win32::u8conv
+ */
+win32::dll const win32::u8conv::_dll("mlang.dll");
+decltype(win32::u8conv::_mb2u) win32::u8conv::_mb2u =
+  decltype(_mb2u)(_dll("ConvertINetMultiByteToUnicode", {}));
+
+win32::u8conv&
+win32::u8conv::codepage(UINT codepage) noexcept
+{
+  if (codepage && codepage != _codepage) {
+    _codepage = codepage, _mode = 0;
+  }
+  return *this;
+}
+
+std::string
+win32::u8conv::operator()(std::string const& text)
+{
+  if (!*this) throw text;
+  if (_codepage == CP_UTF8) return text;
+  if (!_mb2u) return win32::string(win32::wstring(text, _codepage), CP_UTF8);
+  int n = 0;
+  if (_mb2u(&_mode, _codepage, text.c_str(), {}, {}, &n) != S_OK) throw text;
+  std::unique_ptr<WCHAR[]> buf(new WCHAR[n + 1]);
+  _mb2u(&_mode, _codepage, text.c_str(), {}, buf.get(), &n);
+  return win32::string(std::wstring_view(buf.get(), n), CP_UTF8);
+}
+
+/*
  * Functions of the class win32::error
  */
 std::string

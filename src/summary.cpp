@@ -40,8 +40,8 @@ namespace {
     };
     class compare;
     enum column { SUBJECT, SENDER, DATE, MAILBOX, LAST };
-    time_t* _dates = {};
-    std::pair<size_t, std::string>* _mboxes = {};
+    std::vector<time_t> _dates;
+    std::vector<std::pair<size_t, std::string>> _mboxes;
     int _column = 3;
     int _order = 1;
     std::string _tmp;
@@ -53,7 +53,6 @@ namespace {
     void _open();
   public:
     summary(window const& parent);
-    ~summary();
     int initialize(mailbox const* mboxes);
     void raised(bool topmost);
   };
@@ -65,16 +64,9 @@ summary::summary(window const& parent)
   static commctrl listview { ICC_LISTVIEW_CLASSES };
   style(LVS_REPORT | LVS_SINGLESEL);
   (void)ListView_SetExtendedListViewStyle
-    (hwnd(), (LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES |
-	      LVS_EX_LABELTIP | LVS_EX_DOUBLEBUFFER));
+    (hwnd(), LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_LABELTIP);
   setting::preferences("summary")["sort"](_column)(_order);
   show();
-}
-
-summary::~summary()
-{
-  delete [] _dates;
-  delete [] _mboxes;
 }
 
 void
@@ -97,18 +89,15 @@ summary::notify(WPARAM w, LPARAM l)
   case LVN_GETDISPINFOA:
     switch (LPNMLVDISPINFOA(l)->item.iSubItem) {
     case DATE:
-      {
-	auto t = _dates[LPNMLVDISPINFOA(l)->item.lParam];
-	_tmp = t == time_t(-1) ? "" :
-	  win32::date(t, DATE_LONGDATE) + " " + win32::time(t, TIME_NOSECONDS);
-	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(_tmp.c_str());
-      }
+      if (auto t = _dates[LPNMLVDISPINFOA(l)->item.lParam]; t == time_t(-1)) _tmp = "";
+      else _tmp = win32::date(t, DATE_LONGDATE) + " " + win32::time(t, TIME_NOSECONDS);
+      LPNMLVDISPINFOA(l)->item.pszText = LPSTR(_tmp.c_str());
       break;
     case MAILBOX:
-      {
-	auto const* p = _mboxes;
-	while (size_t(LPNMLVDISPINFOA(l)->item.lParam) >= p->first) ++p;
-	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(p->second.c_str());
+      for (auto const& mbox : _mboxes) {
+	if (mbox.first <= size_t(LPNMLVDISPINFOA(l)->item.lParam)) continue;
+	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(mbox.second.c_str());
+	break;
       }
       break;
     }
@@ -214,11 +203,13 @@ summary::_open()
   if (item < 0) return;
   LVITEM lv { LVIF_PARAM, item };
   if (!ListView_GetItem(hwnd(), &lv)) return;
-  size_t i = 0;
-  while (_mboxes[i].first <= size_t(lv.lParam)) ++i;
-  std::string mua;
-  setting::mailbox(_mboxes[i].second)["mua"].sep(0)(mua);
-  if (!mua.empty() && win32::shell(mua)) close(true);
+  for (auto const& mbox : _mboxes) {
+    if (mbox.first <= size_t(lv.lParam)) continue;
+    std::string mua;
+    setting::mailbox(mbox.second)["mua"].sep(0)(mua);
+    if (!mua.empty() && win32::shell(mua)) close(true);
+    break;
+  }
 }
 
 int
@@ -226,22 +217,12 @@ summary::initialize(mailbox const* mboxes)
 {
   int h = extent().y;
   _initialize();
-  size_t mails = 0;
-  int mbn = 0;
   for (auto mb = mboxes; mb; mb = mb->next()) {
-    mails += mb->mails().size();
-    ++mbn;
-  }
-  assert(!_dates && !_mboxes);
-  _dates = new time_t[mails];
-  _mboxes = new std::pair<size_t, std::string>[mbn];
-  mails = 0, mbn = 0;
-  for (auto mb = mboxes; mb; mb = mb->next()) {
+    auto lock = mb->lock();
     LOG("Summary[" << mb->name() << "](" << mb->mails().size() << ")..." << std::endl);
-    _mboxes[mbn].first = mails + mb->mails().size();
-    _mboxes[mbn++].second = mb->name();
+    _mboxes.push_back({ _dates.size() + mb->mails().size(), mb->name() });
     for (auto const& mail : mb->mails()) {
-      _dates[mails++] = mail.date();
+      _dates.push_back(mail.date());
       item(*this)
 	(win32::wstring(mail.subject(), CP_UTF8))
 	(win32::wstring(mail.sender(), CP_UTF8))

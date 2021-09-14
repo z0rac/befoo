@@ -8,6 +8,7 @@
 #include "win32.h"
 #include <cassert>
 #include <cctype>
+#include <Mlang.h>
 
 #ifdef _DEBUG
 #include <iostream>
@@ -18,61 +19,13 @@
 #define LOG(s)
 #endif
 
-/** u8conv - convert multibyte text to UTF-8
- */
-namespace {
-  extern "C" {
-    typedef HRESULT (WINAPI* ConvertINetMultiByteToUnicode)
-      (LPDWORD, DWORD, LPCSTR, LPINT, LPWSTR, LPINT);
-  }
-#define FUNC(name) name(_dll(#name, {}))
-
-  class u8conv {
-    static win32::dll _dll;
-    static ConvertINetMultiByteToUnicode _mb2u;
-    UINT _codepage = 0;
-    DWORD _mode = 0;
-  public:
-    u8conv& codepage(UINT codepage) noexcept;
-    u8conv& reset() noexcept { _mode = 0; return *this; }
-    explicit operator bool() const noexcept { return _codepage != 0; }
-    std::string operator()(std::string const& text);
-  };
-  win32::dll u8conv::_dll("mlang.dll");
-  ConvertINetMultiByteToUnicode
-  u8conv::_mb2u = FUNC(ConvertINetMultiByteToUnicode);
-#undef FUNC
-}
-
-u8conv&
-u8conv::codepage(UINT codepage) noexcept
-{
-  if (codepage && codepage != _codepage) {
-    _codepage = codepage, _mode = 0;
-  }
-  return *this;
-}
-
-std::string
-u8conv::operator()(std::string const& text)
-{
-  if (!*this) throw text;
-  if (_codepage == CP_UTF8) return text;
-  if (!_mb2u) return win32::string(win32::wstring(text, _codepage), CP_UTF8);
-  int n = 0;
-  if (_mb2u(&_mode, _codepage, text.c_str(), {}, {}, &n) != S_OK) throw text;
-  std::unique_ptr<WCHAR[]> buf(new WCHAR[n + 1]);
-  _mb2u(&_mode, _codepage, text.c_str(), {}, buf.get(), &n);
-  return win32::string(std::wstring_view(buf.get(), n), CP_UTF8);
-}
-
 /*
  * Functions of the class mail.
  */
 bool
 mail::header(std::string const& headers)
 {
-  bool read = false;
+  auto read = false;
   decoder de(headers);
   while (de) {
     auto field = de.field({ "SUBJECT", "FROM", "DATE", "STATUS" });
@@ -249,7 +202,7 @@ std::string
 mail::decoder::eword(std::string_view text)
 {
   std::string result;
-  for (u8conv conv;;) {
+  for (win32::u8conv conv;;) {
     size_type prefix = 0, eword = 0;
     std::string_view q[3];
     for (;; prefix += 2) {
@@ -356,7 +309,7 @@ mail::decoder::token(bool comment)
     }
     auto s = i;
     i = findf("\t \"(),.:;<>@[\\]", i);
-    if (i == s || (i != _s.npos && _s[i] == '.')) {
+    if (i == s || i != _s.npos && _s[i] == '.') {
       switch (_s[i]) {
       case '"': // quoted-text
 	i = findq("\"", i + 1);

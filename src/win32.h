@@ -10,6 +10,7 @@
 #include <list>
 #include <string>
 #include <windows.h>
+#include <mlang.h>
 
 class win32 {
   using _dtfn = decltype(&GetDateFormat);
@@ -71,6 +72,19 @@ public:
     ~find() { if (_h != INVALID_HANDLE_VALUE) _close(); }
     operator bool() const noexcept { return _h != INVALID_HANDLE_VALUE; }
     void next() noexcept { if (!FindNextFile(_h, this)) _close(); }
+  };
+
+  // u8conv - UTF-8 converter
+  class u8conv {
+    static win32::dll const _dll;
+    static decltype(&ConvertINetMultiByteToUnicode) const _mb2u;
+    UINT _codepage = 0;
+    DWORD _mode = 0;
+  public:
+    u8conv& codepage(UINT codepage) noexcept;
+    u8conv& reset() noexcept { _mode = 0; return *this; }
+    explicit operator bool() const noexcept { return _codepage != 0; }
+    std::string operator()(std::string const& text);
   };
 
   // error - exception type

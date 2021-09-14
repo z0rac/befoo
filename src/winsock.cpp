@@ -70,14 +70,14 @@ winsock::tcpclient::connect(std::string const& host, std::string const& port, in
 }
 
 winsock::tcpclient&
-winsock::tcpclient::shutdown()
+winsock::tcpclient::shutdown() noexcept
 {
-  if (_socket != INVALID_SOCKET) {
-    ::shutdown(_socket, SD_BOTH);
-    char buf[32];
-    while (::recv(_socket, buf, sizeof(buf), 0) > 0) continue;
-    closesocket(_socket);
+  if (auto socket = _socket; socket != INVALID_SOCKET) {
     _socket = INVALID_SOCKET;
+    ::shutdown(socket, SD_BOTH);
+    char buf[32];
+    while (::recv(socket, buf, sizeof(buf), 0) > 0) continue;
+    closesocket(socket);
   }
   return *this;
 }
@@ -87,8 +87,11 @@ winsock::tcpclient::recv(char* buf, size_t size)
 {
   int n = ::recv(_socket, buf, int(std::min<size_t>(size, INT_MAX)), 0);
   if (n >= 0) return n;
-  if (WSAGetLastError() != WSAEWOULDBLOCK) throw error();
-  return 0;
+  switch (WSAGetLastError()) {
+  case WSAEWOULDBLOCK: return 0;
+  case WSAETIMEDOUT: throw timedout();
+  }
+  throw error();
 }
 
 size_t
@@ -96,8 +99,11 @@ winsock::tcpclient::send(char const* data, size_t size)
 {
   int n = ::send(_socket, data, int(std::min<size_t>(size, INT_MAX)), 0);
   if (n >= 0) return n;
-  if (WSAGetLastError() != WSAEWOULDBLOCK) throw error();
-  return 0;
+  switch (WSAGetLastError()) {
+  case WSAEWOULDBLOCK: return 0;
+  case WSAETIMEDOUT: throw timedout();
+  }
+  throw error();
 }
 
 winsock::tcpclient&
@@ -108,8 +114,8 @@ winsock::tcpclient::timeout(int sec)
   if (ioctlsocket(_socket, FIONBIO, &nb) != 0) throw error();
   if (sec >= 0) {
     DWORD ms = sec * 1000;
-    if (setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&ms, sizeof(ms)) != 0 ||
-	setsockopt(_socket, SOL_SOCKET, SO_SNDTIMEO, (char*)&ms, sizeof(ms)) != 0) {
+    if (setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, LPCSTR(&ms), sizeof(ms)) != 0 ||
+	setsockopt(_socket, SOL_SOCKET, SO_SNDTIMEO, LPCSTR(&ms), sizeof(ms)) != 0) {
       throw error();
     }
   }
@@ -246,11 +252,11 @@ winsock::tlsclient::connect()
 }
 
 winsock::tlsclient&
-winsock::tlsclient::shutdown()
+winsock::tlsclient::shutdown() noexcept
 {
   if (_avail) {
-    _recvq.clear(), _extra.clear();
     try {
+      _recvq.clear(), _extra.clear();
       DWORD value = SCHANNEL_SHUTDOWN;
       SecBuffer in { sizeof(value), SECBUFFER_TOKEN, &value };
       SecBufferDesc inb { SECBUFFER_VERSION, 1, &in };
@@ -334,13 +340,13 @@ winsock::tlsclient::recv(char* buf, size_t size)
 	    CopyMemory(buf + done, dec[i].pvBuffer, m);
 	    done += m;
 	  }
-	  _recvq.append((char*)dec[i].pvBuffer + m, dec[i].cbBuffer - m);
+	  _recvq.append(LPCSTR(dec[i].pvBuffer) + m, dec[i].cbBuffer - m);
 	} else if (ss == SEC_E_OK && *_buf.get() == 0x15) {
 	  ss = SEC_I_CONTEXT_EXPIRED; // for Win2kPro
 	}
 	break;
       case SECBUFFER_EXTRA:
-	extra.append((char*)dec[i].pvBuffer, dec[i].cbBuffer);
+	extra.append(LPCSTR(dec[i].pvBuffer), dec[i].cbBuffer);
 	break;
       }
     }

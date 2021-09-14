@@ -288,23 +288,23 @@ section::keys() const
  */
 profile::~profile()
 {
-  win32::profile({}, {}, {}, _path);
+  win32::profile({}, {}, {}, _path.c_str());
 }
 
 setting::storage*
 profile::storage(std::string const& name) const
 {
-  return new section(name, _path);
+  return new section(name, _path.c_str());
 }
 
 std::list<std::string>
 profile::storages() const
 {
-  return setting::manip(win32::profile({}, {}, _path)).sep(0).split();
+  return setting::manip(win32::profile({}, {}, _path.c_str())).sep(0).split();
 }
 
 void
 profile::erase(std::string const& name)
 {
-  win32::profile(name.c_str(), {}, {}, _path);
+  win32::profile(name.c_str(), {}, {}, _path.c_str());
 }

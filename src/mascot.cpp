@@ -20,11 +20,6 @@
 #define LOG(s)
 #endif
 
-#ifndef NIN_SELECT
-#define NIN_SELECT (WM_USER+0)
-#define NIN_KEYSELECT (WM_USER+1)
-#endif
-
 #define ICON_BKGC RGB(255, 0, 255)
 
 /** tooltips - tooltips controller
@@ -33,7 +28,7 @@ namespace {
   class tooltips : public window, window::timer {
     static commctrl use;
     struct info : public TOOLINFO {
-      info(window const& tips);
+      info(window const& tips, UINT flags = 0);
     };
     class status : public window {
       LRESULT notify(WPARAM w, LPARAM l) override;
@@ -68,19 +63,14 @@ namespace {
   window::commctrl tooltips::use(ICC_BAR_CLASSES);
 }
 
-tooltips::info::info(window const& tips)
-{
-  ZeroMemory(this, sizeof(TOOLINFO));
-  cbSize = sizeof(TOOLINFO);
-  hwnd = GetParent(tips.hwnd());
-}
+tooltips::info::info(window const& tips, UINT flags)
+  : TOOLINFO({ sizeof(TOOLINFO), flags, GetParent(tips.hwnd()) }) {}
 
 tooltips::status::status(window const& owner)
   : window(TOOLTIPS_CLASS, {}, owner.hwnd())
 {
   style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX);
-  info ti(*this);
-  ti.uFlags = TTF_SUBCLASS;
+  info ti(*this, TTF_SUBCLASS);
   GetClientRect(ti.hwnd, &ti.rect);
   SendMessage(hwnd(), TTM_ADDTOOL, 0, LPARAM(&ti));
 }
@@ -113,11 +103,8 @@ tooltips::status::disable()
 void
 tooltips::status::tracking(bool tracking)
 {
-  TRACKMOUSEEVENT tme = {
-    sizeof(TRACKMOUSEEVENT),
-    tracking ? TME_LEAVE : TME_LEAVE | TME_CANCEL,
-    GetParent(hwnd())
-  };
+  TRACKMOUSEEVENT tme
+    { sizeof(tme), tracking ? TME_LEAVE : TME_LEAVE | TME_CANCEL, GetParent(hwnd()) };
   TrackMouseEvent(&tme);
 }
 
@@ -132,8 +119,7 @@ tooltips::tooltips(window const& owner)
   : window(TOOLTIPS_CLASS, {}, owner.hwnd()), _status(owner)
 {
   style(WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE);
-  info ti(*this);
-  ti.uFlags = TTF_TRACK;
+  info ti(*this, TTF_TRACK);
   SendMessage(hwnd(), TTM_ADDTOOL, 0, LPARAM(&ti));
   SendMessage(hwnd(), TTM_SETMAXTIPWIDTH, 0, 300);
 }
@@ -142,8 +128,7 @@ void
 tooltips::balloon(std::wstring const& text, unsigned sec,
 		  std::wstring const& title, int icon)
 {
-  TOOLINFOW ti { sizeof(ti) };
-  ti.hwnd = GetParent(hwnd());
+  TOOLINFOW ti { sizeof(ti), 0, GetParent(hwnd()) };
   SendMessage(hwnd(), TTM_TRACKACTIVATE, FALSE, LPARAM(&ti));
   _status.disable();
   RECT r;
@@ -242,8 +227,7 @@ namespace {
 bool
 iconwindow::_trayicon(bool tray)
 {
-  NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
-  if (tray) {
+  if (NOTIFYICONDATA ni { sizeof(ni), hwnd() }; tray) {
     ni.uFlags = NIF_MESSAGE | NIF_ICON;
     ni.uCallbackMessage = WM_USER;
     ni.hIcon = _icon;
@@ -264,7 +248,7 @@ void
 iconwindow::_update()
 {
   if (intray()) {
-    NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
+    NOTIFYICONDATA ni { sizeof(ni), hwnd() };
     ni.uFlags = NIF_ICON;
     ni.hIcon = _icon;
     Shell_NotifyIcon(NIM_MODIFY, &ni);
@@ -277,7 +261,7 @@ void
 iconwindow::_updatetips()
 {
   if (intray()) {
-    NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
+    NOTIFYICONDATA ni { sizeof(ni), hwnd() };
     ni.uFlags = NIF_TIP;
     lstrcpyn(ni.szTip, _status.c_str(), sizeof(ni.szTip));
     Shell_NotifyIcon(NIM_MODIFY, &ni);
@@ -321,7 +305,7 @@ iconwindow::draw(HDC hDC)
 {
   RECT r;
   GetClientRect(hwnd(), &r);
-  HBRUSH br = CreateSolidBrush(ICON_BKGC);
+  auto br = CreateSolidBrush(ICON_BKGC);
   DrawIconEx(hDC, r.left, r.top, _icon, r.right, r.bottom, 0, br, DI_NORMAL);
   DeleteObject(HGDIOBJ(br));
 }
@@ -329,9 +313,9 @@ iconwindow::draw(HDC hDC)
 bool
 iconwindow::popup(menu const& menu, LPARAM pt)
 {
-  bool t = appwindow::popup(menu, pt);
+  auto t = appwindow::popup(menu, pt);
   if (!t && intray()) {
-    NOTIFYICONDATA ni = { sizeof(NOTIFYICONDATA), hwnd() };
+    NOTIFYICONDATA ni { sizeof(ni), hwnd() };
     Shell_NotifyIcon(NIM_SETFOCUS, &ni);
   }
   return t;
@@ -414,7 +398,7 @@ namespace {
   protected:
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l) override;
     void release() override;
-    void update(int recent, int unseen, std::list<mailbox*>* mboxes);
+    void update(int recent, int unseen, mailbox const** mboxes);
   public:
     mascotwindow();
     ~mascotwindow() { if (hwnd()) _release(); }
@@ -426,7 +410,7 @@ void
 mascotwindow::_release()
 {
   try {
-    MONITORINFO info = { sizeof(info) };
+    MONITORINFO info { sizeof(info) };
     GetMonitorInfo(MonitorFromWindow(hwnd(), MONITOR_DEFAULTTONEAREST), &info);
     RECT dt = info.rcMonitor;
     RECT r = bounds();
@@ -472,7 +456,7 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     return 0;
   case WM_CONTEXTMENU:
     if (l == ~LPARAM(0) && !intray()) {
-      POINT pt = extent();
+      auto pt = extent();
       pt.x >>= 1, pt.y >>= 1;
       ClientToScreen(hwnd(), &pt);
       l = MAKELPARAM(pt.x, pt.y);
@@ -480,7 +464,7 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     popup(_menu, l);
     return 0;
   case WM_APP: // broadcast
-    update(LOWORD(w), HIWORD(w), reinterpret_cast<std::list<mailbox*>*>(l));
+    update(LOWORD(w), HIWORD(w), reinterpret_cast<mailbox const**>(l));
     return 0;
   }
   return iconwindow::dispatch(m, w, l);
@@ -495,14 +479,15 @@ mascotwindow::release()
 }
 
 void
-mascotwindow::update(int recent, int unseen, std::list<mailbox*>* mboxes)
+mascotwindow::update(int recent, int unseen, mailbox const** mboxes)
 {
   if (mboxes) {
     LOG("Update: " << recent << ", " << unseen << std::endl);
     std::wstring info;
-    tooltips::ellipsis ellips;
     auto newer = false;
-    for (auto mbox : *mboxes) {
+    for (tooltips::ellipsis ellips; *mboxes;) {
+      auto mbox = *mboxes++;
+      auto lock = mbox->lock();
       int n = mbox->recent();
       if (n > 0 && _balloon) {
 	auto const& mails = mbox->mails();
@@ -538,7 +523,7 @@ mascotwindow::update(int recent, int unseen, std::list<mailbox*>* mboxes)
 mascotwindow::mascotwindow()
   : iconwindow(_icon()), _menu(MAKEINTRESOURCE(1))
 {
-  setting prefs = setting::preferences();
+  auto prefs = setting::preferences();
   int icon, transparency;
   prefs["icon"](icon = size())(transparency = 0);
   if (!icon) icon = GetSystemMetrics(SM_CXICON);
@@ -548,12 +533,12 @@ mascotwindow::mascotwindow()
   RECT dt;
   GetWindowRect(GetDesktopWindow(), &dt);
   dt.right -= dt.left, dt.bottom -= dt.top;
-  RECT r = { dt.right - icon, dt.top, dt.right, dt.bottom };
+  RECT r { dt.right - icon, dt.top, dt.right, dt.bottom };
   int raise, tray;
   prefs["position"](r.left)(r.top)(r.right)(r.bottom)(raise = 0);
   prefs["tray"](tray = 0);
-  RECT rt = { r.left, r.top, r.left + icon, r.top + icon };
-  MONITORINFO info = { sizeof(info) };
+  RECT rt { r.left, r.top, r.left + icon, r.top + icon };
+  MONITORINFO info { sizeof(info) };
   GetMonitorInfo(MonitorFromRect(&rt, MONITOR_DEFAULTTONEAREST), &info);
   dt = info.rcMonitor;
   dt.right -= dt.left, dt.bottom -= dt.top;

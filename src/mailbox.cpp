@@ -30,10 +30,11 @@ namespace {
     tcpstream(int verifylevel) : _verifylevel(verifylevel) {}
     ~tcpstream() { _socket.shutdown(); }
     void connect(std::string const& host, std::string const& port, int domain);
-    size_t read(char* buf, size_t size);
-    size_t write(char const* data, size_t size);
-    int tls() const;
-    mailbox::backend::stream* starttls(std::string const& host);
+    void disconnect() noexcept override { _socket.shutdown(); }
+    size_t read(char* buf, size_t size) override;
+    size_t write(char const* data, size_t size) override;
+    bool tls() const noexcept override { return false; }
+    mailbox::backend::stream* starttls(std::string const& host) override;
   };
 }
 
@@ -64,35 +65,21 @@ namespace {
     struct tls : public winsock::tlsclient {
       winsock::tcpclient socket;
       ~tls() { shutdown(); }
-      size_t _recv(char* buf, size_t size) override;
-      size_t _send(char const* data, size_t size) override;
-    };
-    tls _tls;
+      size_t _recv(char* buf, size_t size) override { return socket.recv(buf, size); }
+      size_t _send(char const* data, size_t size) override { return socket.send(data, size); }
+    } _tls;
     int _verifylevel;
     void _connect(std::string const& host);
   public:
     sslstream(int verifylevel) : _verifylevel(verifylevel) {}
     void connect(SOCKET socket, std::string const& host);
     void connect(std::string const& host, std::string const& port, int domain);
+    void disconnect() noexcept override { _tls.socket.shutdown(); }
     size_t read(char* buf, size_t size) override;
     size_t write(char const* data, size_t size) override;
-    int tls() const override { return 1; }
+    bool tls() const noexcept override { return true; }
     mailbox::backend::stream* starttls(std::string const&) override { return {}; }
   };
-}
-
-size_t
-sslstream::tls::_recv(char* buf, size_t size)
-{
-  assert(socket != INVALID_SOCKET);
-  return socket.recv(buf, size);
-}
-
-size_t
-sslstream::tls::_send(char const* data, size_t size)
-{
-  assert(socket != INVALID_SOCKET);
-  return socket.send(data, size);
 }
 
 void
@@ -137,12 +124,6 @@ size_t
 sslstream::write(char const* data, size_t size)
 {
   return _tls.send(data, size);
-}
-
-int
-tcpstream::tls() const
-{
-  return 0;
 }
 
 mailbox::backend::stream*
@@ -197,7 +178,11 @@ std::string
 mailbox::backend::read()
 {
   char c;
-  _st->read(&c, 1);
+  try {
+    _st->read(&c, 1);
+  } catch (winsock::timedout const&) {
+    throw silent();
+  }
   std::string data(1, c);
   do {
     do {
@@ -277,7 +262,22 @@ mailbox::fetchmail()
   }
   std::unique_ptr<backend> be(backends[i].make());
   ((*be).*backends[i].stream)(u[uri::host], u[uri::port], _domain, _verify);
-  be->login(u, pw);
+  struct exhibit {
+    mailbox& mb;
+    exhibit(mailbox& mb, backend* be) : mb(mb) { mb.lock(), mb._backend = be; }
+    ~exhibit() { mb.lock(), mb._backend = {}; }
+  } exhibit { *this, be.get() };
+  fetching(false);
+  auto idle = be->login(u, pw);
   _recent = static_cast<int>(be->fetch(*this, u));
+  while (idle) {
+    fetching(idle);
+    try {
+      _recent = static_cast<int>(be->fetch(*this));
+    } catch (...) {
+      _recent = -1;
+      throw;
+    }
+  }
   be->logout();
 }

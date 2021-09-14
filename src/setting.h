@@ -115,10 +115,12 @@ public:
 };
 
 class profile : public setting::repository {
-  char const* _path;
+  std::string _path;
 public:
-  profile(char const* path) : _path(path) {}
+  profile(std::string_view path) : _path(path) {}
   ~profile();
+public:
+  auto& path() const noexcept { return _path; }
   setting::storage* storage(std::string const& name) const override;
   std::list<std::string> storages() const override;
   void erase(std::string const& name) override;
