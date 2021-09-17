@@ -7,7 +7,7 @@
 #include "mailbox.h"
 #include <algorithm>
 
-#if _DEBUG >= 2
+#ifdef _DEBUG
 #include <iostream>
 #define DBG(s) s
 #define LOG(s) (std::cout << s)
@@ -44,24 +44,24 @@ pop3::login(uri const& uri, std::string const& passwd)
 {
   _ok();
   if (_command("CAPA", false)) {
-    bool uidl = false, stls = false;
-    plist cap(_plist(true));
-    plist::iterator p = cap.begin();
-    for (; p != cap.end(); ++p) {
-      if (p->first == "UIDL") uidl = true;
-      else if (p->first == "STLS") stls = true;
+    auto uidl = false, stls = false;
+    auto capa = _plist(true);
+    for (auto const& cap : capa) {
+      uidl = uidl || cap.first == "UIDL";
+      stls = stls || cap.first == "STLS";
     }
     if (!uidl) throw mailbox::error("server not support UIDL command");
     if (stls && !tls()) {
       _command("STLS");
       starttls(uri[uri::host]);
       _command("CAPA");
-      cap = _plist(true);
+      capa = _plist(true);
     }
-    for (p = cap.begin(); p != cap.end(); ++p) {
-      if (p->first == "USER") break;
+    auto user = false;
+    for (auto const& cap : capa) {
+      user = user || cap.first == "USER";
     }
-    if (p == cap.end()) throw mailbox::error("login disabled");
+    if (!user) throw mailbox::error("login disabled");
   }
   _command("USER " + uri[uri::user]);
   _command("PASS " + passwd);
@@ -79,19 +79,18 @@ pop3::fetch(mailbox& mbox, uri const& uri)
 {
   auto& ignore = mbox.ignore();
   std::list<std::string> ignored;
-  std::list<mail> mails;
-  std::list<mail> recents;
-  bool recent = uri[uri::fragment] == "recent";
+  std::list<mail> mails, recents;
+  auto recent = uri[uri::fragment] == "recent";
   _command("UIDL");
   plist uidl(_plist());
-  for (auto uidp = uidl.begin(); uidp != uidl.end(); ++uidp) {
-    auto uid = uidp->second;
-    if (find(ignore.begin(), ignore.end(), uid) != ignore.end()) {
+  for (auto const& uidp : uidl) {
+    auto& uid = uidp.second;
+    if (auto e = ignore.cend(); find(ignore.cbegin(), e, uid) != e) {
       ignored.push_back(uid);
       continue;
     }
     LOG("Fetch mail: " << uid << std::endl);
-    _command("TOP " + uidp->first + " 0");
+    _command("TOP " + uidp.first + " 0");
     mail m(uid);
     if (m.header(_headers())) {
       ignored.push_back(uid);
@@ -104,7 +103,7 @@ pop3::fetch(mailbox& mbox, uri const& uri)
       (mbox.find(uid) ? &mails : &recents)->push_back(m);
     }
   }
-  size_t count = recents.size();
+  auto count = recents.size();
   mails.splice(mails.end(), recents);
   auto lock = mbox.lock();
   mbox.mails(mails);
@@ -135,17 +134,22 @@ pop3::_plist(bool upper)
   plist result;
   for (;;) {
     auto line = read();
-    if (!line.empty() && line[0] == '.') {
-      line.assign(line, 1, line.size() - 1);
-      if (line.empty()) break;
-    }
-    if (upper) line = tokenizer::uppercase(line);
-    std::pair<std::string, std::string> ps;
-    auto i = line.find(' ');
-    ps.first.assign(line, 0, i);
-    if (i != line.npos) {
-      i = line.find_first_not_of(' ', i);
-      if (i != line.npos) ps.second.assign(line, i, line.size() - i);
+    plist::value_type ps;
+    if (std::string_view sv = line; !sv.empty()) {
+      if (sv[0] == '.') {
+	if (sv.size() == 1) break;
+	sv = sv.substr(1);
+      }
+      if (upper) {
+	line = tokenizer::uppercase(sv);
+	sv = std::string_view(line);
+      }
+      auto i = sv.find(' ');
+      ps.first = sv.substr(0, i);
+      if (i != sv.npos) {
+	i = sv.find_first_not_of(' ', i);
+	if (i != sv.npos) ps.second = sv.substr(i);
+      }
     }
     result.push_back(ps);
   }
