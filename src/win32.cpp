@@ -118,50 +118,6 @@ win32::shell(std::string_view cmd, unsigned flags)
     (flags & SEE_MASK_NOCLOSEPROCESS) ? info.hProcess : INVALID_HANDLE_VALUE;
 }
 
-#ifdef _DEBUG
-#include <tlhelp32.h>
-#include <malloc.h>
-
-size_t
-win32::cheapsize() noexcept
-{
-  _heapmin();
-  size_t size = 0;
-  _HEAPINFO hi {};
-  for (;;) {
-    switch (_heapwalk(&hi)) {
-    case _HEAPOK:
-      if (hi._useflag == _USEDENTRY) size += hi._size;
-      break;
-    case _HEAPEND:
-      return size;
-    default:
-      LOG("cheapsize: BAD HEAP!" << std::endl);
-      return size;
-    }
-  }
-}
-
-size_t
-win32::heapsize() noexcept
-{
-  auto h = CreateToolhelp32Snapshot(TH32CS_SNAPHEAPLIST, 0);
-  if (h == HANDLE(-1)) return 0;
-  size_t size = 0;
-  if (HEAPLIST32 hl { sizeof(hl) }; Heap32ListFirst(h, &hl)) {
-    do {
-      if (HEAPENTRY32 he { sizeof(he) }; Heap32First(&he, hl.th32ProcessID, hl.th32HeapID)) {
-	do {
-	  if (!(he.dwFlags & LF32_FREE)) size += he.dwBlockSize;
-	} while (Heap32Next(&he));
-      }
-    } while (Heap32ListNext(h, &hl));
-  }
-  CloseHandle(h);
-  return size;
-}
-#endif
-
 /*
  * Functions of the class win32::module
  */

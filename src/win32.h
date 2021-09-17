@@ -29,10 +29,6 @@ public:
   static std::string time(time_t utc, DWORD flags = 0)
   { return _datetime(utc, flags, GetTimeFormat); }
   static HANDLE shell(std::string_view cmd, unsigned flags = 0);
-#ifdef _DEBUG
-  static size_t cheapsize() noexcept;
-  static size_t heapsize() noexcept;
-#endif
 public:
   // module - module(EXE/DLL) handler
   class module {

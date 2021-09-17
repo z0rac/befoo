@@ -246,8 +246,6 @@ model::_done(mbox& mb, bool idle)
   window::broadcast(WM_APP, MAKEWPARAM(recent, unseen), LPARAM(_fetch.data()));
   _fetch.clear();
   if (summary) window::broadcast(WM_COMMAND, MAKEWPARAM(0, ID_MENU_SUMMARY), 0);
-  LOG("***** HEAP SIZE [" << win32::cheapsize() << ", "
-      << win32::heapsize() << "] *****" << std::endl);
 }
 
 namespace { // misc. functions
