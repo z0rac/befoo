@@ -43,8 +43,7 @@ setting::preferences()
 setting
 setting::preferences(_str name)
 {
-  assert(_rep);
-  assert(name && name[0]);
+  assert(_rep && name && name[0]);
   return _rep->storage('(' + std::string(name) + ')');
 }
 
@@ -52,7 +51,7 @@ std::list<std::string>
 setting::mailboxes()
 {
   assert(_rep);
-  std::list<std::string> st(_rep->storages());
+  auto st = _rep->storages();
   for (auto p = st.begin(); p != st.end();) {
     // skip sections matched with the pattern "(.*)".
     p =  p->empty() || (*p)[0] == '(' && *p->rbegin() == ')' ? st.erase(p) : ++p;
@@ -75,23 +74,24 @@ setting::mailboxclear(std::string const& id)
 }
 
 namespace {
-  std::string cachekey(std::string const& key)
-  {
+  std::string cachekey(std::string_view key) {
     std::string esc;
     auto ch = std::string("$") + _rep->invalidchars();
-    size_t i = 0, n;
-    while (n = StrCSpn(key.c_str() + i, ch.c_str()), i + n < key.size()) {
-      esc += key.substr(i, n), i += n;
+    for (;;) {
+      auto i = key.find_first_of(ch);
+      esc += key.substr(0, i);
+      if (i == key.npos) break;
       char e[] = "$0";
-      e[1] += char(ch.find(key[i++]));
+      e[1] += char(ch.find(key[i]));
       esc += e;
+      key = key.substr(i + 1);
     }
-    return "(cache:" + esc + key.substr(i, n) + ')';
+    return "(cache:" + esc + ')';
   }
 }
 
 std::list<std::string>
-setting::cache(std::string const& key)
+setting::cache(std::string_view key)
 {
   assert(_rep);
   std::list<std::string> result;
@@ -103,7 +103,7 @@ setting::cache(std::string const& key)
 }
 
 void
-setting::cache(std::string const& key, std::list<std::string> const& data)
+setting::cache(std::string_view key, std::list<std::string> const& data)
 {
   assert(_rep);
   auto id = cachekey(key);

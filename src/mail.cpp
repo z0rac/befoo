@@ -348,10 +348,15 @@ tokenizer::digit(std::string_view s, int* value) noexcept
 {
   if (s.empty()) return false;
   auto v = 0;
-  auto p = s.cbegin(), e = s.cend();
-  while (p != e && *p >= '0' && *p <= '9') v = v * 10 + (*p++ - '0');
+  for (auto c : s) {
+    if (c < '0' || c > '9') {
+      if (value) *value = v;
+      return false;
+    }
+    v = v * 10 + (c - '0');
+  }
   if (value) *value = v;
-  return p == e;
+  return true;
 }
 
 std::string

@@ -11,6 +11,12 @@
 #include <string>
 
 class setting {
+  struct _str {
+    char const* c_str;
+    _str(char const* s) : c_str(s) {}
+    _str(std::string const& s) : c_str(s.c_str()) {}
+    operator char const*() const { return c_str; }
+  };
   class _repository {
   public:
     class _storage {
@@ -35,13 +41,6 @@ public:
   using repository = _repository;
   using storage = _repository::_storage;
   setting(setting const& s) : _st(s._st) {}
-public:
-  struct _str {
-    char const* c_str;
-    _str(char const* s) : c_str(s) {}
-    _str(std::string const& s) : c_str(s.c_str()) {}
-    operator char const*() const { return c_str; }
-  };
 public:
   // tuple - use for separated output parameters.
   // Example:
@@ -104,8 +103,8 @@ public:
   static std::list<std::string> mailboxes();
   static setting mailbox(std::string const& id);
   static void mailboxclear(std::string const& id);
-  static std::list<std::string> cache(std::string const& key);
-  static void cache(std::string const& key, std::list<std::string> const& data);
+  static std::list<std::string> cache(std::string_view key);
+  static void cache(std::string_view key, std::list<std::string> const& data);
   static void cacheclear();
   static char const* invalidchars();
 public:
