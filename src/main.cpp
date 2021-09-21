@@ -45,6 +45,7 @@ namespace {
       ~mbox() { exit(); }
     public:
       unsigned period = 0;
+      unsigned cycle = 0;
       unsigned remain = 0;
       std::string sound;
     public:
@@ -70,7 +71,7 @@ namespace {
     unsigned _fetching = 0;
     std::vector<mailbox*> _fetch;
     int _summary = 0;
-    void _done(mbox& mb, bool idle);
+    void _done(mbox& mb, bool fetched, bool idling);
   };
 }
 
@@ -105,7 +106,7 @@ model::mbox::_fetched(bool idle)
       PlaySound(name, {}, SND_NODEFAULT | SND_NOWAIT | SND_ASYNC|
 		(*PathFindExtension(name) ? SND_FILENAME : SND_ALIAS));
     }
-    try { _model._done(*this, idle); } catch (...) {}
+    try { _model._done(*this, !idle, _idling); } catch (...) {}
   }
   if (_idling) return;
   auto lock = mailbox::lock();
@@ -155,7 +156,7 @@ model::model()
       int period;
       s["period"](period = 15);
       s["sound"].sep(0)(mb->sound);
-      mb->period = period > 0 ? period * 60000U : 0;
+      mb->cycle = mb->period = period > 0 ? period * 60000U : 0;
       auto ignore = setting::cache(mb->uristr());
       mb->ignore(ignore);
       last = last ? last->next(mb.release()) : (_mailboxes = mb.release());
@@ -202,10 +203,11 @@ model::fetch(window& source, bool force)
   auto elapse = GetTickCount() - _last;
   _last += elapse;
   for (auto mbox = _mailboxes; mbox; mbox = mbox->next()) {
-    if (!mbox->period) continue; // No fetching by the setting.
+    if (!mbox->cycle) continue;
     if (force || mbox->remain <= elapse) {
-      unsigned late = force ? 0 : (elapse - mbox->remain) % mbox->period;
-      mbox->remain = mbox->period - late;
+      unsigned late = force ? 0 : (elapse - mbox->remain) % mbox->cycle;
+      mbox->remain = mbox->cycle - late;
+      if (mbox->cycle < mbox->period) mbox->cycle = min(mbox->cycle << 1, mbox->period);
       if (mbox->ready()) fetch.push_back(mbox);
     } else {
       mbox->remain -= elapse;
@@ -223,13 +225,19 @@ model::fetch(window& source, bool force)
 }
 
 void
-model::_done(mbox& mb, bool idle)
+model::_done(mbox& mb, bool fetched, bool idling)
 {
   std::unique_lock lock(_mutex);
-  if (!idle) {
+  if (fetched) {
     --_fetching;
-  } else if (auto e = _fetch.cend(); find(_fetch.cbegin(), e, &mb) == e) {
-    _fetch.push_back(&mb);
+    if (idling) mb.cycle = 0;
+    else if (mb.recent() >= 0) mb.cycle = mb.period;
+  } else if (idling) {
+    auto e = _fetch.cend();
+    if (find(_fetch.cbegin(), e, &mb) == e) _fetch.push_back(&mb);
+  } else {
+    mb.cycle = 1000, mb.remain = 0;
+    window::broadcast(WM_APP + 1, 0, 0);
   }
   if (_fetching) return;
   LOG("Report fetched." << std::endl);
@@ -329,14 +337,14 @@ repository::edit()
 }
 
 namespace cmd {
-  struct fetch : public window::command {
+  struct fetch : window::command {
     model& _model;
     fetch(model& model) : window::command(-265), _model(model) {}
     void execute(window& source) override { _model.fetch(source); }
     UINT state(window&) override { return _model.fetching() ? MFS_DISABLED : 0; }
   };
 
-  struct summary : public window::command {
+  struct summary : window::command {
     model& _model;
     std::unique_ptr<window> _summary;
     summary(model& model) : window::command(-281), _model(model) {}
@@ -348,7 +356,7 @@ namespace cmd {
     UINT state(window&) override { return _model.fetching() ? MFS_DISABLED : 0; }
   };
 
-  struct setting : public window::command {
+  struct setting : window::command {
     repository& _rep;
     DWORD _tid = GetCurrentThreadId();
     bool _busy = false;
@@ -362,18 +370,24 @@ namespace cmd {
     UINT state(window&) override { return _busy ? MFS_DISABLED : 0; }
   };
 
-  struct exit : public window::command {
+  struct exit : window::command {
     exit() : window::command(-28) {}
     void execute(window&) override { LOG("Exit." << std::endl); PostQuitMessage(0); }
   };
 
-  struct logoff : public window::command {
+  struct logoff : window::command {
     model& _model;
     logoff(model& model) : _model(model) {}
     void execute(window& source) override {
       source.settimer(_model, 0);
       _model.exit();
     }
+  };
+
+  struct retry : window::command {
+    model& _model;
+    retry(model& model) : _model(model) {}
+    void execute(window& source) override { _model.fetch(source, false); }
   };
 }
 
@@ -400,6 +414,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
       w->addcmd(ID_MENU_SETTINGS, new cmd::setting(rep));
       w->addcmd(ID_MENU_EXIT, new cmd::exit);
       w->addcmd(ID_EVENT_LOGOFF, new cmd::logoff(*m));
+      w->addcmd(ID_EVENT_RETRY, new cmd::retry(*m));
       w->settimer(*m, max(delay * 1000, 1));
       qc = window::eventloop();
     }

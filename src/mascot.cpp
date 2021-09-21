@@ -466,6 +466,9 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_APP: // broadcast
     update(LOWORD(w), HIWORD(w), reinterpret_cast<mailbox const**>(l));
     return 0;
+  case WM_APP + 1:
+    execute(ID_EVENT_RETRY);
+    return 0;
   }
   return iconwindow::dispatch(m, w, l);
 }
@@ -553,14 +556,14 @@ mascotwindow::mascotwindow()
 }
 
 namespace cmd {
-  struct trayicon : public window::command {
+  struct trayicon : window::command {
     void execute(window& source) override
     { ((mascotwindow&)source).trayicon(!((mascotwindow&)source).intray()); }
     UINT state(window& source) override
     { return ((mascotwindow&)source).intray() ? MFS_CHECKED : 0; }
   };
 
-  struct alwaysontop : public window::command {
+  struct alwaysontop : window::command {
     void execute(window& source) override
     { source.topmost(!source.topmost()); }
     UINT state(window& source) override {
@@ -569,7 +572,7 @@ namespace cmd {
     }
   };
 
-  struct about : public window::command {
+  struct about : window::command {
     about() : window::command(-1001) {}
     void execute(window& source) override {
       ((mascotwindow&)source).balloon
