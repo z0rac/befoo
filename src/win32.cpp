@@ -6,8 +6,8 @@
  */
 #include "win32.h"
 #include <cassert>
+#include <memory>
 #include <shlwapi.h>
-#include <process.h>
 
 #ifdef _DEBUG
 #include <iostream>

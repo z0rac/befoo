@@ -99,7 +99,8 @@ void
 model::mbox::_fetched(bool idle)
 {
   std::swap(idle, _idling);
-  if (_state != EXIT) {
+  auto gen = _state != EXIT;
+  if (gen) {
     if (recent() > 0 && !sound.empty()) {
       LOG("Sound: " << sound << std::endl);
       auto name = sound.c_str();
@@ -112,6 +113,7 @@ model::mbox::_fetched(bool idle)
   auto lock = mailbox::lock();
   _state = STOP;
   _cond.notify_all();
+  if (gen && idle) window::broadcast(WM_COMMAND, MAKEWPARAM(0, ID_EVENT_RETRY), 0);
 }
 
 void
@@ -194,7 +196,7 @@ model::fetch(window& source, bool force)
 {
   std::unique_lock lock(_mutex, std::try_to_lock);
   if (!lock.owns_lock()) {
-    source.settimer(*this, 1); // delay to fetch.
+    source.settimer(*this, 5); // delay to fetch.
     return *this;
   }
   LOG("Fetch mails..." << std::endl);
@@ -218,7 +220,7 @@ model::fetch(window& source, bool force)
   if (!fetch.empty()) {
     if (!_fetching) window::broadcast(WM_APP, 0, 0);
     _fetch.insert(_fetch.end(), fetch.cbegin(), fetch.cend());
-    _fetching += static_cast<int>(_fetch.size());
+    _fetching += static_cast<int>(fetch.size());
     for (auto mbox : fetch) mbox->fetch();
   }
   return *this;
@@ -237,7 +239,6 @@ model::_done(mbox& mb, bool fetched, bool idling)
     if (find(_fetch.cbegin(), e, &mb) == e) _fetch.push_back(&mb);
   } else {
     mb.cycle = 1000, mb.remain = 0;
-    window::broadcast(WM_APP + 1, 0, 0);
   }
   if (_fetching) return;
   LOG("Report fetched." << std::endl);

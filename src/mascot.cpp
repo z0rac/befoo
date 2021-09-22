@@ -466,9 +466,6 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_APP: // broadcast
     update(LOWORD(w), HIWORD(w), reinterpret_cast<mailbox const**>(l));
     return 0;
-  case WM_APP + 1:
-    execute(ID_EVENT_RETRY);
-    return 0;
   }
   return iconwindow::dispatch(m, w, l);
 }
