@@ -277,7 +277,7 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
   case WM_LBUTTONDOWN: case WM_RBUTTONDOWN: case WM_MBUTTONDOWN:
   case WM_SHOWWINDOW:
     _tips.clearballoon();
-    // fall down
+    [[fallthrough]];
   case WM_MOUSELEAVE:
     _tips.reset(hascursor());
     break;
@@ -288,10 +288,10 @@ iconwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     case NIN_KEYSELECT: m = WM_LBUTTONDBLCLK; break;
     default: return 0;
     }
-    POINT pt;
-    GetCursorPos(&pt);
-    foreground();
-    PostMessage(hwnd(), m, 0, MAKELPARAM(pt.x, pt.y));
+    if (POINT pt; GetCursorPos(&pt)) {
+      foreground();
+      PostMessage(hwnd(), m, 0, MAKELPARAM(pt.x, pt.y));
+    }
     return 0;
   default:
     if (m == _tbcmsg && intray()) _trayicon(true);
@@ -393,12 +393,23 @@ namespace {
     menu _menu;
     int _balloon;
     int _subjects;
+    struct info {
+      mailbox const* mbox;
+      bool newer;
+      std::wstring msg;
+    };
+    std::list<info> _info;
+    DWORD _last = GetTickCount();
     void _release();
+    void _updateInfo(mailbox const** mboxes = {});
     static icon _icon();
   protected:
     LRESULT dispatch(UINT m, WPARAM w, LPARAM l) override;
     void release() override;
-    void update(int recent, int unseen, mailbox const** mboxes);
+    void wakeup(window& source) override;
+    void status(bool fetched, int recent, int unseen);
+    using iconwindow::status;
+    unsigned balloonsec() const noexcept { return _balloon ? _balloon : 10; }
   public:
     mascotwindow();
     ~mascotwindow() { if (hwnd()) _release(); }
@@ -419,6 +430,41 @@ mascotwindow::_release()
        (r.left)(r.top)(dt.right - dt.left)(dt.bottom - dt.top)(topmost()))
       ("tray", intray());
   } catch (...) {}
+}
+
+void
+mascotwindow::_updateInfo(mailbox const** mboxes)
+{
+  auto now = GetTickCount();
+  if (now - _last > balloonsec() * 1000) _info.clear();
+  _last = now;
+  for (tooltips::ellipsis ellips; *mboxes;) {
+    info t;
+    { 
+      auto mbox = *mboxes++;
+      auto lock = mbox->lock();
+      std::wstring msg;
+      auto n = mbox->recent();
+      if (n > 0 && _balloon) {
+	auto const& mails = mbox->mails();
+	msg += win32::wstring
+	  (win32::exe.textf(ID_TEXT_FETCHED_MAIL, n, mails.size()) +
+	   " @ " + mbox->name()) + L'\n';
+	auto mail = mails.crbegin();
+	for (auto i = min(n, _subjects); i--; ++mail) {
+	  msg += ellips(win32::wstring("- " + mail->subject(), CP_UTF8)) + L'\n';
+	}
+      } else if (n < 0) {
+	msg += win32::wstring(win32::exe.text(ID_TEXT_FETCH_ERROR) +
+			      " @ " + mbox->name()) + L'\n';
+      }
+      t = { mbox, n > 0, { msg, 0 } };
+    }
+    auto p = _info.begin(), e = _info.end();
+    while (p != e && p->mbox != t.mbox) ++p;
+    if (p != e) *p = t;
+    else _info.push_back(t);
+  }
 }
 
 icon
@@ -450,7 +496,7 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
       PostMessage(hwnd(), WM_SYSCOMMAND, SC_MOVE | HTCAPTION, l);
       break;
     }
-    // fall down
+    [[fallthrough]];
   case WM_LBUTTONDBLCLK:
     execute(_menu);
     return 0;
@@ -464,7 +510,9 @@ mascotwindow::dispatch(UINT m, WPARAM w, LPARAM l)
     popup(_menu, l);
     return 0;
   case WM_APP: // broadcast
-    update(LOWORD(w), HIWORD(w), reinterpret_cast<mailbox const**>(l));
+    if (l) _updateInfo(reinterpret_cast<mailbox const**>(l));
+    ReplyMessage(0);
+    status(l != 0, LOWORD(w), HIWORD(w));
     return 0;
   }
   return iconwindow::dispatch(m, w, l);
@@ -479,39 +527,29 @@ mascotwindow::release()
 }
 
 void
-mascotwindow::update(int recent, int unseen, mailbox const** mboxes)
+mascotwindow::wakeup(window& source)
 {
-  if (mboxes) {
-    LOG("Update: " << recent << ", " << unseen << std::endl);
-    std::wstring info;
-    auto newer = false;
-    for (tooltips::ellipsis ellips; *mboxes;) {
-      auto mbox = *mboxes++;
-      auto lock = mbox->lock();
-      int n = mbox->recent();
-      if (n > 0 && _balloon) {
-	auto const& mails = mbox->mails();
-	info += win32::wstring
-	  (win32::exe.textf(ID_TEXT_FETCHED_MAIL, n, mails.size()) +
-	   " @ " + mbox->name()) + L'\n';
-	auto mail = mails.crbegin();
-	for (auto i = min(n, _subjects); i--; ++mail) {
-	  info += ellips(win32::wstring("- " + mail->subject(), CP_UTF8)) + L'\n';
-	}
-      } else if (n < 0) {
-	info += win32::wstring(win32::exe.text(ID_TEXT_FETCH_ERROR) +
-			       " @ " + mbox->name()) + L'\n';
-      }
-      newer = newer || n > 0;
-    }
-    ReplyMessage(0);
+  iconwindow::wakeup(source);
+  if (!_info.empty() && GetTickCount() - _last > balloonsec() * 1000) _info.clear();
+}
+
+void
+mascotwindow::status(bool fetched, int recent, int unseen)
+{
+  if (fetched) {
+    LOG("Recent: " << recent << ", Unseen: " << unseen << std::endl);
     status(win32::exe.textf(ID_TEXT_FETCHED_MAIL, recent, unseen));
-    if (!info.empty()) {
-      info[info.size() - 1] = 0;
-      balloon(info, _balloon ? _balloon : 10,
-	      win32::wstring(win32::exe.text(newer ? ID_TEXT_BALLOON_TITLE :
-					     ID_TEXT_BALLOON_ERROR)),
-	      newer ? NIIF_INFO : NIIF_ERROR);
+    auto newer = false;
+    std::wstring msg;
+    for (auto& info : _info) {
+      newer = newer || info.newer;
+      msg += info.msg;
+    }
+    if (!msg.empty()) {
+      msg.erase(msg.size() - 1);
+      auto title = win32::wstring(win32::exe.text(newer ? ID_TEXT_BALLOON_TITLE :
+						  ID_TEXT_BALLOON_ERROR));
+      balloon(msg, balloonsec(), title, newer ? NIIF_INFO : NIIF_ERROR);
     }
     reset(!unseen + 1);
   } else {
