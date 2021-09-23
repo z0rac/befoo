@@ -223,7 +223,7 @@ imap4::_idle()
     try {
       resp = _response();
       if (resp.tag == "*") {
-	for (auto type : { "RECENT", "EXISTS", "EXPUNGE" }) {
+	for (auto type : { "RECENT", "EXISTS", "EXPUNGE", "FETCH" }) {
 	  done = done || resp.type == type;
 	}
       } else if (resp.tag == "+") {
