@@ -34,8 +34,7 @@ winsock::winsock()
 std::string
 winsock::error::emsg()
 {
-  char s[35];
-  return std::string("winsock error #") + _ltoa(WSAGetLastError(), s, 10);
+  return "winsock error #" + win32::digit(WSAGetLastError());
 }
 
 /*
@@ -161,8 +160,7 @@ winsock::tlsclient::~tlsclient()
 std::string
 winsock::tlsclient::_emsg(SECURITY_STATUS ss)
 {
-  char s[9];
-  return std::string("SSPI error #0x") + _ultoa(ss, s, 16);
+  return "SSPI error #0x" + win32::hexdigit(ss);
 }
 
 SECURITY_STATUS

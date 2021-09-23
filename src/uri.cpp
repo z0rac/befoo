@@ -63,8 +63,8 @@ namespace {
       }
       if (i == s.size()) break;
       result.append(s, 0, i);
-      char hex[4] { '%' };
-      _ltoa(s[i] & 255, hex + 1, 16);
+      constexpr auto h4 = [](auto v) { return "0123456789ABCDEF"[v & 15]; };
+      char hex[4] { '%', h4(s[i] >> 4), h4(s[i]) };
       result.append(hex);
       s = s.substr(i + 1);
     }

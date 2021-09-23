@@ -48,6 +48,20 @@ win32::wstring(std::string_view s, UINT cp)
 }
 
 std::string
+win32::digit(int value)
+{
+  char s[35];
+  return _ltoa_s(value, s, 10) == 0 ? s : std::string();
+}
+
+std::string
+win32::hexdigit(unsigned value)
+{
+  char s[9];
+  return _ultoa_s(value, s, 16) == 0 ? s : std::string();
+}
+
+std::string
 win32::profile(LPCSTR section, LPCSTR key, LPCSTR file)
 {
   if (!file) return {};
@@ -58,8 +72,8 @@ win32::profile(LPCSTR section, LPCSTR key, LPCSTR file)
     buf = std::unique_ptr<char[]>(new char[n]);
     size = GetPrivateProfileString(section, key, "", buf.get(), n, file);
   }
-  size_t i = size && key ? strspn(buf.get(), " \t") : 0;
-  return { buf.get() + i, size - i };
+  std::string_view sv(buf.get(), size);
+  return std::string(sv.substr(min(sv.find_first_not_of("\t "), sv.size())));
 }
 
 void
@@ -215,14 +229,4 @@ win32::u8conv::operator()(std::string const& text)
   std::unique_ptr<WCHAR[]> buf(new WCHAR[n + 1]);
   _mb2u(&_mode, _codepage, text.c_str(), {}, buf.get(), &n);
   return win32::string(std::wstring_view(buf.get(), n), CP_UTF8);
-}
-
-/*
- * Functions of the class win32::error
- */
-std::string
-win32::error::emsg()
-{
-  char s[35];
-  return std::string("WinAPI error #") + _ultoa(GetLastError(), s, 10);
 }

@@ -110,9 +110,8 @@ setting::cache(std::string_view key, std::list<std::string> const& data)
   _rep->erase(id);
   if (!data.empty()) {
     std::unique_ptr<storage> cache(_rep->storage(id));
-    char s[35];
-    long i = 0;
-    for (auto const& v : data) cache->put(_ltoa(++i, s, 10), v.c_str());
+    auto i = 0;
+    for (auto const& v : data) cache->put(win32::digit(++i).c_str(), v.c_str());
   }
 }
 
@@ -195,8 +194,7 @@ setting::tuple::add(std::string const& s)
 std::string
 setting::tuple::digit(long i)
 {
-  char s[35];
-  return _ltoa(i, s, 10);
+  return win32::digit(i);
 }
 
 /*

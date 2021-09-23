@@ -20,6 +20,8 @@ public:
 
   static std::string string(std::wstring_view ws, UINT cp = CP_ACP);
   static std::wstring wstring(std::string_view s, UINT cp = CP_ACP);
+  static std::string digit(int value);
+  static std::string hexdigit(unsigned value);
 
   static std::string profile(LPCSTR section, LPCSTR key, LPCSTR file);
   static void profile(LPCSTR section, LPCSTR key, LPCSTR value, LPCSTR file);
@@ -90,7 +92,7 @@ public:
     error() : _msg(emsg()) {}
     error(std::string const& msg) : _msg(msg) {}
     char const* what() const noexcept override { return _msg.c_str(); }
-    static std::string emsg();
+    static std::string emsg() { return "WinAPI error #" + digit(GetLastError()); }
   };
   template<class T> static T valid(T h) { if (h) return h; throw error(); }
 };

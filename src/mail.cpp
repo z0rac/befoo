@@ -53,7 +53,7 @@ mail::decoder::field(std::initializer_list<char const*> names)
     }
     if (_s[i] == ':') {
       auto name = uppercase(i++);
-      auto n = 0;
+      auto n = 0u;
       for (auto np : names) {
 	if (np == name) break;
 	++n;
@@ -139,13 +139,12 @@ mail::decoder::date()
 
   auto gmt = mktime(&tms);
   if (gmt == time_t(-1)) return time_t(-1);
-  auto gm = gmtime(&gmt);
-  if (!gm) return time_t(-1);
-  gmt += tms.tm_sec - gm->tm_sec;
-  gmt += (tms.tm_min - gm->tm_min) * 60;
-  gmt += (tms.tm_hour - gm->tm_hour) * 3600;
-  if (tms.tm_mday != gm->tm_mday) gmt += 86400;
-
+  if (struct tm gm; gmtime_s(&gm, &gmt)) {
+    gmt += tms.tm_sec - gm.tm_sec;
+    gmt += (tms.tm_min - gm.tm_min) * 60;
+    gmt += (tms.tm_hour - gm.tm_hour) * 3600;
+    if (tms.tm_mday != gm.tm_mday) gmt += 86400;
+  } else return time_t(-1);
   int delta = 0;
   if (!zone.empty()) {
     if (zone[0] == '+' || zone[0] == '-') {
