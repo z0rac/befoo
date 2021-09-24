@@ -7,12 +7,11 @@
 #pragma once
 
 #include "define.h"
+#include "definedlg.h"
 #include "win32.h"
 #include "setting.h"
 #include <windowsx.h>
 #include <commctrl.h>
-
-namespace extend { extern win32::module dll; }
 
 /** dialog - base dialog class
  */

@@ -4,14 +4,6 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
-#define _WIN32_WINNT 0x0601
-#include <sdkddkver.h>
-
-#include "version.h"
-
-#define DLL_NAME                                "extend"
-#define DLL_VERSION                             "1.4.3"
-#define DLL_VERSION_BINARY                      1,4,3,0
 
 #define IDD_SETTING				100
 #define IDC_LIST_MAILBOX			1000

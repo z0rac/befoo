@@ -98,7 +98,7 @@ icondlg::done(bool ok)
 {
   if (ok) {
     unsigned i = ListBox_GetCurSel(item(IDC_LIST_ICON));
-    if (i >= _list.size()) error(IDC_LIST_ICON, extend::dll.text(IDS_MSG_ITEM_REQUIRED));
+    if (i >= _list.size()) error(IDC_LIST_ICON, win32::exe.text(IDS_MSG_ITEM_REQUIRED));
     _setting = _list[i].setting;
   }
   dialog::done(ok);

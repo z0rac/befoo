@@ -28,6 +28,7 @@
 
 extern window* mascot();
 extern window* summary(mailbox const*);
+extern void settingdlg();
 
 // model - main model
 namespace {
@@ -260,49 +261,30 @@ model::_done(mbox& mb, bool fetched, bool idling)
   if (summary) window::broadcast(WM_COMMAND, MAKEWPARAM(0, ID_MENU_SUMMARY), 0);
 }
 
-namespace { // misc. functions
-  bool appendix(char const* file, char* path) {
-    return GetModuleFileName({}, path, MAX_PATH) < MAX_PATH &&
-      PathRemoveFileSpec(path) && PathAppend(path, file) &&
-      PathFileExists(path);
-  }
-
-  bool shell(std::string_view cmd) {
-    auto h = win32::shell(cmd, SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_DDEWAIT);
-    if (!h) return false;
-    WaitForSingleObject(h, INFINITE);
-    CloseHandle(h);
-    return true;
-  }
-
-  bool rundll(char const* arg) {
-    char s[MAX_PATH];
-    if (!appendix("extend.dll", s)) return false;
-    win32::dll extend(s);
-    if (!extend) return false;
-    typedef void (*settingdlg)(HWND, HINSTANCE, LPCSTR, int);
-    auto fun = settingdlg(extend("settingdlg", {}));
-    if (!fun) return false;
-    fun({}, win32::exe, arg, SW_NORMAL);
-    return true;
-  }
-}
-
 /** repository - profile added some features.
  */
 #define INI_FILE APP_NAME ".ini"
 namespace {
   class repository : public profile {
+    static bool _appendix(char const* file, char* path) noexcept;
   public:
     repository();
     bool edit();
   };
 }
 
+bool
+repository::_appendix(char const* file, char* path) noexcept
+{
+  return GetModuleFileName({}, path, MAX_PATH) < MAX_PATH &&
+    PathRemoveFileSpec(path) && PathAppend(path, file) &&
+    PathFileExists(path);
+}
+
 repository::repository()
   : profile([] {
     char path[MAX_PATH];
-    if (appendix(INI_FILE, path) ||
+    if (_appendix(INI_FILE, path) ||
 	(SHGetFolderPath({}, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
 			 {}, SHGFP_TYPE_CURRENT, path) == S_OK &&
 	 PathAppend(path, APP_NAME "\\" INI_FILE) &&
@@ -333,8 +315,8 @@ repository::edit()
   FILETIME before {};
   GetFileTime(fh, {}, {}, &before);
   auto after = before;
-  (rundll(path().c_str()) || shell('"' + path() + '"')) &&
-    GetFileTime(fh, {}, {}, &after);
+  settingdlg();
+  GetFileTime(fh, {}, {}, &after);
   CloseHandle(fh);
 
   return CompareFileTime(&before, &after) != 0;

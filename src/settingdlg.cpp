@@ -66,7 +66,7 @@ dialog::getfile(int filter, bool quote, std::string const& dir) const
   char fn[MAX_PATH] {};
   OPENFILENAME ofn { sizeof(ofn) };
   ofn.hwndOwner = _hwnd;
-  if (auto fs = extend::dll.text(filter); fs.size() > 1) {
+  if (auto fs = win32::exe.text(filter); fs.size() > 1) {
     auto delim = *fs.rbegin();
     for (auto& c : fs) {
       if (c == delim) c = '\0';
@@ -128,7 +128,7 @@ dialog::balloon(int id, std::string const& msg) const noexcept
 			 WS_POPUP | TTS_NOPREFIX | TTS_BALLOON | TTS_CLOSE,
 			 CW_USEDEFAULT, CW_USEDEFAULT,
 			 CW_USEDEFAULT, CW_USEDEFAULT,
-			 _hwnd, {}, extend::dll, {});
+			 _hwnd, {}, win32::exe, {});
     if (_tips) SendMessage(_tips, TTM_ADDTOOL, 0, LPARAM(&ti));
   }
   if (_tips) {
@@ -185,7 +185,7 @@ dialog::modal(int id, HWND parent) noexcept
     } catch (...) {}
     return FALSE;
   };
-  return static_cast<int>(DialogBoxParam(extend::dll, MAKEINTRESOURCE(id),
+  return static_cast<int>(DialogBoxParam(win32::exe, MAKEINTRESOURCE(id),
 					 parent, callback, LPARAM(this)));
 }
 
@@ -284,12 +284,10 @@ startup::update(bool add)
 void
 maindlg::initialize()
 {
-  { // mailbox list and buttons
-    for (auto& t : setting::mailboxes()) {
-      ListBox_AddString(item(IDC_LIST_MAILBOX), t.c_str());
-    }
-    _enablebuttons();
+  for (auto& t : setting::mailboxes()) {
+    ListBox_AddString(item(IDC_LIST_MAILBOX), t.c_str());
   }
+  _enablebuttons();
   setting pref(setting::preferences());
   int n, b, t;
   { // icon group
@@ -369,7 +367,7 @@ maindlg::_delete()
 {
   auto name = listitem(IDC_LIST_MAILBOX);
   if (name.empty() ||
-      msgbox(extend::dll.textf(IDS_MSGBOX_DELETE, name.c_str()),
+      msgbox(win32::exe.textf(IDS_MSGBOX_DELETE, name.c_str()),
 	     MB_ICONQUESTION | MB_YESNO) != IDYES) return;
   setting::mailboxclear(name);
   auto h = item(IDC_LIST_MAILBOX);
@@ -398,4 +396,16 @@ maindlg::_enableicon(bool en) noexcept
 {
   enable(IDC_EDIT_ICON, en);
   enable(IDC_SPIN_ICON, en);
+}
+
+void
+settingdlg()
+{
+  CoInitialize({});
+  try {
+    INITCOMMONCONTROLSEX icce { sizeof(icce), ICC_WIN95_CLASSES };
+    InitCommonControlsEx(&icce);
+    maindlg().modal(IDD_SETTING, {});
+  } catch (...) {}
+  CoUninitialize();
 }

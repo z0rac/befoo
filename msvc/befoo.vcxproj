@@ -163,13 +163,16 @@
   <ItemGroup>
     <ClCompile Include="..\src\codepage.cpp" />
     <ClCompile Include="..\src\icon.cpp" />
+    <ClCompile Include="..\src\icondlg.cpp" />
     <ClCompile Include="..\src\imap4.cpp" />
     <ClCompile Include="..\src\mail.cpp" />
     <ClCompile Include="..\src\mailbox.cpp" />
+    <ClCompile Include="..\src\mailboxdlg.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\mascot.cpp" />
     <ClCompile Include="..\src\pop3.cpp" />
     <ClCompile Include="..\src\setting.cpp" />
+    <ClCompile Include="..\src\settingdlg.cpp" />
     <ClCompile Include="..\src\summary.cpp" />
     <ClCompile Include="..\src\uri.cpp" />
     <ClCompile Include="..\src\win32.cpp" />
@@ -179,9 +182,11 @@
   <ItemGroup>
     <ClInclude Include="..\src\codepage.h" />
     <ClInclude Include="..\src\define.h" />
+    <ClInclude Include="..\src\definedlg.h" />
     <ClInclude Include="..\src\icon.h" />
     <ClInclude Include="..\src\mailbox.h" />
     <ClInclude Include="..\src\setting.h" />
+    <ClInclude Include="..\src\settingdlg.h" />
     <ClInclude Include="..\src\win32.h" />
     <ClInclude Include="..\src\window.h" />
     <ClInclude Include="..\src\winsock.h" />
