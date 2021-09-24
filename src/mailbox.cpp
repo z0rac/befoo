@@ -41,7 +41,7 @@ namespace {
 void
 tcpstream::connect(std::string const& host, std::string const& port, int domain)
 {
-  assert(_socket == INVALID_SOCKET);
+  assert(!_socket);
   _socket.connect(host, port, domain).timeout(TCP_TIMEOUT);
 }
 
@@ -65,8 +65,9 @@ namespace {
     struct tls : public winsock::tlsclient {
       winsock::tcpclient socket;
       ~tls() { shutdown(); }
-      size_t _recv(char* buf, size_t size) override { return socket.recv(buf, size); }
-      size_t _send(char const* data, size_t size) override { return socket.send(data, size); }
+      bool availlo() const noexcept override { return static_cast<bool>(socket); }
+      size_t recvlo(char* buf, size_t size) override { return socket.recv(buf, size); }
+      size_t sendlo(char const* data, size_t size) override { return socket.send(data, size); }
     } _tls;
     int _verifylevel;
     void _connect(std::string const& host);
@@ -101,15 +102,16 @@ sslstream::_connect(std::string const& host)
 void
 sslstream::connect(SOCKET socket, std::string const& host)
 {
-  assert(_tls.socket == INVALID_SOCKET);
-  _tls.socket(socket).timeout(TCP_TIMEOUT);
+  assert(!_tls.socket);
+  _tls.socket = socket;
+  _tls.socket.timeout(TCP_TIMEOUT);
   _connect(host);
 }
 
 void
 sslstream::connect(std::string const& host, std::string const& port, int domain)
 {
-  assert(_tls.socket == INVALID_SOCKET);
+  assert(!_tls.socket);
   _tls.socket.connect(host, port, domain).timeout(TCP_TIMEOUT);
   _connect(host);
 }
@@ -129,7 +131,7 @@ sslstream::write(char const* data, size_t size)
 mailbox::backend::stream*
 tcpstream::starttls(std::string const& host)
 {
-  assert(_socket != INVALID_SOCKET);
+  assert(_socket);
   std::unique_ptr<sslstream> st(new sslstream(_verifylevel));
   st->connect(_socket.release(), host);
   return st.release();
