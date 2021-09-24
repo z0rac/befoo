@@ -139,7 +139,7 @@ mail::decoder::date()
 
   auto gmt = mktime(&tms);
   if (gmt == time_t(-1)) return time_t(-1);
-  if (struct tm gm; gmtime_s(&gm, &gmt)) {
+  if (struct tm gm; gmtime_s(&gm, &gmt) == 0) {
     gmt += tms.tm_sec - gm.tm_sec;
     gmt += (tms.tm_min - gm.tm_min) * 60;
     gmt += (tms.tm_hour - gm.tm_hour) * 3600;
