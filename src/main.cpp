@@ -36,6 +36,7 @@ namespace {
       model& _model;
       std::condition_variable _cond;
       enum { STOP, RUN, EXIT } _state = STOP;
+      bool _idle = false;
       bool _idling = false;
       void _fetch();
       void _fetched(bool idle = false);
@@ -51,6 +52,7 @@ namespace {
     public:
       auto next() noexcept { return static_cast<mbox*>(mailbox::next()); }
       auto ready() const noexcept { return _state == STOP; }
+      auto& idle(bool idle) noexcept { return _idle = idle, *this; }
       void fetch();
       void exit() noexcept;
     };
@@ -85,7 +87,7 @@ model::mbox::_fetch()
   }
   LOG("Start thread [" << name() << "]." << std::endl);
   try {
-    fetchmail();
+    fetchmail(_idle);
   } catch (std::exception const& DBG(e)) {
     LOG(e.what() << std::endl);
   } catch (...) {
@@ -155,10 +157,11 @@ model::model()
       mb->uripasswd(s["uri"], s.cipher("passwd"))
 	.domain(ip == 4 ? AF_INET : ip == 6 ? AF_INET6 : AF_UNSPEC)
 	.verify(verify);
-      int period;
-      s["period"](period = 15);
+      int period, idle;
+      s["period"](period = 15)(idle = 1);
       s["sound"].sep(0)(mb->sound);
       mb->cycle = mb->period = period > 0 ? period * 60000U : 0;
+      mb->idle(idle != 0);
       auto ignore = setting::cache(mb->uristr());
       mb->ignore(ignore);
       last = last ? last->next(mb.release()) : (_mailboxes = mb.release());

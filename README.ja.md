@@ -29,10 +29,10 @@ befooは"befoo.ini"ファイルから設定を読み込みます。
 [メールボックス名]
 uri=imap://username@mail.example.com/
 passwd=パスワード	; 後で暗号化されます。
-sound=MailBeep		; サウンド名かWAVEファイルのパス。(デフォルト:着信音なし)
-period=10		; 分単位のメール確認間隔。(デフォルト:15分)
-ip=6			; IPバージョン6。(デフォルト:0=指定なし)
-verify=1		; TLS/SSL証明書の検証レベル(サーバー名のみ)。(デフォルト:3=完全検証)
+sound=MailBeep		; サウンド名かWAVEファイルのパス。(デフォルト: 着信音なし)
+period=10,1		; 10分毎のメール確認で可能なら即時取得。(デフォルト: 15,1=即時)
+ip=6			; IPバージョン6。(デフォルト: 0=指定なし)
+verify=1		; TLS/SSL証明書の検証レベル(サーバー名のみ)。(デフォルト: 3=完全検証)
 
 [SSLを使用]
 uri=imap+ssl://username@mail.example.com/
@@ -43,6 +43,7 @@ verify=2		; 自己証明書
 [Google Apps email]
 uri=imap+ssl://username%40your_domain.com@imap.gmail.com/
 passwd=...
+period=5,0		; 即時取得せずに5分毎にメール確認。
 
 [POP3]
 uri=pop://username@pop.example.com/

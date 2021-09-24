@@ -233,7 +233,7 @@ mailbox::find(std::string const& uid) const
 }
 
 void
-mailbox::fetchmail()
+mailbox::fetchmail(bool idle)
 {
   extern backend* backendIMAP4();
   extern backend* backendPOP3();
@@ -270,7 +270,7 @@ mailbox::fetchmail()
     ~exhibit() { mb.lock(), mb._backend = {}; }
   } exhibit { *this, be.get() };
   fetching(false);
-  auto idle = be->login(u, pw);
+  idle = be->login(u, pw) && idle;
   _recent = static_cast<int>(be->fetch(*this, u));
   while (idle) {
     fetching(idle);

@@ -115,7 +115,7 @@ public:
   auto& ignore() const noexcept { return _ignore; }
   auto const& ignore(std::list<std::string>& ignore)
   { return _ignore.swap(ignore), _ignore; }
-  void fetchmail();
+  void fetchmail(bool idle = false);
   void exit() noexcept { if (_backend) _backend->disconnect(); }
 public:
   class backend {

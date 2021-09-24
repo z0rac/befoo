@@ -30,7 +30,7 @@ See below an example for "befoo.ini":
 uri=imap://username@imap.example.com/
 passwd=your password	; It will be coded later.
 sound=MailBeep		; A sound alias or path to a wave file. (default: No sound)
-period=10		; A fetching period in minutes. (default: 15)
+period=10,1		; Fetching emails every 10 minutes with fetching immediately if possible. (default: 15,1 meaning "immediately")
 ip=6			; IP version 6. (default: 0 meaning "unspecified")
 verify=1		; Ability to verify certificate, only server name. (default: 3 meaning "full")
 
@@ -43,6 +43,7 @@ verify=2		; Allow self certification.
 [Google Apps email]
 uri=imap+ssl://username%40your_domain.com@imap.gmail.com/
 passwd=...
+period=5,0		; Fetching emails every 5 minutes without fetching immediately.
 
 [POP3]
 uri=pop://username@pop.example.com/
