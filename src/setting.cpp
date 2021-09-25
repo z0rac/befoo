@@ -132,6 +132,17 @@ setting::invalidchars()
   return _rep->invalidchars();
 }
 
+bool
+setting::edit()
+{
+  assert(_rep);
+  auto watch = _rep->watch();
+  if (!watch.get()) return false;
+  extern void settingdlg();
+  settingdlg();
+  return watch->changed();
+}
+
 static constexpr std::string_view code64
 ("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
 
@@ -235,6 +246,145 @@ setting::manip::split()
   return result;
 }
 
+#if USE_REG
+/** regkey - implement for setting::storage.
+ */
+namespace {
+  class regkey : public setting::storage {
+    HKEY _key = {};
+  public:
+    regkey(HKEY key, std::string const& name);
+    ~regkey();
+    std::string get(char const* key) const override;
+    void put(char const* key, char const* value) override;
+    void erase(char const* key) override;
+    std::list<std::string> keys() const override;
+  };
+}
+
+regkey::regkey(HKEY key, std::string const& name)
+{
+  key && RegCreateKeyEx(key, name.c_str(), 0, {}, REG_OPTION_NON_VOLATILE,
+			KEY_ALL_ACCESS, {}, &_key, {});
+}
+
+regkey::~regkey()
+{
+  _key && RegCloseKey(_key);
+}
+
+std::string
+regkey::get(char const* key) const
+{
+  DWORD type;
+  DWORD size;
+  if (_key &&
+      RegQueryValueEx(_key, key, {}, &type, {}, &size) == ERROR_SUCCESS &&
+      type == REG_SZ) {
+    std::unique_ptr<char[]> buf(new char[size]);
+    if (RegQueryValueEx(_key, key, {}, {},
+			LPBYTE(buf.get()), &size) == ERROR_SUCCESS) return buf.get();
+  }
+  return {};
+}
+
+void
+regkey::put(char const* key, char const* value)
+{
+  _key && RegSetValueEx(_key, key, 0, REG_SZ, LPCBYTE(value), strlen(value) + 1);
+}
+
+void
+regkey::erase(char const* key)
+{
+  _key && RegDeleteValue(_key, key);
+}
+
+std::list<std::string>
+regkey::keys() const
+{
+  std::list<std::string> result;
+  DWORD size;
+  if (_key && RegQueryInfoKey(_key, {}, {}, {}, {}, {},
+			      {}, {}, &size, {}, {}, {}) == ERROR_SUCCESS) {
+    std::unique_ptr<char[]> buf(new char[++size]);
+    DWORD i = 0, n;
+    while (n = size, RegEnumValue(_key, i++, buf.get(), &n,
+				  {}, {}, {}, {}) == ERROR_SUCCESS) {
+      result.push_back(buf.get());
+    }
+  }
+  return result;
+}
+
+/*
+ * Functions of class registory
+ */
+registory::registory(char const* key)
+{
+  RegCreateKeyEx(HKEY_CURRENT_USER, key, 0, {},
+		 REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, {}, PHKEY(&_key), {});
+}
+
+registory::~registory()
+{
+  _key && RegCloseKey(HKEY(_key));
+}
+
+setting::storage*
+registory::storage(std::string const& name) const
+{
+  return new regkey(HKEY(_key), name);
+}
+
+std::list<std::string>
+registory::storages() const
+{
+  std::list<std::string> result;
+  DWORD size;
+  if (_key && RegQueryInfoKey(HKEY(_key), {}, {}, {}, {}, &size,
+			      {}, {}, {}, {}, {}, {}) == ERROR_SUCCESS) {
+    std::unique_ptr<char[]> buf(new char[++size]);
+    DWORD i = 0, n;
+    while (n = size, RegEnumKeyEx(HKEY(_key), i++, buf.get(), &n,
+				  {}, {}, {}, {}) == ERROR_SUCCESS) {
+      result.push_back(buf.get());
+    }
+  }
+  return result;
+}
+
+void
+registory::erase(std::string const& name)
+{
+  _key && RegDeleteKey(HKEY(_key), name.c_str());
+}
+
+std::unique_ptr<registory::_watch>
+registory::watch() const
+{
+  if (!_key) return {};
+  class watch : public _watch {
+    HANDLE _event = win32::valid(CreateEvent({}, false, false, {}));
+    HKEY _key = {};
+  public:
+    watch(HKEY key) {
+      if (RegOpenKeyEx(key, {}, 0, KEY_NOTIFY, &_key) == ERROR_SUCCESS) {
+	constexpr auto notify = REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET;
+	if (RegNotifyChangeKeyValue(_key, true, notify, _event, true) == ERROR_SUCCESS) return;
+	RegCloseKey(_key);
+      }
+      CloseHandle(_event);
+      throw win32::error();
+    }
+    ~watch() { RegCloseKey(_key), CloseHandle(_event); }
+    bool changed() const noexcept override
+    { return WaitForSingleObject(_event, 0) == WAIT_OBJECT_0; }
+  };
+  return std::unique_ptr<_watch>(new watch(HKEY(_key)));
+}
+
+#else // !USE_REG
 /** section - implement for setting::storage.
  * This is using Windows API for .INI file.
  */
@@ -261,12 +411,10 @@ section::get(char const* key) const
 void
 section::put(char const* key, char const* value)
 {
-  std::string tmp;
-  if (value && value[0] == '"' && value[strlen(value) - 1] == '"') {
-    tmp = '"' + std::string(value) + '"';
-    value = tmp.c_str();
-  }
-  win32::profile(_section.c_str(), key, value, _path);
+  std::string v;
+  if (value) v.assign(value);
+  if (!v.empty() && v[0] == '"' && *v.rbegin() == '"') v = '"' + v + '"';
+  if (v != get(key)) win32::profile(_section.c_str(), key, v.c_str(), _path);
 }
 
 void
@@ -306,3 +454,29 @@ profile::erase(std::string const& name)
 {
   win32::profile(name.c_str(), {}, {}, _path.c_str());
 }
+
+std::unique_ptr<profile::_watch>
+profile::watch() const
+{
+  if (_path.empty()) return {};
+  class watch : public _watch {
+    HANDLE _h;
+    FILETIME _time;
+  public:
+    watch(LPCSTR path)
+      : _h(CreateFile(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		      {}, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, {})) {
+      win32::valid(_h != INVALID_HANDLE_VALUE);
+      GetFileTime(_h, {}, {}, &_time);
+    }
+    ~watch() { CloseHandle(_h); }
+    bool changed() const noexcept {
+      auto after = _time;
+      GetFileTime(_h, {}, {}, &after);
+      return CompareFileTime(&_time, &after) != 0;
+    }
+  };
+  WritePrivateProfileString({}, {}, {}, _path.c_str()); // flush entries.
+  return std::unique_ptr<_watch>(new watch(_path.c_str()));
+}
+#endif // !USE_REG

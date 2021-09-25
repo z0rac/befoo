@@ -261,67 +261,6 @@ model::_done(mbox& mb, bool fetched, bool idling)
   if (summary) window::broadcast(WM_COMMAND, MAKEWPARAM(0, ID_MENU_SUMMARY), 0);
 }
 
-/** repository - profile added some features.
- */
-#define INI_FILE APP_NAME ".ini"
-namespace {
-  class repository : public profile {
-    static bool _appendix(char const* file, char* path) noexcept;
-  public:
-    repository();
-    bool edit();
-  };
-}
-
-bool
-repository::_appendix(char const* file, char* path) noexcept
-{
-  return GetModuleFileName({}, path, MAX_PATH) < MAX_PATH &&
-    PathRemoveFileSpec(path) && PathAppend(path, file) &&
-    PathFileExists(path);
-}
-
-repository::repository()
-  : profile([] {
-    char path[MAX_PATH];
-    if (_appendix(INI_FILE, path) ||
-	(SHGetFolderPath({}, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
-			 {}, SHGFP_TYPE_CURRENT, path) == S_OK &&
-	 PathAppend(path, APP_NAME "\\" INI_FILE) &&
-	 MakeSureDirectoryPathExists(path))) {
-      auto h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, 0,
-			  {}, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, {});
-      if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-      return std::string(path);
-    }
-    return std::string();
-  }())
-{
-  LOG("Using the setting file: " << path() << std::endl);
-}
-
-bool
-repository::edit()
-{
-  LOG("Edit setting." << std::endl);
-  if (path().empty()) return false;
-
-  WritePrivateProfileString({}, {}, {}, path().c_str()); // flush entries.
-  auto fh = CreateFile(path().c_str(), GENERIC_READ,
-		       FILE_SHARE_READ | FILE_SHARE_WRITE,
-		       {}, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, {});
-  if (fh == INVALID_HANDLE_VALUE) throw win32::error();
-
-  FILETIME before {};
-  GetFileTime(fh, {}, {}, &before);
-  auto after = before;
-  settingdlg();
-  GetFileTime(fh, {}, {}, &after);
-  CloseHandle(fh);
-
-  return CompareFileTime(&before, &after) != 0;
-}
-
 namespace cmd {
   struct fetch : window::command {
     model& _model;
@@ -342,14 +281,13 @@ namespace cmd {
     UINT state(window&) override { return _model.fetching() ? MFS_DISABLED : 0; }
   };
 
-  struct setting : window::command {
-    repository& _rep;
+  struct settings : window::command {
     DWORD _tid = GetCurrentThreadId();
     bool _busy = false;
-    setting(repository& rep) : window::command(-274), _rep(rep) {}
+    settings() : window::command(-274) {}
     void execute(window&) override {
       if (!_busy) std::thread([this] {
-	if (_rep.edit()) PostThreadMessage(_tid, WM_QUIT, 1, 0);
+	if (setting::edit()) PostThreadMessage(_tid, WM_QUIT, 1, 0);
 	_busy = false;
       }).detach(), _busy = true;
     }
@@ -389,7 +327,27 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
   try {
     win32 befoo("befoo:79585F30-DD15-446C-B414-152D31324970");
     winsock winsock;
-    repository rep;
+#if USE_REG
+    registory rep("Software\\" APP_NAME);
+#else
+#define INI_FILE APP_NAME ".ini"
+    profile rep([] {
+      char path[MAX_PATH];
+      if (GetModuleFileName({}, path, MAX_PATH) < MAX_PATH &&
+	  PathRemoveFileSpec(path) && PathAppend(path, INI_FILE) &&
+	  PathFileExists(path)) return std::string(path);
+      if (SHGetFolderPath({}, CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE,
+			  {}, SHGFP_TYPE_CURRENT, path) == S_OK &&
+	  PathAppend(path, APP_NAME "\\" INI_FILE) &&
+	  MakeSureDirectoryPathExists(path)) {
+	auto h = CreateFile(path, GENERIC_READ | GENERIC_WRITE, 0,
+			    {}, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, {});
+	if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+	return std::string(path);
+      }
+      return std::string();
+    }());
+#endif
     int delay;
     setting::preferences()["delay"](delay = 0);
     for (int qc = 1; qc > 0; delay = 0) {
@@ -397,7 +355,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
       std::unique_ptr<window> w(mascot());
       w->addcmd(ID_MENU_FETCH, new cmd::fetch(*m));
       w->addcmd(ID_MENU_SUMMARY, new cmd::summary(*m));
-      w->addcmd(ID_MENU_SETTINGS, new cmd::setting(rep));
+      w->addcmd(ID_MENU_SETTINGS, new cmd::settings);
       w->addcmd(ID_MENU_EXIT, new cmd::exit);
       w->addcmd(ID_EVENT_LOGOFF, new cmd::logoff(*m));
       w->addcmd(ID_EVENT_RETRY, new cmd::retry(*m));

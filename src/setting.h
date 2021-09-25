@@ -27,20 +27,29 @@ class setting {
       virtual void erase(char const* key) = 0;
       virtual std::list<std::string> keys() const = 0;
     };
+    class _watch {
+    public:
+      virtual ~_watch() {}
+      virtual bool changed() const noexcept = 0;
+    };
   public:
     _repository();
     virtual ~_repository() {}
     virtual _storage* storage(std::string const& name) const = 0;
     virtual std::list<std::string> storages() const = 0;
     virtual void erase(std::string const& name) = 0;
-    virtual char const* invalidchars() const = 0;
+    virtual char const* invalidchars() const noexcept = 0;
+    virtual std::unique_ptr<_watch> watch() const = 0;
   };
-  std::shared_ptr<_repository::_storage> _st;
+  std::unique_ptr<_repository::_storage> _st;
   setting(_repository::_storage* st) : _st(st) {}
 public:
   using repository = _repository;
-  using storage = _repository::_storage;
-  setting(setting const& s) : _st(s._st) {}
+  using storage = repository::_storage;
+  setting(setting const& s) = delete;
+  setting(setting&& s) { std::swap(_st, s._st); }
+  setting& operator=(setting const&) = delete;
+  setting& operator=(setting&& s) { return std::swap(_st, s._st), *this; }
 public:
   // tuple - use for separated output parameters.
   // Example:
@@ -58,12 +67,10 @@ public:
     auto& row() const noexcept { return _s; }
     operator std::string const&() const noexcept { return _s; }
   };
-  setting& operator()(_str key, std::string const& value)
-  { _st->put(key, value.c_str()); return *this; }
-  setting& operator()(_str key, char const* value)
-  { _st->put(key, value); return *this; }
-  setting& operator()(_str key, long value)
-  { return operator()(key, tuple(value)); }
+  auto& operator()(_str key, std::string const& value)
+  { return _st->put(key, value.c_str()), *this; }
+  auto& operator()(_str key, char const* value) { return _st->put(key, value), *this; }
+  auto& operator()(_str key, long value) { return operator()(key, tuple(value)); }
 
   // manip - use for separated input parameters.
   // Examples:
@@ -78,17 +85,17 @@ public:
     bool next(int& v);
   public:
     manip(std::string const& s) : _s(s) {}
-    manip& operator()() { next(); return *this; }
+    manip& operator()() { return next(), *this; }
     manip& operator()(std::string& v);
     template<class T> auto& operator()(T& v)
     { int i = int(v); next(i), v = T(i); return *this; }
     template<class T, typename U> auto& operator()(T& v, U& e)
     { int i = int(v); e = U(next(i)), v = T(i); return *this; }
-    auto& operator()(int& v) { next(v); return *this; }
-    template<class T> auto& operator()(int& v, T& e) { e = T(next(v)); return *this; }
+    auto& operator()(int& v) { return next(v), *this; }
+    template<class T> auto& operator()(int& v, T& e) { return e = T(next(v)), *this; }
     auto& row() const noexcept { return _s; }
     operator std::string const&() const { return _s; }
-    auto& sep(char sep) { _sep = sep; return *this; }
+    auto& sep(char sep) { return _sep = sep, *this; }
     std::list<std::string> split();
     template<class T> std::list<T> split() {
       std::list<T> l;
@@ -107,21 +114,37 @@ public:
   static void cache(std::string_view key, std::list<std::string> const& data);
   static void cacheclear();
   static char const* invalidchars();
+  static bool edit();
 public:
   std::string cipher(_str key);
   setting& cipher(_str key, std::string const& value);
   setting& erase(_str key) { _st->erase(key); return *this; }
 };
 
+#if USE_REG
+class registory : public setting::repository {
+  void* _key = {};
+public:
+  registory(char const* key);
+  ~registory();
+public:
+  setting::storage* storage(std::string const& name) const override;
+  std::list<std::string> storages() const override;
+  void erase(std::string const& name) override;
+  char const* invalidchars() const noexcept override { return "\\"; }
+  std::unique_ptr<_watch> watch() const override;
+};
+#else // !USE_REG
 class profile : public setting::repository {
   std::string _path;
 public:
   profile(std::string_view path) : _path(path) {}
   ~profile();
 public:
-  auto& path() const noexcept { return _path; }
   setting::storage* storage(std::string const& name) const override;
   std::list<std::string> storages() const override;
   void erase(std::string const& name) override;
-  char const* invalidchars() const override { return "]"; }
+  char const* invalidchars() const noexcept override { return "]"; }
+  std::unique_ptr<_watch> watch() const override;
 };
+#endif // !USE_REG
