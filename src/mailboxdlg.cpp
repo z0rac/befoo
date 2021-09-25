@@ -121,7 +121,7 @@ namespace {
 void
 mailboxdlg::initialize()
 {
-  int ip = 0, verify = 3, fetch = 15;
+  int ip = 0, verify = 3, fetch = 15, immediate = 1;
   std::string sound;
   if (!_name.empty()) {
     settext(IDC_EDIT_NAME, _name);
@@ -130,7 +130,7 @@ mailboxdlg::initialize()
     settext(IDC_EDIT_PASSWD, s.cipher("passwd"));
     s["ip"](ip);
     s["verify"](verify);
-    s["period"](fetch);
+    s["period"](fetch)(immediate);
     s["sound"].sep(0)(sound);
     std::string mua;
     s["mua"].sep(0)(mua);
@@ -152,6 +152,7 @@ mailboxdlg::initialize()
   }
   ComboBox_SetCurSel(item(IDC_COMBO_VERIFY), verify);
   setspin(IDC_SPIN_FETCH, fetch);
+  Button_SetCheck(item(IDC_CHECKBOX_IMMEDIATE), immediate != 0);
   settext(IDC_COMBO_SOUND, _sound(sound));
   for (auto& t : _snd) {
     ComboBox_InsertString(item(IDC_COMBO_SOUND), -1, t.first.c_str());
@@ -202,7 +203,8 @@ mailboxdlg::done(bool ok)
     int verify = max(ComboBox_GetCurSel(item(IDC_COMBO_VERIFY)), 0);
     if (verify < 3) s("verify", verify);
     else s.erase("verify");
-    s("period", setting::tuple(getint(IDC_EDIT_FETCH)));
+    int immediate = Button_GetCheck(item(IDC_CHECKBOX_IMMEDIATE)) != 0;
+    s("period", setting::tuple(getint(IDC_EDIT_FETCH))(immediate));
     std::string st;
     st = gettext(IDC_COMBO_SOUND);
     if (!st.empty()) {
