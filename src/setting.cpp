@@ -9,26 +9,6 @@
 #include "win32.h"
 #include <cassert>
 #include <ctime>
-#include <shlwapi.h>
-
-#ifdef _DEBUG
-#include <iostream>
-#define DBG(s) s
-#define LOG(s) (std::cout << s)
-#else
-#define DBG(s)
-#define LOG(s)
-#endif
-
-/*
- * Functions of class setting::_repository
- */
-static setting::repository* _rep = {};
-
-setting::_repository::_repository()
-{
-  _rep = this;
-}
 
 /*
  * Functions of class setting
@@ -73,21 +53,21 @@ setting::mailboxclear(std::string const& id)
   _rep->erase(id);
 }
 
-namespace {
-  std::string cachekey(std::string_view key) {
-    std::string esc;
-    auto ch = std::string("$") + _rep->invalidchars();
-    for (;;) {
-      auto i = key.find_first_of(ch);
-      esc += key.substr(0, i);
-      if (i == key.npos) break;
-      char e[] = "$0";
-      e[1] += char(ch.find(key[i]));
-      esc += e;
-      key = key.substr(i + 1);
-    }
-    return "(cache:" + esc + ')';
+std::string
+setting::_cachekey(std::string_view key)
+{
+  std::string esc;
+  auto ch = std::string("$") + _rep->invalidchars();
+  for (;;) {
+    auto i = key.find_first_of(ch);
+    esc += key.substr(0, i);
+    if (i == key.npos) break;
+    char e[] = "$0";
+    e[1] += char(ch.find(key[i]));
+    esc += e;
+    key = key.substr(i + 1);
   }
+  return "(cache:" + esc + ')';
 }
 
 std::list<std::string>
@@ -95,7 +75,7 @@ setting::cache(std::string_view key)
 {
   assert(_rep);
   std::list<std::string> result;
-  std::unique_ptr<storage> cache(_rep->storage(cachekey(key)));
+  auto cache = _rep->storage(_cachekey(key));
   for (auto const& k : cache->keys()) {
     result.push_back(cache->get(k.c_str()));
   }
@@ -106,10 +86,10 @@ void
 setting::cache(std::string_view key, std::list<std::string> const& data)
 {
   assert(_rep);
-  auto id = cachekey(key);
+  auto id = _cachekey(key);
   _rep->erase(id);
   if (!data.empty()) {
-    std::unique_ptr<storage> cache(_rep->storage(id));
+    auto cache = _rep->storage(id);
     auto i = 0;
     for (auto const& v : data) cache->put(win32::digit(++i).c_str(), v.c_str());
   }
@@ -247,124 +227,93 @@ setting::manip::split()
 }
 
 #if USE_REG
-/** regkey - implement for setting::storage.
+/** _registory - implement for setting::storage.
+ * This is using Windows registory API.
  */
-namespace {
-  class regkey : public setting::storage {
+class setting::_registory : public setting::repository {
+  class _regkey {
     HKEY _key = {};
   public:
-    regkey(HKEY key, std::string const& name);
-    ~regkey();
-    std::string get(char const* key) const override;
-    void put(char const* key, char const* value) override;
-    void erase(char const* key) override;
-    std::list<std::string> keys() const override;
+    _regkey(HKEY key, LPCTSTR name) {
+      win32::valid(RegCreateKeyEx(key, name, 0, {}, REG_OPTION_NON_VOLATILE,
+				  KEY_ALL_ACCESS, {}, &_key, {}) == ERROR_SUCCESS);
+    }
+    ~_regkey() { _key && RegCloseKey(_key); }
+  public:
+    operator HKEY() const noexcept { return _key; }
   };
-}
+  _regkey _reg;
+public:
+  _registory(_str key) : _reg(HKEY_CURRENT_USER, key) {}
+public:
+  std::unique_ptr<setting::storage> storage(std::string const& name) const override;
+  std::list<std::string> storages() const override;
+  void erase(std::string const& name) override
+  { _reg && RegDeleteKey(_reg, name.c_str()); }
+  char const* invalidchars() const noexcept override { return "\\"; }
+  std::unique_ptr<setting::watch> watch() const override;
+};
 
-regkey::regkey(HKEY key, std::string const& name)
+std::unique_ptr<setting::storage>
+setting::_registory::storage(std::string const& name) const
 {
-  key && RegCreateKeyEx(key, name.c_str(), 0, {}, REG_OPTION_NON_VOLATILE,
-			KEY_ALL_ACCESS, {}, &_key, {});
-}
-
-regkey::~regkey()
-{
-  _key && RegCloseKey(_key);
-}
-
-std::string
-regkey::get(char const* key) const
-{
-  DWORD type;
-  DWORD size;
-  if (_key &&
-      RegQueryValueEx(_key, key, {}, &type, {}, &size) == ERROR_SUCCESS &&
-      type == REG_SZ) {
-    std::unique_ptr<char[]> buf(new char[size]);
-    if (RegQueryValueEx(_key, key, {}, {},
-			LPBYTE(buf.get()), &size) == ERROR_SUCCESS) return buf.get();
-  }
-  return {};
-}
-
-void
-regkey::put(char const* key, char const* value)
-{
-  _key && RegSetValueEx(_key, key, 0, REG_SZ, LPCBYTE(value), strlen(value) + 1);
-}
-
-void
-regkey::erase(char const* key)
-{
-  _key && RegDeleteValue(_key, key);
+  class subkey : public setting::storage {
+    _regkey _reg;
+  public:
+    subkey(HKEY key, char const* name) : _reg(key, name) {}
+    std::string get(char const* key) const override {
+      DWORD type, size;
+      if (_reg &&
+	  RegQueryValueEx(_reg, key, {}, &type, {}, &size) == ERROR_SUCCESS &&
+	  type == REG_SZ) {
+	std::unique_ptr<char[]> buf(new char[size]);
+	if (RegQueryValueEx(_reg, key, {}, {}, LPBYTE(buf.get()), &size) == ERROR_SUCCESS) {
+	  return buf.get();
+	}
+      }
+      return {};
+    }
+    void put(char const* key, char const* value) override
+    { _reg && RegSetValueEx(_reg, key, 0, REG_SZ, LPCBYTE(value), strlen(value) + 1); }
+    void erase(char const* key) override { _reg && RegDeleteValue(_reg, key); }
+    std::list<std::string> keys() const override {
+      std::list<std::string> result;
+      if (DWORD size; _reg && RegQueryInfoKey(_reg, {}, {}, {}, {}, {},
+					      {}, {}, &size, {}, {}, {}) == ERROR_SUCCESS) {
+	std::unique_ptr<char[]> buf(new char[++size]);
+	for (DWORD i = 0;; ++i) {
+	  auto n = size;
+	  if (RegEnumValue(_reg, i, buf.get(), &n, {}, {}, {}, {}) != ERROR_SUCCESS) break;
+	  result.push_back(buf.get());
+	}
+      }
+      return result;
+    }
+  };
+  return std::unique_ptr<setting::storage>(new subkey(_reg, name.c_str()));
 }
 
 std::list<std::string>
-regkey::keys() const
+setting::_registory::storages() const
 {
   std::list<std::string> result;
-  DWORD size;
-  if (_key && RegQueryInfoKey(_key, {}, {}, {}, {}, {},
-			      {}, {}, &size, {}, {}, {}) == ERROR_SUCCESS) {
+  if (DWORD size; _reg && RegQueryInfoKey(_reg, {}, {}, {}, {}, &size,
+					  {}, {}, {}, {}, {}, {}) == ERROR_SUCCESS) {
     std::unique_ptr<char[]> buf(new char[++size]);
-    DWORD i = 0, n;
-    while (n = size, RegEnumValue(_key, i++, buf.get(), &n,
-				  {}, {}, {}, {}) == ERROR_SUCCESS) {
+    for (DWORD i = 0;; ++i) {
+      auto n = size;
+      if (RegEnumKeyEx(_reg, i, buf.get(), &n, {}, {}, {}, {}) != ERROR_SUCCESS) break;
       result.push_back(buf.get());
     }
   }
   return result;
 }
 
-/*
- * Functions of class registory
- */
-registory::registory(char const* key)
+std::unique_ptr<setting::watch>
+setting::_registory::watch() const
 {
-  RegCreateKeyEx(HKEY_CURRENT_USER, key, 0, {},
-		 REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, {}, PHKEY(&_key), {});
-}
-
-registory::~registory()
-{
-  _key && RegCloseKey(HKEY(_key));
-}
-
-setting::storage*
-registory::storage(std::string const& name) const
-{
-  return new regkey(HKEY(_key), name);
-}
-
-std::list<std::string>
-registory::storages() const
-{
-  std::list<std::string> result;
-  DWORD size;
-  if (_key && RegQueryInfoKey(HKEY(_key), {}, {}, {}, {}, &size,
-			      {}, {}, {}, {}, {}, {}) == ERROR_SUCCESS) {
-    std::unique_ptr<char[]> buf(new char[++size]);
-    DWORD i = 0, n;
-    while (n = size, RegEnumKeyEx(HKEY(_key), i++, buf.get(), &n,
-				  {}, {}, {}, {}) == ERROR_SUCCESS) {
-      result.push_back(buf.get());
-    }
-  }
-  return result;
-}
-
-void
-registory::erase(std::string const& name)
-{
-  _key && RegDeleteKey(HKEY(_key), name.c_str());
-}
-
-std::unique_ptr<registory::_watch>
-registory::watch() const
-{
-  if (!_key) return {};
-  class watch : public _watch {
+  if (!_reg) return {};
+  class watch : public setting::watch {
     HANDLE _event = win32::valid(CreateEvent({}, false, false, {}));
     HKEY _key = {};
   public:
@@ -381,85 +330,64 @@ registory::watch() const
     bool changed() const noexcept override
     { return WaitForSingleObject(_event, 0) == WAIT_OBJECT_0; }
   };
-  return std::unique_ptr<_watch>(new watch(HKEY(_key)));
+  return std::unique_ptr<setting::watch>(new watch(_reg));
+}
+
+std::unique_ptr<setting::repository>
+setting::registory(_str key)
+{
+  return std::unique_ptr<repository>(new _registory(key));
 }
 
 #else // !USE_REG
-/** section - implement for setting::storage.
+/** _profile - implement for setting::repository
  * This is using Windows API for .INI file.
  */
-namespace {
+class setting::_profile : public setting::repository {
+  std::string _path;
+public:
+  _profile(_str path) : _path(path) {}
+  ~_profile() { win32::profile({}, {}, {}, _path.c_str()); }
+public:
+  std::unique_ptr<setting::storage> storage(std::string const& name) const override;
+  std::list<std::string> storages() const override
+  { return setting::manip(win32::profile({}, {}, _path.c_str())).sep(0).split(); }
+  void erase(std::string const& name) override
+  { win32::profile(name.c_str(), {}, {}, _path.c_str()); }
+  char const* invalidchars() const noexcept override { return "]"; }
+  std::unique_ptr<setting::watch> watch() const override;
+};
+
+std::unique_ptr<setting::storage>
+setting::_profile::storage(std::string const& name) const
+{
   class section : public setting::storage {
     std::string _section;
     char const* _path;
   public:
     section(std::string const& section, char const* path)
       : _section(section), _path(path) {}
-    std::string get(char const* key) const override;
-    void put(char const* key, char const* value) override;
-    void erase(char const* key) override;
-    std::list<std::string> keys() const override;
+    std::string get(char const* key) const override
+    { return win32::profile(_section.c_str(), key, _path); }
+    void put(char const* key, char const* value) override {
+      std::string v;
+      if (value) v.assign(value);
+      if (!v.empty() && v[0] == '"' && *v.rbegin() == '"') v = '"' + v + '"';
+      if (v != get(key)) win32::profile(_section.c_str(), key, v.c_str(), _path);
+    }
+    void erase(char const* key) override
+    { win32::profile(_section.c_str(), key, {}, _path); }
+    std::list<std::string> keys() const override
+    { return setting::manip(get({})).sep(0).split(); }
   };
+  return std::unique_ptr<setting::storage>(new section(name, _path.c_str()));
 }
 
-std::string
-section::get(char const* key) const
-{
-  return win32::profile(_section.c_str(), key, _path);
-}
-
-void
-section::put(char const* key, char const* value)
-{
-  std::string v;
-  if (value) v.assign(value);
-  if (!v.empty() && v[0] == '"' && *v.rbegin() == '"') v = '"' + v + '"';
-  if (v != get(key)) win32::profile(_section.c_str(), key, v.c_str(), _path);
-}
-
-void
-section::erase(char const* key)
-{
-  win32::profile(_section.c_str(), key, {}, _path);
-}
-
-std::list<std::string>
-section::keys() const
-{
-  return setting::manip(get({})).sep(0).split();
-}
-
-/*
- * Functions of class profile
- */
-profile::~profile()
-{
-  win32::profile({}, {}, {}, _path.c_str());
-}
-
-setting::storage*
-profile::storage(std::string const& name) const
-{
-  return new section(name, _path.c_str());
-}
-
-std::list<std::string>
-profile::storages() const
-{
-  return setting::manip(win32::profile({}, {}, _path.c_str())).sep(0).split();
-}
-
-void
-profile::erase(std::string const& name)
-{
-  win32::profile(name.c_str(), {}, {}, _path.c_str());
-}
-
-std::unique_ptr<profile::_watch>
-profile::watch() const
+std::unique_ptr<setting::watch>
+setting::_profile::watch() const
 {
   if (_path.empty()) return {};
-  class watch : public _watch {
+  class watch : public setting::watch {
     HANDLE _h;
     FILETIME _time;
   public:
@@ -477,6 +405,12 @@ profile::watch() const
     }
   };
   WritePrivateProfileString({}, {}, {}, _path.c_str()); // flush entries.
-  return std::unique_ptr<_watch>(new watch(_path.c_str()));
+  return std::unique_ptr<setting::watch>(new watch(_path.c_str()));
+}
+
+std::unique_ptr<setting::repository>
+setting::profile(_str path)
+{
+  return std::unique_ptr<repository>(new _profile(path));
 }
 #endif // !USE_REG

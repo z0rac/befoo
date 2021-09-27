@@ -328,10 +328,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     win32 befoo("befoo:79585F30-DD15-446C-B414-152D31324970");
     winsock winsock;
 #if USE_REG
-    registory rep("Software\\" APP_NAME);
+    auto rep = setting::registory("Software\\" APP_NAME);
 #else
 #define INI_FILE APP_NAME ".ini"
-    profile rep([] {
+    auto rep = setting::profile([] {
       char path[MAX_PATH];
       if (GetModuleFileName({}, path, MAX_PATH) < MAX_PATH &&
 	  PathRemoveFileSpec(path) && PathAppend(path, INI_FILE) &&

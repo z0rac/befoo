@@ -203,8 +203,9 @@ mailboxdlg::done(bool ok)
     int verify = max(ComboBox_GetCurSel(item(IDC_COMBO_VERIFY)), 0);
     if (verify < 3) s("verify", verify);
     else s.erase("verify");
-    int immediate = Button_GetCheck(item(IDC_CHECKBOX_IMMEDIATE)) != 0;
-    s("period", setting::tuple(getint(IDC_EDIT_FETCH))(immediate));
+    auto period = setting::tuple(getint(IDC_EDIT_FETCH));
+    if (Button_GetCheck(item(IDC_CHECKBOX_IMMEDIATE)) == 0) period(0);
+    s("period", period);
     std::string st;
     st = gettext(IDC_COMBO_SOUND);
     if (!st.empty()) {

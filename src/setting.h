@@ -17,39 +17,43 @@ class setting {
     _str(std::string const& s) : c_str(s.c_str()) {}
     operator char const*() const { return c_str; }
   };
-  class _repository {
+  class _profile;
+  class _registory;
+  class storage {
   public:
-    class _storage {
-    public:
-      virtual ~_storage() {}
-      virtual std::string get(char const* key) const = 0;
-      virtual void put(char const* key, char const* value) = 0;
-      virtual void erase(char const* key) = 0;
-      virtual std::list<std::string> keys() const = 0;
-    };
-    class _watch {
-    public:
-      virtual ~_watch() {}
-      virtual bool changed() const noexcept = 0;
-    };
+    virtual ~storage() {}
+    virtual std::string get(char const* key) const = 0;
+    virtual void put(char const* key, char const* value) = 0;
+    virtual void erase(char const* key) = 0;
+    virtual std::list<std::string> keys() const = 0;
+  };
+  class watch {
   public:
-    _repository();
-    virtual ~_repository() {}
-    virtual _storage* storage(std::string const& name) const = 0;
+    virtual ~watch() {}
+    virtual bool changed() const noexcept = 0;
+  };
+  class repository {
+  public:
+    repository() { _rep = this; }
+    virtual ~repository() {}
+    using _str = setting::_str;
+    virtual std::unique_ptr<setting::storage> storage(std::string const& name) const = 0;
     virtual std::list<std::string> storages() const = 0;
     virtual void erase(std::string const& name) = 0;
     virtual char const* invalidchars() const noexcept = 0;
-    virtual std::unique_ptr<_watch> watch() const = 0;
+    virtual std::unique_ptr<setting::watch> watch() const = 0;
   };
-  std::unique_ptr<_repository::_storage> _st;
-  setting(_repository::_storage* st) : _st(st) {}
+  static inline repository* _rep = {};
+  std::unique_ptr<storage> _st;
+  static std::string _cachekey(std::string_view key);
+  setting(std::unique_ptr<storage>&& st) { std::swap(_st, st); }
 public:
-  using repository = _repository;
-  using storage = repository::_storage;
   setting(setting const& s) = delete;
   setting(setting&& s) { std::swap(_st, s._st); }
   setting& operator=(setting const&) = delete;
   setting& operator=(setting&& s) { return std::swap(_st, s._st), *this; }
+  static std::unique_ptr<repository> profile(_str path);
+  static std::unique_ptr<repository> registory(_str key);
 public:
   // tuple - use for separated output parameters.
   // Example:
@@ -120,31 +124,3 @@ public:
   setting& cipher(_str key, std::string const& value);
   setting& erase(_str key) { _st->erase(key); return *this; }
 };
-
-#if USE_REG
-class registory : public setting::repository {
-  void* _key = {};
-public:
-  registory(char const* key);
-  ~registory();
-public:
-  setting::storage* storage(std::string const& name) const override;
-  std::list<std::string> storages() const override;
-  void erase(std::string const& name) override;
-  char const* invalidchars() const noexcept override { return "\\"; }
-  std::unique_ptr<_watch> watch() const override;
-};
-#else // !USE_REG
-class profile : public setting::repository {
-  std::string _path;
-public:
-  profile(std::string_view path) : _path(path) {}
-  ~profile();
-public:
-  setting::storage* storage(std::string const& name) const override;
-  std::list<std::string> storages() const override;
-  void erase(std::string const& name) override;
-  char const* invalidchars() const noexcept override { return "]"; }
-  std::unique_ptr<_watch> watch() const override;
-};
-#endif // !USE_REG
