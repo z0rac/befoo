@@ -62,11 +62,11 @@ window::broadcast(UINT m, WPARAM w, LPARAM l)
     LPARAM l;
     DWORD id;
   } enums { m, w, l, GetCurrentProcessId() };
-  EnumWindows([](auto h, auto l) {
-    DWORD id = 0;
-    GetWindowThreadProcessId(h, &id);
-    auto& e = *reinterpret_cast<_enum const*>(l);
-    if (id == e.id) SendMessageTimeout(h, e.m, e.w, e.l, SMTO_NORMAL, 1000, {});
+  EnumWindows([](auto hwnd, auto param) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    auto& [m, w, l, id] = *reinterpret_cast<_enum const*>(param);
+    if (pid == id) SendMessageTimeout(hwnd, m, w, l, SMTO_NORMAL, 1000, {});
     return TRUE;
   }, LPARAM(&enums));
 }
@@ -323,8 +323,8 @@ window::execute(int id)
 window::command*
 window::_cmd(int id)
 {
-  for (auto const& c : _cmdmap) {
-    if (c.first == id) return c.second.get();
+  for (auto const& [cid, cmdp] : _cmdmap) {
+    if (cid == id) return cmdp.get();
   }
   return {};
 }
@@ -332,9 +332,9 @@ window::_cmd(int id)
 void
 window::addcmd(int id, cmdp cmd)
 {
-  for (auto& c : _cmdmap) {
-    if (c.first != id) continue;
-    c.second = cmd;
+  for (auto& [cid, cmdp] : _cmdmap) {
+    if (cid != id) continue;
+    cmdp = cmd;
     return;
   }
   _cmdmap.push_back({ id, cmd });

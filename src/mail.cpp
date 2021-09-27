@@ -28,12 +28,11 @@ mail::header(std::string const& headers)
   auto read = false;
   decoder de(headers);
   while (de) {
-    auto field = de.field({ "SUBJECT", "FROM", "DATE", "STATUS" });
-    switch (field.first) {
-    case 0: _subject = decoder(field.second).unstructured(); break;
-    case 1: _from = decoder(field.second).address(); break;
-    case 2: _date = decoder(field.second).date(); break;
-    case 3: read = field.second.find('R') != field.second.npos; break;
+    switch (auto [n, field] = de.field({ "SUBJECT", "FROM", "DATE", "STATUS" }); n) {
+    case 0: _subject = decoder(field).unstructured(); break;
+    case 1: _from = decoder(field).address(); break;
+    case 2: _date = decoder(field).date(); break;
+    case 3: read = field.find('R') != field.npos; break;
     }
   }
   return read;

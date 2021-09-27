@@ -46,9 +46,9 @@ pop3::login(uri const& uri, std::string const& passwd)
   if (_command("CAPA", false)) {
     auto uidl = false, stls = false;
     auto capa = _plist(true);
-    for (auto const& cap : capa) {
-      uidl = uidl || cap.first == "UIDL";
-      stls = stls || cap.first == "STLS";
+    for (auto const& [tag, param] : capa) {
+      uidl = uidl || tag == "UIDL";
+      stls = stls || tag == "STLS";
     }
     if (!uidl) throw mailbox::error("server not support UIDL command");
     if (stls && !tls()) {
@@ -58,8 +58,8 @@ pop3::login(uri const& uri, std::string const& passwd)
       capa = _plist(true);
     }
     auto user = false;
-    for (auto const& cap : capa) {
-      user = user || cap.first == "USER";
+    for (auto const& [tag, param] : capa) {
+      user = user || tag == "USER";
     }
     if (!user) throw mailbox::error("login disabled");
   }
@@ -83,14 +83,13 @@ pop3::fetch(mailbox& mbox, uri const& uri)
   auto recent = uri[uri::fragment] == "recent";
   _command("UIDL");
   plist uidl(_plist());
-  for (auto const& uidp : uidl) {
-    auto& uid = uidp.second;
+  for (auto const& [msg, uid] : uidl) {
     if (auto e = ignore.cend(); find(ignore.cbegin(), e, uid) != e) {
       ignored.push_back(uid);
       continue;
     }
     LOG("Fetch mail: " << uid << std::endl);
-    _command("TOP " + uidp.first + " 0");
+    _command("TOP " + msg + " 0");
     mail m(uid);
     if (m.header(_headers())) {
       ignored.push_back(uid);

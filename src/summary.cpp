@@ -94,9 +94,9 @@ summary::notify(WPARAM w, LPARAM l)
       LPNMLVDISPINFOA(l)->item.pszText = LPSTR(_tmp.c_str());
       break;
     case MAILBOX:
-      for (auto const& mbox : _mboxes) {
-	if (mbox.first <= size_t(LPNMLVDISPINFOA(l)->item.lParam)) continue;
-	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(mbox.second.c_str());
+      for (auto const& [mails, name] : _mboxes) {
+	if (mails <= size_t(LPNMLVDISPINFOA(l)->item.lParam)) continue;
+	LPNMLVDISPINFOA(l)->item.pszText = LPSTR(name.c_str());
 	break;
       }
       break;
@@ -203,10 +203,10 @@ summary::_open()
   if (item < 0) return;
   LVITEM lv { LVIF_PARAM, item };
   if (!ListView_GetItem(hwnd(), &lv)) return;
-  for (auto const& mbox : _mboxes) {
-    if (mbox.first <= size_t(lv.lParam)) continue;
+  for (auto const& [mails, name] : _mboxes) {
+    if (mails <= size_t(lv.lParam)) continue;
     std::string mua;
-    setting::mailbox(mbox.second)["mua"].sep(0)(mua);
+    setting::mailbox(name)["mua"].sep(0)(mua);
     if (!mua.empty() && win32::shell(mua)) close(true);
     break;
   }

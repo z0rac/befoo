@@ -63,12 +63,10 @@ bool
 imap4::login(uri const& uri, std::string const& passwd)
 {
   constexpr char notimap[] = "server not IMAP4 compliant";
-  auto resp = _response();
-  auto preauth = resp.type == "PREAUTH";
-  if (resp.tag != "*" || (!preauth && resp.type != "OK")) throw mailbox::error(notimap);
-  auto imap = false;
-  auto stls = false;
-  auto idle = false;
+  auto [tag, type, data] = _response();
+  auto preauth = type == "PREAUTH";
+  if (tag != "*" || (!preauth && type != "OK")) throw mailbox::error(notimap);
+  auto imap = false, stls = false, idle = false;
   constexpr char CAPABILITY[] = "CAPABILITY", STARTTLS[] = "STARTTLS", IDLE[] = "IDLE";
   auto cap = _command(CAPABILITY, CAPABILITY);
   for (parser caps(cap); caps;) {
@@ -90,7 +88,13 @@ imap4::login(uri const& uri, std::string const& passwd)
     if (s == "LOGINDISABLED") throw mailbox::error("login disabled");
     idle = idle || s == IDLE;
   }
-  _command("LOGIN" + _arg(uri[uri::user]) + _arg(passwd));
+  if (cap = _command("LOGIN" + _arg(uri[uri::user]) + _arg(passwd), CAPABILITY); !cap.empty()) {
+    idle = false;
+    for (parser caps(cap); caps;) {
+      auto s = caps.token();
+      idle = idle || s == IDLE;
+    }
+  }
   return idle;
 }
 
@@ -275,23 +279,23 @@ imap4::_response(bool logout)
 {
   parser parse(_read());
   response resp;
-  if (resp.tag = parse.token(); resp.tag == "+") { // continuation
-    resp.data = parse.remain();
-    return resp;
-  }
-  resp.type = parse.token();
-  if (resp.tag.empty() || resp.type.empty()) {
-    throw mailbox::error("unexpected response: " + parse.data());
-  }
-  if (!logout && resp.tag == "*" && resp.type == "BYE") {
-    throw mailbox::error("bye");
-  }
-  if (parse && parser::digit(resp.type)) {
-    resp.data = resp.type, resp.type = parse.token();
-  }
-  if (parse) {
-    if (!resp.data.empty()) resp.data += ' ';
-    resp.data += parse.remain();
+  if (resp.tag = parse.token(); resp.tag != "+") {
+    resp.type = parse.token();
+    if (resp.tag.empty() || resp.type.empty()) {
+      throw mailbox::error("unexpected response: " + parse.data());
+    }
+    if (!logout && resp.tag == "*" && resp.type == "BYE") {
+      throw mailbox::error("bye");
+    }
+    if (parse && parser::digit(resp.type)) {
+      resp.data = resp.type, resp.type = parse.token();
+    }
+    if (parse) {
+      if (!resp.data.empty()) resp.data += ' ';
+      resp.data += parse.remain();
+    }
+  } else {
+    resp.data = parse.remain();  // continuation
   }
   return resp;
 }
