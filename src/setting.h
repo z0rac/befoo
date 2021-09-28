@@ -13,18 +13,18 @@
 class setting {
   struct _str {
     char const* c_str;
-    _str(char const* s) : c_str(s) {}
-    _str(std::string const& s) : c_str(s.c_str()) {}
-    operator char const*() const { return c_str; }
+    constexpr _str(char const* s = {}) noexcept : c_str(s) {}
+    constexpr _str(std::string const& s) noexcept : c_str(s.c_str()) {}
+    constexpr operator char const*() const noexcept { return c_str; }
   };
   class _profile;
   class _registory;
   class storage {
   public:
     virtual ~storage() {}
-    virtual std::string get(char const* key) const = 0;
-    virtual void put(char const* key, char const* value) = 0;
-    virtual void erase(char const* key) = 0;
+    virtual std::string get(_str key) const = 0;
+    virtual void put(_str key, _str value) = 0;
+    virtual void erase(_str key) = 0;
     virtual std::list<std::string> keys() const = 0;
   };
   class watch {
@@ -37,9 +37,9 @@ class setting {
     repository() { _rep = this; }
     virtual ~repository() {}
     using _str = setting::_str;
-    virtual std::unique_ptr<setting::storage> storage(std::string const& name) const = 0;
+    virtual std::unique_ptr<setting::storage> storage(_str name) const = 0;
     virtual std::list<std::string> storages() const = 0;
-    virtual void erase(std::string const& name) = 0;
+    virtual void erase(_str name) = 0;
     virtual char const* invalidchars() const noexcept = 0;
     virtual std::unique_ptr<setting::watch> watch() const = 0;
   };
@@ -58,47 +58,40 @@ public:
   // tuple - use for separated output parameters.
   // Example:
   //   setting::preferences()("windowpos", setting::tuple(x)(y)(w)(h));
-  class tuple {
-    std::string _s;
+  class tuple : public std::string {
     char _sep;
-    tuple& add(std::string const& s);
+    tuple& add(_str s);
     static std::string digit(long i);
   public:
-    tuple(std::string const& v, char sep = ',') : _s(v), _sep(sep) {}
-    template<class T> tuple(T v, char sep = ',') : _s(digit(v)), _sep(sep) {}
-    auto& operator()(std::string const& v) { return add(v); }
-    template<class T> auto& operator()(T v) { return add(digit(v)); }
-    auto& row() const noexcept { return _s; }
-    operator std::string const&() const noexcept { return _s; }
+    tuple(_str v, char sep = ',') : std::string(v), _sep(sep) {}
+    tuple(long v, char sep = ',') : std::string(digit(v)), _sep(sep) {}
+    auto& operator()(_str v) { return add(v); }
+    auto& operator()(long v) { return add(digit(v)); }
   };
-  auto& operator()(_str key, std::string const& value)
-  { return _st->put(key, value.c_str()), *this; }
-  auto& operator()(_str key, char const* value) { return _st->put(key, value), *this; }
-  auto& operator()(_str key, long value) { return operator()(key, tuple(value)); }
+  auto& operator()(_str key, _str value) { return _st->put(key, value), *this; }
+  auto& operator()(_str key, long value) { return _st->put(key, tuple(value)), *this; }
 
   // manip - use for separated input parameters.
   // Examples:
   //   s = setting::preferences()["title"];
   //   setting::preferences()["windowpos"](x)(y)(w)(h);
-  class manip {
-    std::string _s;
-    std::string::size_type _next = 0;
+  class manip : public std::string {
+    size_type _next = 0;
     char _sep = ',';
-    auto avail() const { return _next < _s.size(); }
-    std::string next();
+    auto avail() const { return _next < size(); }
+    std::string_view next();
     bool next(int& v);
   public:
-    manip(std::string const& s) : _s(s) {}
-    manip& operator()() { return next(), *this; }
+    manip(std::string const& s) : std::string(s) {}
+    manip(std::string&& s) : std::string(s) {}
+    auto& operator()() { return next(), *this; }
     manip& operator()(std::string& v);
     template<class T> auto& operator()(T& v)
-    { int i = int(v); next(i), v = T(i); return *this; }
-    template<class T, typename U> auto& operator()(T& v, U& e)
-    { int i = int(v); e = U(next(i)), v = T(i); return *this; }
+    { auto i = int(v); next(i), v = T(i); return *this; }
+    template<class T, class U> auto& operator()(T& v, U& e)
+    { auto i = int(v); e = U(next(i)), v = T(i); return *this; }
     auto& operator()(int& v) { return next(v), *this; }
     template<class T> auto& operator()(int& v, T& e) { return e = T(next(v)), *this; }
-    auto& row() const noexcept { return _s; }
-    operator std::string const&() const { return _s; }
     auto& sep(char sep) { return _sep = sep, *this; }
     std::list<std::string> split();
     template<class T> std::list<T> split() {

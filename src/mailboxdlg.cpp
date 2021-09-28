@@ -179,11 +179,8 @@ mailboxdlg::done(bool ok)
     if (name[0] == '(' && *name.rbegin() == ')') {
       error(IDC_EDIT_NAME, win32::exe.text(IDS_MSG_INVALID_CHAR), 0, 1);
     }
-    {
-      int n = StrCSpn(name.c_str(), setting::invalidchars());
-      if (size_t(n) < name.size()) {
-	error(IDC_EDIT_NAME, win32::exe.text(IDS_MSG_INVALID_CHAR), n, n + 1);
-      }
+    if (auto n = name.find_first_of(setting::invalidchars()); n != name.npos) {
+      error(IDC_EDIT_NAME, win32::exe.text(IDS_MSG_INVALID_CHAR), n, n + 1);
     }
     auto s = setting::mailbox(name);
     if (name != _name && !std::string(s["passwd"]).empty()) {
@@ -257,8 +254,9 @@ mailboxdlg::_env(std::string const& path)
 {
   std::string s = path;
   constexpr char const* vars[] = {
-    "%CommonProgramFiles%", "%ProgramFiles%", "%USERPROFILE%",
-    "%SystemRoot%", "%SystemDrive%"
+    "%CommonProgramFiles%", "%CommonProgramFiles(x86)%",
+    "%ProgramFiles%", "%ProgramFiles(x86)%",
+    "%USERPROFILE%", "%SystemRoot%", "%SystemDrive%"
   };
   for (auto var : vars) {
     std::string ev = win32::xenv(var);

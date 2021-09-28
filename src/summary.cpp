@@ -62,9 +62,9 @@ summary::release()
     auto prefs = setting::preferences("summary");
     auto tuple = setting::tuple(ListView_GetColumnWidth(hwnd(), 0));
     for (int i = 1; i < LAST; ++i) tuple(ListView_GetColumnWidth(hwnd(), i));
-    if (tuple.row().compare(prefs["columns"])) prefs("columns", tuple);
+    if (tuple.compare(prefs["columns"])) prefs("columns", tuple);
     tuple = setting::tuple(_column)(_order);
-    if (tuple.row().compare(prefs["sort"])) prefs("sort", tuple);
+    if (tuple.compare(prefs["sort"])) prefs("sort", tuple);
   } catch (...) {}
 }
 

@@ -72,9 +72,7 @@ setting::cache(std::string_view key)
   assert(_rep);
   std::list<std::string> result;
   auto cache = _rep->storage(_cachekey(key));
-  for (auto const& k : cache->keys()) {
-    result.push_back(cache->get(k.c_str()));
-  }
+  for (auto const& k : cache->keys()) result.push_back(cache->get(k));
   return result;
 }
 
@@ -87,7 +85,7 @@ setting::cache(std::string_view key, std::list<std::string> const& data)
   if (!data.empty()) {
     auto cache = _rep->storage(id);
     auto i = 0;
-    for (auto const& v : data) cache->put(win32::digit(++i).c_str(), v.c_str());
+    for (auto const& v : data) cache->put(win32::digit(++i), v);
   }
 }
 
@@ -164,7 +162,7 @@ setting::cipher(_str key, std::string const& value)
     s[i * 2 + 2] = code64[((e[i] & 15) + d + 5) & 63];
     d += 11;
   }
-  _st->put(key, s.c_str());
+  _st->put(key, s);
   return *this;
 }
 
@@ -172,10 +170,9 @@ setting::cipher(_str key, std::string const& value)
  * Functions of class setting::tuple
  */
 setting::tuple&
-setting::tuple::add(std::string const& s)
+setting::tuple::add(_str s)
 {
-  _s += _sep, _s += s;
-  return *this;
+  return *this += _sep, *this += s, *this;
 }
 
 std::string
@@ -187,15 +184,19 @@ setting::tuple::digit(long i)
 /*
  * Functions of class setting::manip
  */
-std::string
+std::string_view
 setting::manip::next()
 {
   constexpr char ws[] = "\t ";
-  if (!avail()) return {};
-  auto i = _s.find_first_not_of(ws, _next);
-  auto n = _s.find(_sep, _next);
-  _next = n != _s.npos ? n + 1 : (n = _s.size());
-  return i < n ? _s.substr(i, _s.find_last_not_of(ws, n - 1) - i + 1) : std::string();
+  std::string_view sv(*this);
+  auto n = _next;
+  if (n < sv.size()) {
+    auto i = sv.find_first_not_of(ws, n);
+    n = sv.find(_sep, i);
+    _next = n != npos ? n + 1 : (n = size());
+    if (i < n) return sv.substr(i, sv.find_last_not_of(ws, n) - i + 1);
+  }
+  return sv.substr(n, 0);
 }
 
 bool
@@ -203,14 +204,14 @@ setting::manip::next(int& v)
 {
   auto s = next();
   if (s.empty()) return false;
-  v = strtol(s.c_str(), {}, 0);
+  v = strtol(std::string(s).c_str(), {}, 0);
   return true;
 }
 
 setting::manip&
 setting::manip::operator()(std::string& v)
 {
-  if (auto s = next(); !s.empty()) v = win32::xenv(s);
+  if (auto s = next(); !s.empty()) v = win32::xenv(std::string(s));
   return *this;
 }
 
@@ -218,7 +219,7 @@ std::list<std::string>
 setting::manip::split()
 {
   std::list<std::string> result;
-  while (avail()) result.push_back(win32::xenv(next()));
+  while (avail()) result.push_back(win32::xenv(std::string(next())));
   return result;
 }
 
@@ -242,22 +243,21 @@ class setting::_registory : public setting::repository {
 public:
   _registory(_str key) : _reg(HKEY_CURRENT_USER, key) {}
 public:
-  std::unique_ptr<setting::storage> storage(std::string const& name) const override;
+  std::unique_ptr<setting::storage> storage(_str name) const override;
   std::list<std::string> storages() const override;
-  void erase(std::string const& name) override
-  { _reg && RegDeleteKey(_reg, name.c_str()); }
+  void erase(_str name) override { _reg && RegDeleteKey(_reg, name); }
   char const* invalidchars() const noexcept override { return "\\"; }
   std::unique_ptr<setting::watch> watch() const override;
 };
 
 std::unique_ptr<setting::storage>
-setting::_registory::storage(std::string const& name) const
+setting::_registory::storage(_str name) const
 {
   class subkey : public setting::storage {
     _regkey _reg;
   public:
     subkey(HKEY key, char const* name) : _reg(key, name) {}
-    std::string get(char const* key) const override {
+    std::string get(_str key) const override {
       DWORD type, size;
       if (_reg &&
 	  RegQueryValueEx(_reg, key, {}, &type, {}, &size) == ERROR_SUCCESS &&
@@ -269,9 +269,9 @@ setting::_registory::storage(std::string const& name) const
       }
       return {};
     }
-    void put(char const* key, char const* value) override
+    void put(_str key, _str value) override
     { _reg && RegSetValueEx(_reg, key, 0, REG_SZ, LPCBYTE(value), strlen(value) + 1); }
-    void erase(char const* key) override { _reg && RegDeleteValue(_reg, key); }
+    void erase(_str key) override { _reg && RegDeleteValue(_reg, key); }
     std::list<std::string> keys() const override {
       std::list<std::string> result;
       if (DWORD size; _reg && RegQueryInfoKey(_reg, {}, {}, {}, {}, {},
@@ -286,7 +286,7 @@ setting::_registory::storage(std::string const& name) const
       return result;
     }
   };
-  return std::unique_ptr<setting::storage>(new subkey(_reg, name.c_str()));
+  return std::unique_ptr<setting::storage>(new subkey(_reg, name));
 }
 
 std::list<std::string>
@@ -345,34 +345,32 @@ public:
   _profile(_str path) : _path(path) {}
   ~_profile() { win32::profile({}, {}, {}, _path.c_str()); }
 public:
-  std::unique_ptr<setting::storage> storage(std::string const& name) const override;
+  std::unique_ptr<setting::storage> storage(_str name) const override;
   std::list<std::string> storages() const override
   { return setting::manip(win32::profile({}, {}, _path.c_str())).sep(0).split(); }
-  void erase(std::string const& name) override
-  { win32::profile(name.c_str(), {}, {}, _path.c_str()); }
+  void erase(_str name) override { win32::profile(name, {}, {}, _path.c_str()); }
   char const* invalidchars() const noexcept override { return "]"; }
   std::unique_ptr<setting::watch> watch() const override;
 };
 
 std::unique_ptr<setting::storage>
-setting::_profile::storage(std::string const& name) const
+setting::_profile::storage(_str name) const
 {
   class section : public setting::storage {
     std::string _section;
     char const* _path;
   public:
-    section(std::string const& section, char const* path)
+    section(char const* section, char const* path)
       : _section(section), _path(path) {}
-    std::string get(char const* key) const override
+    std::string get(_str key) const override
     { return win32::profile(_section.c_str(), key, _path); }
-    void put(char const* key, char const* value) override {
+    void put(_str key, _str value) override {
       std::string v;
       if (value) v.assign(value);
       if (!v.empty() && v[0] == '"' && *v.rbegin() == '"') v = '"' + v + '"';
       if (v != get(key)) win32::profile(_section.c_str(), key, v.c_str(), _path);
     }
-    void erase(char const* key) override
-    { win32::profile(_section.c_str(), key, {}, _path); }
+    void erase(_str key) override { win32::profile(_section.c_str(), key, {}, _path); }
     std::list<std::string> keys() const override
     { return setting::manip(get({})).sep(0).split(); }
   };
