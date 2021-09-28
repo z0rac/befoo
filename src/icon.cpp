@@ -4,19 +4,8 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
+#include "stdafx.h"
 #include "icon.h"
-#include <cassert>
-#include <stdexcept>
-#include <shlwapi.h>
-
-#ifdef _DEBUG
-#include <iostream>
-#define DBG(s) s
-#define LOG(s) (std::cout << s)
-#else
-#define DBG(s)
-#define LOG(s)
-#endif
 
 #define RT_MASCOTICON "MASCOTICON"
 

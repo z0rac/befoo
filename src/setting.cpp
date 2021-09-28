@@ -4,11 +4,7 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
-#include "define.h"
-#include "setting.h"
-#include "win32.h"
-#include <cassert>
-#include <ctime>
+#include "stdafx.h"
 
 /*
  * Functions of class setting

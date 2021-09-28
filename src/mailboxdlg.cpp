@@ -4,11 +4,9 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
+#include "stdafx.h"
 #include "settingdlg.h"
-#include "mailbox.h"
-#include <cassert>
 #include <map>
-#include <shlwapi.h>
 
 /** uridlg - dialog that manipulate URI
  */

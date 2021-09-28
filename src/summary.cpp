@@ -4,21 +4,7 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
-#include "define.h"
-#include "mailbox.h"
-#include "setting.h"
-#include "win32.h"
-#include "window.h"
-#include <cassert>
-
-#ifdef _DEBUG
-#include <iostream>
-#define DBG(s) s
-#define LOG(s) (std::cout << s)
-#else
-#define DBG(s)
-#define LOG(s)
-#endif
+#include "stdafx.h"
 
 #ifndef HDF_SORTDOWN
 #define HDF_SORTDOWN 0x0200

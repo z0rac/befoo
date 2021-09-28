@@ -4,11 +4,9 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
+#include "stdafx.h"
 #include "settingdlg.h"
 #include "icon.h"
-#include <cassert>
-#include <vector>
-#include <shlwapi.h>
 
 /** iconlist - list of icons
  */

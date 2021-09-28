@@ -4,17 +4,7 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
-#include "mailbox.h"
-#include <algorithm>
-
-#ifdef _DEBUG
-#include <iostream>
-#define DBG(s) s
-#define LOG(s) (std::cout << s)
-#else
-#define DBG(s)
-#define LOG(s)
-#endif
+#include "stdafx.h"
 
 /** pop3 - pop3 protocol backend
  * This class is a mailbox::backend for POP3 protocol.

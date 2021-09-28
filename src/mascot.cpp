@@ -4,21 +4,8 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
-#include "define.h"
-#include "mailbox.h"
-#include "setting.h"
+#include "stdafx.h"
 #include "icon.h"
-#include "window.h"
-#include <cassert>
-
-#ifdef _DEBUG
-#include <iostream>
-#define DBG(s) s
-#define LOG(s) (std::cout << s)
-#else
-#define DBG(s)
-#define LOG(s)
-#endif
 
 #define ICON_BKGC RGB(255, 0, 255)
 

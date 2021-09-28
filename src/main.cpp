@@ -4,31 +4,13 @@
  * This software comes with ABSOLUTELY NO WARRANTY; for details of
  * the license terms, see the LICENSE.txt file included with the program.
  */
-#include "define.h"
-#include "mailbox.h"
-#include "setting.h"
-#include "winsock.h"
-#include "win32.h"
-#include "window.h"
+#include "stdafx.h"
 #include <thread>
 #include <mutex>
 #include <imagehlp.h>
-#include <shlobj.h>
-#include <shlwapi.h>
-#include <cassert>
-
-#ifdef _DEBUG
-#include <iostream>
-#define DBG(s) s
-#define LOG(s) (std::cout << win32::time(time({})) << "|" << s)
-#else
-#define DBG(s)
-#define LOG(s)
-#endif
 
 extern window* mascot();
 extern window* summary(mailbox const*);
-extern void settingdlg();
 
 // model - main model
 namespace {
