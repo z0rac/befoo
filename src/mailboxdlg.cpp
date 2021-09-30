@@ -180,7 +180,7 @@ mailboxdlg::done(bool ok)
       error(IDC_EDIT_NAME, win32::exe.text(IDS_MSG_INVALID_CHAR), 0, 1);
     }
     if (auto n = name.find_first_of(setting::invalidchars()); n != name.npos) {
-      error(IDC_EDIT_NAME, win32::exe.text(IDS_MSG_INVALID_CHAR), n, n + 1);
+      error(IDC_EDIT_NAME, win32::exe.text(IDS_MSG_INVALID_CHAR), int(n), int(n) + 1);
     }
     auto s = setting::mailbox(name);
     if (name != _name && !std::string(s["passwd"]).empty()) {
@@ -252,16 +252,16 @@ mailboxdlg::action(int id, int cmd)
 std::string
 mailboxdlg::_env(std::string const& path)
 {
-  std::string s = path;
+  auto s = path;
   constexpr char const* vars[] = {
     "%CommonProgramFiles%", "%CommonProgramFiles(x86)%",
     "%ProgramFiles%", "%ProgramFiles(x86)%",
     "%USERPROFILE%", "%SystemRoot%", "%SystemDrive%"
   };
   for (auto var : vars) {
-    std::string ev = win32::xenv(var);
+    auto ev = win32::xenv(var);
     if (ev.empty()) continue;
-    std::string d;
+    decltype(s) d;
     for (size_t t = 0; t < s.size();) {
       auto sp = s.c_str() + t, p = sp;
       do {
@@ -293,10 +293,8 @@ mailboxdlg::_sound(std::string const& snd)
     { return h && RegEnumKeyEx(h, i, p, &n, {},
 			       {}, {}, {}) == ERROR_SUCCESS ? n : 0; }
   };
-  static win32::dll shlwapi("shlwapi.dll");
-  auto shload = decltype(&SHLoadIndirectString)(shlwapi("SHLoadIndirectString", {}));
   key schemes("AppEvents\\Schemes\\Apps\\.Default");
-  std::string disp = snd;
+  auto disp = snd;
   for (DWORD i = 0;; ++i) {
     char s[256];
     std::string name(s, schemes(i, s, sizeof(s)));
@@ -304,8 +302,9 @@ mailboxdlg::_sound(std::string const& snd)
     if (name[0] == '.' || !key(name + "\\.Current", schemes)(s, sizeof(s))) continue;
     key event("AppEvents\\EventLabels\\" + name);
     std::string label;
-    if (shload && event(s, sizeof(s), "DispFileName") &&
-	shload(win32::wstring(s).c_str(), LPWSTR(s), sizeof(s) / sizeof(WCHAR), {}) == S_OK) {
+    if (event(s, sizeof(s), "DispFileName") &&
+	SHLoadIndirectString(win32::wstring(s).c_str(), LPWSTR(s),
+			     sizeof(s) / sizeof(WCHAR), {}) == S_OK) {
       label = win32::string(LPWSTR(s));
     } else if (event(s, sizeof(s))) {
       label = s;

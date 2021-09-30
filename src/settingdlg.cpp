@@ -397,13 +397,11 @@ maindlg::_enableicon(bool en) noexcept
 }
 
 void
-settingdlg()
+settingdlg() noexcept
 {
   CoInitialize({});
-  try {
-    INITCOMMONCONTROLSEX icce { sizeof(icce), ICC_WIN95_CLASSES };
-    InitCommonControlsEx(&icce);
-    maindlg().modal(IDD_SETTING, {});
-  } catch (...) {}
+  INITCOMMONCONTROLSEX icce { sizeof(icce), ICC_WIN95_CLASSES };
+  InitCommonControlsEx(&icce);
+  maindlg().modal(IDD_SETTING, {});
   CoUninitialize();
 }

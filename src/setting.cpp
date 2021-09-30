@@ -112,7 +112,7 @@ setting::edit()
   assert(_rep);
   auto watch = _rep->watch();
   if (!watch.get()) return false;
-  extern void settingdlg();
+  extern void settingdlg() noexcept;
   settingdlg();
   return watch->changed();
 }
@@ -269,8 +269,10 @@ setting::_registory::storage(_str name) const
       }
       return {};
     }
-    void put(_str key, _str value) override
-    { _reg && RegSetValueEx(_reg, key, 0, REG_SZ, LPCBYTE(value), strlen(value) + 1); }
+    void put(_str key, _str value) override {
+      _reg && RegSetValueEx(_reg, key, 0, REG_SZ,
+			    LPCBYTE(value.c_str), int(strlen(value)) + 1);
+    }
     void erase(_str key) override { _reg && RegDeleteValue(_reg, key); }
     std::list<std::string> keys() const override {
       std::list<std::string> result;
