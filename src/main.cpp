@@ -46,7 +46,7 @@ namespace {
     model();
     ~model() { exit(), _release(); }
     auto mailboxes() const noexcept { return _mailboxes; }
-    void exit() noexcept;
+    void exit(bool cache = true) noexcept;
     model& fetch(window& source, bool force = true);
     bool fetching() const { return _fetching != 0; }
   private:
@@ -168,10 +168,14 @@ model::_release() noexcept
 }
 
 void
-model::exit() noexcept
+model::exit(bool cache) noexcept
 {
-  for (auto p = _mailboxes; p; p = p->next()) p->exit();
+  for (auto p = _mailboxes; p; p = p->next()) {
+    p->exit();
+    if (p->cycle == 0) p->cycle = 1000, p->remain = 0;
+  }
   _fetching = 0, _fetch.clear();
+  if (!cache) return;
   for (auto p = _mailboxes; p; p = p->next()) {
     try { setting::cache(p->uristr(), p->ignore()); } catch (...) {}
   }
@@ -180,10 +184,16 @@ model::exit() noexcept
 model&
 model::fetch(window& source, bool force)
 {
-  std::unique_lock lock(_mutex, std::try_to_lock);
-  if (!lock.owns_lock()) {
-    source.settimer(*this, 5); // delay to fetch.
-    return *this;
+  std::unique_lock<decltype(_mutex)> lock;
+  if (!force) {
+    lock = std::unique_lock(_mutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+      source.settimer(*this, 5); // delay to fetch.
+      return *this;
+    }
+  } else {
+    exit(false);
+    lock = std::unique_lock(_mutex);
   }
   LOG("Fetch mails..." << std::endl);
   unsigned next = 0;
