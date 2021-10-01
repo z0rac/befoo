@@ -9,11 +9,10 @@ It fetchesmail from plural mailbox, and shows summary with subject, sender and d
 
 Installation
 ------------
-You will copy the file "befoo.exe", and "extend.dll" as necessary, to your application folder.
-And you may make a shortcut in the startup folder.
+You will copy the file "befoo.exe" to your application folder.
+If you want it to start automatically, right-click to select the settings menu, and check "Register in Startup" in the dialog that opens.
 
-The "extend.dll" provides the settings dialog box.
-If it didn't exist, you need to edit your settings manually by Notepad.
+The previous version of "extend.dll" has been merged into "befoo.exe" and is no longer needed.
 
 Settings
 --------
@@ -22,6 +21,8 @@ This file will be located in the user's local application data folder, or the sa
 with the application.
 
 At initial startup, it will be created in the local application data folder.
+
+Each setting item can also be configured in the "Settings" dialog.
 
 See below an example for "befoo.ini":
 
