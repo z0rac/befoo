@@ -156,6 +156,11 @@ std::string
 mailbox::backend::read(size_t size)
 {
   std::string result;
+  if (auto n = min(_rbuf.size(), size); n) {
+    result.assign(_rbuf, 0, n);
+    _rbuf.erase(0, n);
+    size -= n;
+  }
   while (size) {
     char buf[1024];
     auto n = _st->read(buf, min(size, sizeof(buf)));
@@ -168,20 +173,22 @@ mailbox::backend::read(size_t size)
 std::string
 mailbox::backend::read()
 {
-  char c;
   try {
-    _st->read(&c, 1);
+    char buf[1024];
+    for (size_t i = 1;; _rbuf.append(buf, _st->read(buf, sizeof(buf)))) {
+      if (i >= _rbuf.size()) continue;
+      for (i = _rbuf.find('\012', i); i != _rbuf.npos; i = _rbuf.find('\012', i + 1)) {
+	if (_rbuf[i - 1] != '\015') continue;
+	std::string result(_rbuf, 0, i - 1);
+	_rbuf.erase(0, i + 1);
+	return result;
+      }
+      i = _rbuf.size();
+    }
   } catch (winsock::timedout const&) {
-    throw silent();
+    if (_rbuf.empty()) throw silent();
+    throw;
   }
-  std::string data(1, c);
-  do {
-    do {
-      _st->read(&c, 1);
-      data.push_back(c);
-    } while (c != '\012');
-  } while (data[data.size() - 2] != '\015');
-  return data.substr(0, data.size() - 2); // remove CRLF
 }
 
 void

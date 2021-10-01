@@ -129,6 +129,7 @@ public:
       virtual _stream* starttls(std::string const& host) = 0;
     };
     std::unique_ptr<_stream> _st;
+    std::string _rbuf;
   protected:
     auto tls() const noexcept { return _st->tls(); }
     void starttls(std::string const& host);
