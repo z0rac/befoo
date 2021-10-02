@@ -53,13 +53,12 @@ public:
     SecPkgContext_StreamSizes _sizes;
     std::string _recvq;
     size_t _rest = 0;
-    std::vector<char> _buf;
-    std::vector<char> _extra;
+    std::vector<char> _rbuf;
+    size_t _remain = 0;
     class error;
     SECURITY_STATUS _ok(SECURITY_STATUS ss) const;
     SECURITY_STATUS _init(SecBufferDesc* inb = {});
     void _send(char const* data, size_t size);
-    size_t _next(char* buf, size_t size);
   public:
     tlsclient();
     virtual ~tlsclient();

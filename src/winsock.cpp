@@ -169,41 +169,28 @@ winsock::tlsclient::_send(char const* data, size_t size)
   }
 }
 
-size_t
-winsock::tlsclient::_next(char* buf, size_t size)
-{
-  if (_extra.empty()) return recvlo(buf, size);
-  auto n = min(_extra.size(), size);
-  CopyMemory(buf, _extra.data(), n);
-  _extra.erase(_extra.begin(), _extra.begin() + n);
-  return n;
-}
-
 winsock::tlsclient&
 winsock::tlsclient::connect()
 {
-  shutdown();
   try {
     size_t n = 0;
-    _buf.resize(16 * 1024);
+    if (_rbuf.empty()) _rbuf.resize(16 * 1024);
     for (auto ss = _init(); ss == SEC_I_CONTINUE_NEEDED;) {
-      auto t = _next(_buf.data() + n, _buf.size() - n);
-      if (t == 0) throw error(SEC_E_INCOMPLETE_MESSAGE);
-      n += t;
-      SecBuffer in[2] { { DWORD(n), SECBUFFER_TOKEN, _buf.data() } };
+      if (_remain) n = _remain, _remain = 0;
+      else if (auto t = recvlo(_rbuf.data() + n, _rbuf.size() - n); t) n += t;
+      else throw error(SEC_E_INCOMPLETE_MESSAGE);
+      SecBuffer in[2] { { DWORD(n), SECBUFFER_TOKEN, _rbuf.data() } };
       SecBufferDesc inb { SECBUFFER_VERSION, 2, in };
-      ss = _init(&inb);
-      if (ss == SEC_E_INCOMPLETE_MESSAGE) {
-	if (n < _buf.size()) ss = SEC_I_CONTINUE_NEEDED;
+      if (ss = _init(&inb); ss == SEC_E_INCOMPLETE_MESSAGE) {
+	if (n < _rbuf.size()) ss = SEC_I_CONTINUE_NEEDED;
       } else if (in[1].BufferType == SECBUFFER_EXTRA) {
-	n = in[1].cbBuffer;
-	MoveMemory(_buf.data(), _buf.data() + in[0].cbBuffer - n, n);
+	_remain = in[1].cbBuffer;
+	MoveMemory(_rbuf.data(), _rbuf.data() + in[0].cbBuffer - _remain, _remain);
       } else n = 0;
       _ok(ss);
     }
-    _extra.assign(_buf.cbegin(), _buf.cbegin() + n);
     _ok(QueryContextAttributes(_ctx, SECPKG_ATTR_STREAM_SIZES, &_sizes));
-    _buf.resize(_sizes.cbHeader + _sizes.cbMaximumMessage + _sizes.cbTrailer);
+    _rbuf.resize(_sizes.cbHeader + _sizes.cbMaximumMessage + _sizes.cbTrailer);
   } catch (...) {
     shutdown();
     throw;
@@ -215,7 +202,7 @@ winsock::tlsclient&
 winsock::tlsclient::shutdown() noexcept
 {
   if (_ctx) {
-    _recvq.clear(), _extra.clear();
+    _recvq.clear(), _remain = 0;
     if (availlo()) {
       try {
 	DWORD value = SCHANNEL_SHUTDOWN;
@@ -277,39 +264,36 @@ winsock::tlsclient::recv(char* buf, size_t size)
   _rest = 0;
   size_t done = 0;
   for (size_t n = 0; size && !done;) {
-    auto t = _next(_buf.data() + n, _sizes.cbMaximumMessage - n);
-    if (t == 0) {
-      if (n == 0) break;
-      throw error(SEC_E_INCOMPLETE_MESSAGE);
-    }
-    n += t;
-    SecBuffer dec[4] { { DWORD(n), SECBUFFER_DATA, _buf.data() } };
+    if (_remain) n = _remain, _remain = 0;
+    else if (auto t = recvlo(_rbuf.data() + n, _sizes.cbMaximumMessage - n); t) n += t;
+    else if (n == 0) break;
+    else throw error(SEC_E_INCOMPLETE_MESSAGE);
+    SecBuffer dec[4] { { DWORD(n), SECBUFFER_DATA, _rbuf.data() } };
     SecBufferDesc decb { SECBUFFER_VERSION, 4, dec };
     auto ss = DecryptMessage(_ctx, &decb, 0, {});
     if (ss == SEC_E_INCOMPLETE_MESSAGE && n < _sizes.cbMaximumMessage) continue;
     _ok(ss), n = 0;
-    std::string extra;
-    for (int i = 0; i < 4; ++i) {
-      switch(dec[i].BufferType) {
+    for (auto const& sec : dec) {
+      switch(sec.BufferType) {
       case SECBUFFER_DATA:
-	if (dec[i].cbBuffer) {
+	if (sec.cbBuffer) {
 	  size_t m = 0;
 	  if (done < size) {
-	    m = min(size - done, dec[i].cbBuffer);
-	    CopyMemory(buf + done, dec[i].pvBuffer, m);
+	    m = min(size - done, sec.cbBuffer);
+	    CopyMemory(buf + done, sec.pvBuffer, m);
 	    done += m;
 	  }
-	  _recvq.append(LPCSTR(dec[i].pvBuffer) + m, dec[i].cbBuffer - m);
-	} else if (ss == SEC_E_OK && _buf[0] == 0x15) {
+	  _recvq.append(LPCSTR(sec.pvBuffer) + m, sec.cbBuffer - m);
+	} else if (ss == SEC_E_OK && _rbuf[0] == 0x15) {
 	  ss = SEC_I_CONTEXT_EXPIRED; // for Win2kPro
 	}
 	break;
       case SECBUFFER_EXTRA:
-	extra.append(LPCSTR(dec[i].pvBuffer), dec[i].cbBuffer);
+	MoveMemory(_rbuf.data() + _remain, sec.pvBuffer, sec.cbBuffer);
+	_remain += sec.cbBuffer;
 	break;
       }
     }
-    _extra.insert(_extra.begin(), extra.cbegin(), extra.cend());
     if (ss == SEC_I_CONTEXT_EXPIRED && !done) {
       throw error(SEC_E_CONTEXT_EXPIRED);
     }
@@ -324,15 +308,16 @@ winsock::tlsclient::send(char const* data, size_t size)
   assert(_ctx);
   if (!size) return size;
   size = min(size, _sizes.cbMaximumMessage);
+  std::vector<char> buf(_sizes.cbHeader + size + _sizes.cbTrailer);
   SecBuffer enc[4] = {
-    { _sizes.cbHeader, SECBUFFER_STREAM_HEADER, _buf.data() },
+    { _sizes.cbHeader, SECBUFFER_STREAM_HEADER, buf.data() },
     { DWORD(size), SECBUFFER_DATA, LPSTR(enc[0].pvBuffer) + enc[0].cbBuffer },
     { _sizes.cbTrailer, SECBUFFER_STREAM_TRAILER, LPSTR(enc[1].pvBuffer) + enc[1].cbBuffer }
   };
   SecBufferDesc encb { SECBUFFER_VERSION, 4, enc };
-  CopyMemory(_buf.data() + _sizes.cbHeader, data, size);
+  CopyMemory(buf.data() + _sizes.cbHeader, data, size);
   _ok(EncryptMessage(_ctx, 0, &encb, 0));
-  _send(_buf.data(), enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
+  _send(buf.data(), enc[0].cbBuffer + enc[1].cbBuffer + enc[2].cbBuffer);
   return size;
 }
 
