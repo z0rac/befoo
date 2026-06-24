@@ -55,6 +55,12 @@
     <NMakeOutput Condition="'$(Configuration)|$(Platform)'=='Icons|Win32'">simple.ico</NMakeOutput>
     <NMakeOutput Condition="'$(Configuration)|$(Platform)'=='Icons|x64'">simple.ico</NMakeOutput>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Icons|Win32'">
+    <IntDir>$(OutDir)$(ShortProjectName)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Icons|x64'">
+    <IntDir>$(OutDir)$(ShortProjectName)\</IntDir>
+  </PropertyGroup>
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
